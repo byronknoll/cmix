@@ -188,19 +188,19 @@ void Predictor::AddMixers() {
 
 
   mixers_[1].push_back(std::unique_ptr<Mixer>(new Mixer(*(layers_[1]),
-        context.context_, manager_.zero_context_, 0.005, context.size_)));
+      context.context_, manager_.zero_context_, 0.005, context.size_)));
   mixers_[1].push_back(std::unique_ptr<Mixer>(new Mixer(*(layers_[1]),
-        context.context_, manager_.zero_context_, 0.0005, context.size_)));
+      context.context_, manager_.zero_context_, 0.0005, context.size_)));
   mixers_[1].push_back(std::unique_ptr<Mixer>(new Mixer(*(layers_[1]),
-        context.context_, manager_.bit_context_, 0.005, context.size_)));
+      context.context_, manager_.bit_context_, 0.005, context.size_)));
   mixers_[1].push_back(std::unique_ptr<Mixer>(new Mixer(*(layers_[1]),
-        context.context_, manager_.bit_context_, 0.0005, context.size_)));
+      context.context_, manager_.bit_context_, 0.0005, context.size_)));
   mixers_[1].push_back(std::unique_ptr<Mixer>(new Mixer(*(layers_[1]),
-        context.context_, manager_.recent_bytes2_[0], 0.005, context.size_)));
+      context.context_, manager_.recent_bytes2_[0], 0.005, context.size_)));
   mixers_[1].push_back(std::unique_ptr<Mixer>(new Mixer(*(layers_[1]),
-        context.context_, manager_.recent_bytes2_[1], 0.005, context.size_)));
+      context.context_, manager_.recent_bytes2_[1], 0.005, context.size_)));
   mixers_[1].push_back(std::unique_ptr<Mixer>(new Mixer(*(layers_[1]),
-        context.context_, manager_.recent_bytes2_[2], 0.005, context.size_)));
+      context.context_, manager_.recent_bytes2_[2], 0.005, context.size_)));
 
   mixers_[2].push_back(std::unique_ptr<Mixer>(new Mixer(*(layers_[2]),
       context.context_, manager_.zero_context_, 0.0003, context.size_)));
