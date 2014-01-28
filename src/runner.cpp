@@ -1,0 +1,88 @@
+#include <fstream>
+#include <iostream>
+#include <ctime>
+
+#include "coder/encoder.h"
+#include "coder/decoder.h"
+
+void WriteHeader(unsigned long long length, std::ofstream* os) {
+  for (int i = 7; i >= 0; --i) {
+    char c = length >> (8*i);
+    os->put(c);
+  }
+}
+
+void ReadHeader(std::ifstream* is, unsigned long long* length) {
+  *length = 0;
+  for (int i = 0; i < 8; ++i) {
+    *length <<= 8;
+    *length += (unsigned char)(is->get());
+  }
+}
+
+void Compress(unsigned long long input_bytes, std::ifstream* is,
+    std::ofstream* os, unsigned long long* output_bytes) {
+  Encoder e(os, input_bytes);
+  while (true) {
+    char c = is->get();
+    if (!is->good()) break;
+    for (int j = 7; j >= 0; --j) {
+      e.Encode((c>>j)&1);
+    }
+  }
+  e.Flush();
+  *output_bytes = os->tellp();
+}
+
+void Decompress(unsigned long long output_length, std::ifstream* is,
+                std::ofstream* os) {
+  Decoder d(is, output_length);
+  unsigned long long pos = 0;
+  while (pos < output_length) {
+    int byte = 1;
+    while (byte < 256) {
+      byte += byte + d.Decode();
+    }
+    os->put(byte);
+    ++pos;
+  }
+}
+
+int main(int argc, char* argv[]) {
+    if (argc != 4 || argv[1][0] != '-' ||
+      (argv[1][1] != 'c' && argv[1][1] != 'd')) {
+    std::cout << "To compress:   cmix -c input output" << std::endl
+              << "To decompress: cmix -d input output" << std::endl;
+    return -1;
+  }
+
+  clock_t start = clock();
+
+  std::ifstream is(argv[2], std::ios::in | std::ios::binary);
+  std::ofstream os(argv[3], std::ios::out | std::ios::binary);
+  if (!is.is_open() || !os.is_open()) {
+    std::cout << "Error opening file." << std::endl;
+    abort();
+  }
+
+  is.seekg(0, std::ios::end);
+  unsigned long long input_bytes = is.tellg();
+  is.seekg(0, std::ios::beg);
+  unsigned long long output_bytes;
+
+  if (argv[1][1]=='c') {
+    WriteHeader(input_bytes, &os);
+    Compress(input_bytes, &is, &os, &output_bytes);
+  } else {
+    ReadHeader(&is, &output_bytes);
+    Decompress(output_bytes, &is, &os);
+  }
+
+  is.close();
+  os.close();
+
+  printf("%lld bytes -> %lld bytes in %1.2f s.\n",
+      input_bytes, output_bytes,
+      ((double)clock()-start)/CLOCKS_PER_SEC);
+  return 0;
+}
