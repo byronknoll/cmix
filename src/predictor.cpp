@@ -161,7 +161,7 @@ void Predictor::AddMixers() {
   }
 
   std::vector<std::vector<double>> model_params = {{0, 8, 0.005},
-      {0, 8, 0.0005}, {1, 8, 0.002}, {2, 4, 0.005}, {3, 3, 0.002}};
+      {0, 8, 0.0005}, {1, 8, 0.005}, {1, 8, 0.0005}, {3, 3, 0.002}};
   for (const auto& params : model_params) {
     const Context& context = manager_.AddContext(std::unique_ptr<Context>(
         new ContextHash(manager_.bit_context_, params[0], params[1])));
@@ -169,7 +169,7 @@ void Predictor::AddMixers() {
         context.context_, manager_.bit_context_, params[2], context.size_)));
   }
 
-  model_params = {{0, 0.001}, {1, 0.005}, {2, 0.002}, {3, 0.005}};
+  model_params = {{0, 0.001}, {1, 0.01}, {2, 0.002}, {3, 0.005}};
   const Context& context = manager_.AddContext(std::unique_ptr<Context>(
       new ContextHash(manager_.bit_context_, 0, 8)));
   for (const auto& params : model_params) {
