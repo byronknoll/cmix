@@ -23,7 +23,7 @@ class Indirect : public Model {
   unsigned int map_index_;
   float divisor_;
   const State& state_;
-  std::vector<std::array<unsigned char, 256>> map_;
+  std::vector<unsigned char> map_;
   std::array<float, 256> predictions_;
 };
 
