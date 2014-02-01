@@ -7,8 +7,12 @@ void Encoder::WriteByte(unsigned int byte) {
   os_->put(byte);
 }
 
+unsigned int Encoder::Discretize(float p) {
+  return 1 + 65534 * p;
+}
+
 void Encoder::Encode(int bit) {
-  const unsigned int p = p_.Predict();
+  const unsigned int p = Discretize(p_.Predict());
   const unsigned int xmid = x1_ + ((x2_ - x1_) >> 16) * p +
       (((x2_ - x1_) & 0xffff) * p >> 16);
   if (bit) {

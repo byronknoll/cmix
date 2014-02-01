@@ -13,11 +13,10 @@
 class Predictor {
  public:
   Predictor(unsigned long long file_size);
-  int Predict();  // Probability of the next bit being one (0-65535).
+  float Predict();
   void Perceive(int bit);
 
  private:
-  int Discretize(float p);
   void Add(Model* model);
   void AddNonstationary();
   void AddEnglish();

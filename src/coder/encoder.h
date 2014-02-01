@@ -13,6 +13,7 @@ class Encoder {
 
  private:
   void WriteByte(unsigned int byte);
+  unsigned int Discretize(float p);
 
   std::ofstream* os_;
   unsigned int x1_, x2_;

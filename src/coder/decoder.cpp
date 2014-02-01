@@ -14,8 +14,12 @@ int Decoder::ReadByte() {
   return byte;
 }
 
+unsigned int Decoder::Discretize(float p) {
+  return 1 + 65534 * p;
+}
+
 int Decoder::Decode() {
-  const unsigned int p = p_.Predict();
+  const unsigned int p = Discretize(p_.Predict());
   const unsigned int xmid = x1_ + ((x2_ - x1_) >> 16) * p +
       (((x2_ - x1_) & 0xffff) * p >> 16);
   int bit = 0;

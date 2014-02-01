@@ -12,6 +12,7 @@ class Decoder {
 
  private:
   int ReadByte();
+  unsigned int Discretize(float p);
 
   std::ifstream* is_;
   unsigned int x1_, x2_, x_;

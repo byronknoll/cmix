@@ -16,12 +16,8 @@ Predictor::Predictor(unsigned long long file_size) : manager_(file_size) {
   AddRunMap();
   AddMatch();
   AddPic();
-  AddSSE();
   AddMixers();
-}
-
-int Predictor::Discretize(float p) {
-  return 1 + 65534 * p;
+  AddSSE();
 }
 
 void Predictor::Add(Model* model) {
@@ -208,8 +204,8 @@ void Predictor::AddMixers() {
   }
 }
 
-int Predictor::Predict() {
-  //return Discretize(models_[0]->Predict());
+float Predictor::Predict() {
+  //return models_[0]->Predict();
   for (unsigned int i = 0; i < models_.size(); ++i) {
     float p = models_[i]->Predict();
     layers_[0]->SetInput(i, p);
@@ -223,7 +219,7 @@ int Predictor::Predict() {
   float p = mixers_[2][0]->Mix();
   p = (p + 2 * sse_[0]->Process(p) + sse_[1]->Process(p) + sse_[2]->Process(p) +
       sse_[3]->Process(p)) / 6;
-  return Discretize(p);
+  return p;
 }
 
 void Predictor::Perceive(int bit) {
