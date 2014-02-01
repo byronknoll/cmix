@@ -2,7 +2,7 @@ CC = g++
 CFLAGS = -std=c++11 -Wall -c
 LFLAGS = -std=c++11 -Wall
 
-OBJS = build/encoder.o build/decoder.o build/predictor.o  build/mixer-input.o build/mixer.o build/sse.o build/manager.o build/direct.o build/indirect.o build/nonstationary.o build/run-map.o build/match.o build/context-hash.o build/rubin-karp.o build/sparse.o build/bit-buffer.o
+OBJS = build/encoder.o build/decoder.o build/predictor.o  build/mixer-input.o build/mixer.o build/sse.o build/manager.o build/direct.o build/indirect.o build/nonstationary.o build/run-map.o build/match.o build/context-hash.o build/sparse.o build/bit-buffer.o
 
 all: CFLAGS += -O3
 all: LFLAGS += -O3
@@ -21,7 +21,7 @@ build/encoder.o: src/coder/encoder.h src/coder/encoder.cpp src/predictor.h
 build/decoder.o: src/coder/decoder.h src/coder/decoder.cpp src/predictor.h
 	$(CC) $(CFLAGS) src/coder/decoder.cpp -o build/decoder.o
 
-build/predictor.o: src/predictor.h src/predictor.cpp src/mixer/mixer-input.h src/mixer/mixer.h src/sse.h src/models/model.h src/models/direct.h src/models/indirect.h src/models/match.h src/manager.h src/contexts/context-hash.h src/contexts/rubin-karp.h src/contexts/sparse.h src/models/bit-buffer.h
+build/predictor.o: src/predictor.h src/predictor.cpp src/mixer/mixer-input.h src/mixer/mixer.h src/sse.h src/models/model.h src/models/direct.h src/models/indirect.h src/models/match.h src/manager.h src/contexts/context-hash.h src/contexts/sparse.h src/models/bit-buffer.h
 	$(CC) $(CFLAGS) src/predictor.cpp -o build/predictor.o
 
 build/mixer-input.o: src/mixer/mixer-input.h src/mixer/mixer-input.cpp
@@ -56,9 +56,6 @@ build/run-map.o: src/states/run-map.h src/states/run-map.cpp src/states/state.h
 
 build/context-hash.o: src/contexts/context-hash.h src/contexts/context-hash.cpp src/contexts/context.h
 	$(CC) $(CFLAGS) src/contexts/context-hash.cpp -o build/context-hash.o
-
-build/rubin-karp.o: src/contexts/rubin-karp.h src/contexts/rubin-karp.cpp src/contexts/context.h
-	$(CC) $(CFLAGS) src/contexts/rubin-karp.cpp -o build/rubin-karp.o
 
 build/sparse.o: src/contexts/sparse.h src/contexts/sparse.cpp src/contexts/context.h
 	$(CC) $(CFLAGS) src/contexts/sparse.cpp -o build/sparse.o

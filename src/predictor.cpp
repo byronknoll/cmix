@@ -4,7 +4,6 @@
 #include "models/match.h"
 #include "models/bit-buffer.h"
 #include "contexts/context-hash.h"
-#include "contexts/rubin-karp.h"
 #include "contexts/sparse.h"
 
 #include <vector>
@@ -41,12 +40,6 @@ void Predictor::AddNonstationary() {
     Add(new Indirect(manager_.nonstationary_, context.context_,
         manager_.bit_context_, delta, std::min(max_size, context.size_)));
   }
-
-  max_size = 200000;
-  const Context& context = manager_.AddContext(std::unique_ptr<Context>(
-      new RubinKarp(manager_.bit_context_, 5)));
-  Add(new Indirect(manager_.nonstationary_, context.context_,
-      manager_.bit_context_, delta, std::min(max_size, context.size_ / 5)));
 }
 
 void Predictor::AddEnglish() {
@@ -66,8 +59,6 @@ void Predictor::AddEnglish() {
   std::unique_ptr<Context> hash(new Sparse(manager_.words_,
       std::vector<unsigned int>(1, 1)));
   const Context& context = manager_.AddContext(std::move(hash));
-  Add(new Indirect(manager_.nonstationary_, context.context_,
-      manager_.bit_context_, delta, 1000));
   Add(new Indirect(manager_.run_map_, context.context_, manager_.bit_context_,
       delta, 1000000));
   Add(new Direct(context.context_, manager_.bit_context_, 30, 0, 1000000));
