@@ -2,7 +2,7 @@ CC = g++
 CFLAGS = -std=c++11 -Wall -c
 LFLAGS = -std=c++11 -Wall
 
-OBJS = build/encoder.o build/decoder.o build/predictor.o  build/mixer-input.o build/mixer.o build/sse.o build/manager.o build/direct.o build/indirect.o build/nonstationary.o build/run-map.o build/match.o build/context-hash.o build/sparse.o build/bit-buffer.o
+OBJS = build/encoder.o build/decoder.o build/predictor.o build/logistic.o build/mixer-input.o build/mixer.o build/sse.o build/manager.o build/direct.o build/indirect.o build/nonstationary.o build/run-map.o build/match.o build/context-hash.o build/sparse.o build/bit-buffer.o
 
 all: CFLAGS += -O3
 all: LFLAGS += -O3
@@ -21,13 +21,16 @@ build/encoder.o: src/coder/encoder.h src/coder/encoder.cpp src/predictor.h
 build/decoder.o: src/coder/decoder.h src/coder/decoder.cpp src/predictor.h
 	$(CC) $(CFLAGS) src/coder/decoder.cpp -o build/decoder.o
 
-build/predictor.o: src/predictor.h src/predictor.cpp src/mixer/mixer-input.h src/mixer/mixer.h src/sse.h src/models/model.h src/models/direct.h src/models/indirect.h src/models/match.h src/manager.h src/contexts/context-hash.h src/contexts/sparse.h src/models/bit-buffer.h
+build/predictor.o: src/predictor.h src/predictor.cpp src/mixer/mixer-input.h src/mixer/mixer.h src/sse.h src/models/model.h src/models/direct.h src/models/indirect.h src/models/match.h src/manager.h src/contexts/context-hash.h src/contexts/sparse.h src/models/bit-buffer.h src/mixer/logistic.h
 	$(CC) $(CFLAGS) src/predictor.cpp -o build/predictor.o
 
-build/mixer-input.o: src/mixer/mixer-input.h src/mixer/mixer-input.cpp
+build/logistic.o: src/mixer/logistic.h src/mixer/logistic.cpp
+	$(CC) $(CFLAGS) src/mixer/logistic.cpp -o build/logistic.o
+
+build/mixer-input.o: src/mixer/mixer-input.h src/mixer/mixer-input.cpp src/mixer/logistic.h
 	$(CC) $(CFLAGS) src/mixer/mixer-input.cpp -o build/mixer-input.o
 
-build/mixer.o: src/mixer/mixer.h src/mixer/mixer.cpp
+build/mixer.o: src/mixer/mixer.h src/mixer/mixer.cpp src/mixer/logistic.h
 	$(CC) $(CFLAGS) src/mixer/mixer.cpp -o build/mixer.o
 
 build/sse.o: src/sse.h src/sse.cpp

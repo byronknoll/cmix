@@ -8,7 +8,8 @@
 
 #include <vector>
 
-Predictor::Predictor(unsigned long long file_size) : manager_(file_size) {
+Predictor::Predictor(unsigned long long file_size) : manager_(file_size),
+    logistic_(10000, 1000) {
   AddNonstationary();
   AddEnglish();
   AddSparse();
@@ -22,6 +23,10 @@ Predictor::Predictor(unsigned long long file_size) : manager_(file_size) {
 
 void Predictor::Add(Model* model) {
   models_.push_back(std::unique_ptr<Model>(model));
+}
+
+void Predictor::Add(int layer, Mixer* mixer) {
+  mixers_[layer].push_back(std::unique_ptr<Mixer>(mixer));
 }
 
 void Predictor::AddNonstationary() {
@@ -140,8 +145,8 @@ void Predictor::AddSSE() {
 
 void Predictor::AddMixers() {
   for (int i = 0; i < 3; ++i) {
-    layers_.push_back(std::unique_ptr<MixerInput>(new MixerInput(1.0e-4,
-        10000, 1000)));
+    layers_.push_back(std::unique_ptr<MixerInput>(new MixerInput(logistic_,
+        1.0e-4)));
     mixers_.push_back(std::vector<std::unique_ptr<Mixer>>());
   }
 
@@ -150,57 +155,53 @@ void Predictor::AddMixers() {
   for (const auto& params : model_params) {
     const Context& context = manager_.AddContext(std::unique_ptr<Context>(
         new ContextHash(manager_.bit_context_, params[0], params[1])));
-    mixers_[0].push_back(std::unique_ptr<Mixer>(new Mixer(*(layers_[0]),
-        context.context_, manager_.bit_context_, params[2], context.size_)));
+    Add(0, new Mixer(layers_[0]->inputs_, logistic_, context.context_,
+        manager_.bit_context_, params[2], context.size_));
   }
 
   model_params = {{0, 0.001}, {1, 0.01}, {2, 0.002}, {3, 0.005}};
   const Context& context = manager_.AddContext(std::unique_ptr<Context>(
       new ContextHash(manager_.bit_context_, 0, 8)));
   for (const auto& params : model_params) {
-    mixers_[0].push_back(std::unique_ptr<Mixer>(new Mixer(*(layers_[0]),
-        context.context_, manager_.recent_bytes2_[params[0]], params[1],
-        context.size_)));
+    Add(0, new Mixer(layers_[0]->inputs_, logistic_, context.context_,
+        manager_.recent_bytes2_[params[0]], params[1], context.size_));
   }
-  mixers_[0].push_back(std::unique_ptr<Mixer>(new Mixer(*(layers_[0]),
-      context.context_, manager_.zero_context_, 0.00005, context.size_)));
-  mixers_[0].push_back(std::unique_ptr<Mixer>(new Mixer(*(layers_[0]),
-      manager_.recent_bytes_[1], manager_.bit_context_, 0.005, 256)));
-  mixers_[0].push_back(std::unique_ptr<Mixer>(new Mixer(*(layers_[0]),
-      manager_.recent_bytes_[1], manager_.recent_bytes2_[0], 0.005, 256)));
-  mixers_[0].push_back(std::unique_ptr<Mixer>(new Mixer(*(layers_[0]),
-      manager_.recent_bytes_[2], manager_.recent_bytes2_[1], 0.003, 256)));
+  Add(0, new Mixer(layers_[0]->inputs_, logistic_, context.context_,
+      manager_.zero_context_, 0.00005, context.size_));
+  Add(0, new Mixer(layers_[0]->inputs_, logistic_, manager_.recent_bytes_[1],
+      manager_.bit_context_, 0.005, 256));
+  Add(0, new Mixer(layers_[0]->inputs_, logistic_, manager_.recent_bytes_[1],
+      manager_.recent_bytes2_[0], 0.005, 256));
+  Add(0, new Mixer(layers_[0]->inputs_, logistic_, manager_.recent_bytes_[2],
+      manager_.recent_bytes2_[1], 0.003, 256));
 
+  Add(1, new Mixer(layers_[1]->inputs_, logistic_, context.context_,
+      manager_.zero_context_, 0.005, context.size_));
+  Add(1, new Mixer(layers_[1]->inputs_, logistic_, context.context_,
+      manager_.zero_context_, 0.0005, context.size_));
+  Add(1, new Mixer(layers_[1]->inputs_, logistic_, context.context_,
+      manager_.bit_context_, 0.005, context.size_));
+  Add(1, new Mixer(layers_[1]->inputs_, logistic_, context.context_,
+      manager_.bit_context_, 0.0005, context.size_));
+  Add(1, new Mixer(layers_[1]->inputs_, logistic_, context.context_,
+      manager_.recent_bytes2_[0], 0.005, context.size_));
+  Add(1, new Mixer(layers_[1]->inputs_, logistic_, context.context_,
+      manager_.recent_bytes2_[1], 0.005, context.size_));
+  Add(1, new Mixer(layers_[1]->inputs_, logistic_, context.context_,
+      manager_.recent_bytes2_[2], 0.005, context.size_));
 
-  mixers_[1].push_back(std::unique_ptr<Mixer>(new Mixer(*(layers_[1]),
-      context.context_, manager_.zero_context_, 0.005, context.size_)));
-  mixers_[1].push_back(std::unique_ptr<Mixer>(new Mixer(*(layers_[1]),
-      context.context_, manager_.zero_context_, 0.0005, context.size_)));
-  mixers_[1].push_back(std::unique_ptr<Mixer>(new Mixer(*(layers_[1]),
-      context.context_, manager_.bit_context_, 0.005, context.size_)));
-  mixers_[1].push_back(std::unique_ptr<Mixer>(new Mixer(*(layers_[1]),
-      context.context_, manager_.bit_context_, 0.0005, context.size_)));
-  mixers_[1].push_back(std::unique_ptr<Mixer>(new Mixer(*(layers_[1]),
-      context.context_, manager_.recent_bytes2_[0], 0.005, context.size_)));
-  mixers_[1].push_back(std::unique_ptr<Mixer>(new Mixer(*(layers_[1]),
-      context.context_, manager_.recent_bytes2_[1], 0.005, context.size_)));
-  mixers_[1].push_back(std::unique_ptr<Mixer>(new Mixer(*(layers_[1]),
-      context.context_, manager_.recent_bytes2_[2], 0.005, context.size_)));
-
-  mixers_[2].push_back(std::unique_ptr<Mixer>(new Mixer(*(layers_[2]),
-      context.context_, manager_.zero_context_, 0.0003, context.size_)));
+  Add(2, new Mixer(layers_[2]->inputs_, logistic_, context.context_,
+      manager_.zero_context_, 0.0003, context.size_));
 
   layers_[0]->SetNumModels(models_.size());
   for (const auto& mixer : mixers_[0]) {
     mixer->SetNumModels(models_.size());
   }
-  layers_[1]->SetNumModels(mixers_[0].size());
-  for (const auto& mixer : mixers_[1]) {
-    mixer->SetNumModels(mixers_[0].size());
-  }
-  layers_[2]->SetNumModels(mixers_[1].size());
-  for (const auto& mixer : mixers_[2]) {
-    mixer->SetNumModels(mixers_[1].size());
+  for (unsigned int i = 1; i < layers_.size(); ++i) {
+    layers_[i]->SetNumModels(mixers_[i-1].size());
+    for (const auto& mixer : mixers_[i]) {
+      mixer->SetNumModels(mixers_[i-1].size());
+    }
   }
 }
 
@@ -210,11 +211,10 @@ float Predictor::Predict() {
     float p = models_[i]->Predict();
     layers_[0]->SetInput(i, p);
   }
-  for (unsigned int i = 0; i < mixers_[0].size(); ++i) {
-    layers_[1]->SetInput(i, mixers_[0][i]->Mix());
-  }
-  for (unsigned int i = 0; i < mixers_[1].size(); ++i) {
-    layers_[2]->SetInput(i, mixers_[1][i]->Mix());
+  for (unsigned int layer = 1; layer <= 2; ++layer) {
+    for (unsigned int i = 0; i < mixers_[layer - 1].size(); ++i) {
+      layers_[layer]->SetInput(i, mixers_[layer - 1][i]->Mix());
+    }
   }
   float p = mixers_[2][0]->Mix();
   p = (p + 2 * sse_[0]->Process(p) + sse_[1]->Process(p) + sse_[2]->Process(p) +

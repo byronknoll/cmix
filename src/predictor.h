@@ -1,6 +1,7 @@
 #ifndef PREDICTOR_H
 #define PREDICTOR_H
 
+#include "mixer/logistic.h"
 #include "mixer/mixer-input.h"
 #include "mixer/mixer.h"
 #include "sse.h"
@@ -18,6 +19,7 @@ class Predictor {
 
  private:
   void Add(Model* model);
+  void Add(int layer, Mixer* mixer);
   void AddNonstationary();
   void AddEnglish();
   void AddSparse();
@@ -33,6 +35,7 @@ class Predictor {
   std::vector<std::unique_ptr<MixerInput>> layers_;
   std::vector<std::vector<std::unique_ptr<Mixer>>> mixers_;
   Manager manager_;
+  Logistic logistic_;
 };
 
 #endif
