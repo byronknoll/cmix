@@ -6,7 +6,7 @@
 #include "coder/decoder.h"
 
 void WriteHeader(unsigned long long length, std::ofstream* os) {
-  for (int i = 7; i >= 0; --i) {
+  for (int i = 4; i >= 0; --i) {
     char c = length >> (8*i);
     os->put(c);
   }
@@ -14,7 +14,7 @@ void WriteHeader(unsigned long long length, std::ofstream* os) {
 
 void ReadHeader(std::ifstream* is, unsigned long long* length) {
   *length = 0;
-  for (int i = 0; i < 8; ++i) {
+  for (int i = 0; i < 5; ++i) {
     *length <<= 8;
     *length += (unsigned char)(is->get());
   }
