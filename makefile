@@ -4,8 +4,8 @@ LFLAGS = -std=c++11 -Wall
 
 OBJS = build/encoder.o build/decoder.o build/predictor.o build/logistic.o build/mixer-input.o build/mixer.o build/sse.o build/manager.o build/direct.o build/indirect.o build/nonstationary.o build/run-map.o build/match.o build/context-hash.o build/sparse.o build/bit-buffer.o
 
-all: CFLAGS += -O3
-all: LFLAGS += -O3
+all: CFLAGS += -Ofast -s
+all: LFLAGS += -Ofast -s
 all: cmix
 
 debug: CFLAGS += -ggdb

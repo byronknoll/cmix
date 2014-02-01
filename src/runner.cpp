@@ -1,5 +1,4 @@
 #include <fstream>
-#include <iostream>
 #include <ctime>
 
 #include "coder/encoder.h"
@@ -51,8 +50,8 @@ void Decompress(unsigned long long output_length, std::ifstream* is,
 int main(int argc, char* argv[]) {
     if (argc != 4 || argv[1][0] != '-' ||
       (argv[1][1] != 'c' && argv[1][1] != 'd')) {
-    std::cout << "To compress:   cmix -c input output" << std::endl
-              << "To decompress: cmix -d input output" << std::endl;
+    printf("To compress:   cmix -c input output\n");
+    printf("To decompress: cmix -d input output\n");
     return -1;
   }
 
@@ -61,7 +60,6 @@ int main(int argc, char* argv[]) {
   std::ifstream is(argv[2], std::ios::in | std::ios::binary);
   std::ofstream os(argv[3], std::ios::out | std::ios::binary);
   if (!is.is_open() || !os.is_open()) {
-    std::cout << "Error opening file." << std::endl;
     abort();
   }
 
