@@ -30,7 +30,7 @@ void Predictor::Add(Model* model) {
 }
 
 void Predictor::AddNonstationary() {
-  unsigned long long max_size = 3000000;
+  unsigned long long max_size = 1000000;
   float delta = 500;
   std::vector<std::vector<unsigned int>> model_params = {{0, 8}, {1, 5},
       {1, 8}, {2, 6}, {2, 8}, {3, 7}, {4, 7}, {5, 4}, {6, 4}, {7, 3}, {8, 3},
@@ -43,21 +43,19 @@ void Predictor::AddNonstationary() {
   }
 
   max_size = 200000;
-  std::vector<int> orders = {1, 2, 3, 4, 5, 7, 9, 11, 13};
-  for (const auto& order : orders) {
-    const Context& context = manager_.AddContext(std::unique_ptr<Context>(
-        new RubinKarp(manager_.bit_context_, order)));
-    Add(new Indirect(manager_.nonstationary_, context.context_,
-        manager_.bit_context_, delta, std::min(max_size, context.size_ / 5)));
-  }
+  const Context& context = manager_.AddContext(std::unique_ptr<Context>(
+      new RubinKarp(manager_.bit_context_, 5)));
+  Add(new Indirect(manager_.nonstationary_, context.context_,
+      manager_.bit_context_, delta, std::min(max_size, context.size_ / 5)));
 }
 
 void Predictor::AddEnglish() {
   float delta = 200;
-  unsigned long long max_size = 1000000;
-  std::vector<std::vector<unsigned int>> model_params = {{0}, {7, 2}, {7}, {1},
-      {1, 2}, {1, 2, 3}, {1, 3}, {1, 4}, {1, 5}, {2, 3}, {3, 4}, {1, 2, 4},
-      {1, 2, 3, 4}, {2, 3, 4}, {2}, {1, 2, 3, 4, 5}, {1, 2, 3, 4, 5, 6}};
+  unsigned long long max_size = 1500000;
+  std::vector<std::vector<unsigned int>> model_params = {{0}, {0, 1}, {7, 2},
+      {7}, {1}, {1, 2}, {1, 2, 3}, {1, 3}, {1, 4}, {1, 5}, {2, 3}, {3, 4},
+      {1, 2, 4}, {1, 2, 3, 4}, {2, 3, 4}, {2}, {1, 2, 3, 4, 5},
+      {1, 2, 3, 4, 5, 6}};
   for (const auto& params : model_params) {
     std::unique_ptr<Context> hash(new Sparse(manager_.words_, params));
     const Context& context = manager_.AddContext(std::move(hash));
@@ -108,10 +106,10 @@ void Predictor::AddRunMap() {
   unsigned long long max_size = 5000;
   float delta = 200;
   std::vector<std::vector<unsigned int>> model_params = {{0, 8}, {1, 5}, {1, 7},
-      {1, 8}, {2, 6}, {2, 8}, {3, 7}, {5, 5}, {7, 4}, {9, 4}, {11, 3}, {12, 3}};
+      {1, 8}};
   for (const auto& params : model_params) {
     const Context& context = manager_.AddContext(std::unique_ptr<Context>(
-        new ContextHash(manager_.bit_context_,params[0], params[1])));
+        new ContextHash(manager_.bit_context_, params[0], params[1])));
     Add(new Indirect(manager_.run_map_, context.context_, manager_.bit_context_,
         delta, std::min(max_size, context.size_)));
   }
