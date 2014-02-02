@@ -60,6 +60,7 @@ int main(int argc, char* argv[]) {
   std::ifstream is(argv[2], std::ios::in | std::ios::binary);
   std::ofstream os(argv[3], std::ios::out | std::ios::binary);
   if (!is.is_open() || !os.is_open()) {
+    printf("Error opening file.\n");
     abort();
   }
 
