@@ -16,7 +16,7 @@ Predictor::Predictor(unsigned long long file_size) : manager_(file_size),
   AddDirect();
   AddRunMap();
   AddMatch();
-  AddPic();
+  AddBitBuffer();
   AddMixers();
   AddSSE();
 }
@@ -112,7 +112,7 @@ void Predictor::AddMatch() {
   int limit = 200;
   unsigned long long max_size = 20000000;
   std::vector<std::vector<int>> model_params = {{0, 8}, {1, 8}, {2, 8}, {3, 8},
-    {5, 6}, {7, 5}, {9, 4}};
+    {5, 6}, {7, 5}, {9, 4}, {11, 3}, {13, 2}, {15, 2}};
 
   for (const auto& params : model_params) {
     const Context& context = manager_.AddContext(std::unique_ptr<Context>(
@@ -122,11 +122,12 @@ void Predictor::AddMatch() {
   }
 }
 
-void Predictor::AddPic() {
+void Predictor::AddBitBuffer() {
   float delta = 0;
   int limit = 200;
   std::vector<int> params = {216 * 8 + 1, 216 * 8, 216 * 8 - 1, 216 * 8 - 2,
-      216 * 8 - 3, 1, 2, 3, 4, 5, 6, 7};
+      216 * 8 - 3};
+  for (int i = 1; i < 16; ++i) params.push_back(i);
   for (int size : params) {
     Add(new BitBuffer(size, delta, limit));
   }
