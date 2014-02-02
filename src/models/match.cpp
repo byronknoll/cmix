@@ -6,7 +6,7 @@ Match::Match(const std::vector<unsigned char>& history,
     byte_context_(byte_context), bit_context_(bit_context), 
     history_pos_(0), cur_match_(0), cur_byte_(0),
     match_length_(0), limit_(limit), delta_(delta),
-    divisor_(1.0 / (limit + delta)), map_(256 * map_size, 0) {
+    divisor_(1.0 / (limit + delta)), map_(map_size, 0) {
   for (int i = 0; i < 256; ++i) {
     predictions_[i] = 0.5 + (i + 0.5) / 512;
     unsigned char orig = i;

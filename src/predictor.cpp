@@ -7,10 +7,9 @@
 #include "contexts/sparse.h"
 
 #include <vector>
-#include <limits.h>
 
-Predictor::Predictor(unsigned long long file_size) : file_size_(file_size),
-    manager_(file_size), logistic_(10000, 1000) {
+Predictor::Predictor(unsigned long long file_size) : manager_(file_size),
+    logistic_(10000, 1000) {
   AddNonstationary();
   AddEnglish();
   AddSparse();
@@ -30,14 +29,6 @@ void Predictor::Add(int layer, Mixer* mixer) {
   mixers_[layer].push_back(std::unique_ptr<Mixer>(mixer));
 }
 
-unsigned long long Predictor::Size(const Context& context,
-    unsigned long long size) {
-  unsigned long long val = size;
-  val = std::min(context.size_, val);
-  val = std::min(val, file_size_ / 2);
-  return std::max(1ULL, val);
-}
-
 void Predictor::AddNonstationary() {
   unsigned long long max_size = 1000000;
   float delta = 500;
@@ -48,7 +39,7 @@ void Predictor::AddNonstationary() {
     const Context& context = manager_.AddContext(std::unique_ptr<Context>(
         new ContextHash(manager_.bit_context_, params[0], params[1])));
     Add(new Indirect(manager_.nonstationary_, context.context_,
-        manager_.bit_context_, delta, Size(context, max_size)));
+        manager_.bit_context_, delta, std::min(max_size, context.size_)));
   }
 }
 
@@ -63,18 +54,17 @@ void Predictor::AddEnglish() {
     std::unique_ptr<Context> hash(new Sparse(manager_.words_, params));
     const Context& context = manager_.AddContext(std::move(hash));
     Add(new Indirect(manager_.nonstationary_, context.context_,
-        manager_.bit_context_, delta, Size(context, max_size)));
+        manager_.bit_context_, delta, max_size));
   }
 
   std::unique_ptr<Context> hash(new Sparse(manager_.words_,
       std::vector<unsigned int>(1, 1)));
   const Context& context = manager_.AddContext(std::move(hash));
   Add(new Indirect(manager_.run_map_, context.context_, manager_.bit_context_,
-      delta, Size(context, 1000000)));
-  Add(new Direct(context.context_, manager_.bit_context_, 30, 0,
-      Size(context, 1000000)));
+      delta, 1000000));
+  Add(new Direct(context.context_, manager_.bit_context_, 30, 0, 1000000));
   Add(new Match(manager_.history_, context.context_, manager_.bit_context_, 200,
-      0.5, Size(context, 40000)));
+      0.5, 10000000));
 }
 
 void Predictor::AddSparse() {
@@ -88,7 +78,7 @@ void Predictor::AddSparse() {
     std::unique_ptr<Context> hash(new Sparse(manager_.recent_bytes_, params));
     const Context& context = manager_.AddContext(std::move(hash));
     Add(new Indirect(manager_.nonstationary_, context.context_,
-        manager_.bit_context_, delta, Size(context, max_size)));
+        manager_.bit_context_, delta, max_size));
   }
 }
 
@@ -100,7 +90,7 @@ void Predictor::AddDirect() {
     const Context& context = manager_.AddContext(std::unique_ptr<Context>(
         new ContextHash(manager_.bit_context_,params[0], params[1])));
     Add(new Direct(context.context_, manager_.bit_context_, limit, delta,
-        Size(context, ULLONG_MAX)));
+        context.size_));
   }
 }
 
@@ -113,14 +103,14 @@ void Predictor::AddRunMap() {
     const Context& context = manager_.AddContext(std::unique_ptr<Context>(
         new ContextHash(manager_.bit_context_, params[0], params[1])));
     Add(new Indirect(manager_.run_map_, context.context_, manager_.bit_context_,
-        delta, Size(context, max_size)));
+        delta, std::min(max_size, context.size_)));
   }
 }
 
 void Predictor::AddMatch() {
   float delta = 0.5;
   int limit = 200;
-  unsigned long long max_size = 80000;
+  unsigned long long max_size = 20000000;
   std::vector<std::vector<int>> model_params = {{0, 8}, {1, 8}, {2, 8}, {3, 8},
     {5, 6}, {7, 5}, {9, 4}, {11, 3}, {13, 2}, {15, 2}};
 
@@ -128,7 +118,7 @@ void Predictor::AddMatch() {
     const Context& context = manager_.AddContext(std::unique_ptr<Context>(
         new ContextHash(manager_.bit_context_,params[0], params[1])));
     Add(new Match(manager_.history_, context.context_, manager_.bit_context_,
-        limit, delta, Size(context, max_size)));
+        limit, delta, std::min(max_size, context.size_)));
   }
 }
 

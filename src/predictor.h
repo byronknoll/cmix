@@ -20,7 +20,6 @@ class Predictor {
  private:
   void Add(Model* model);
   void Add(int layer, Mixer* mixer);
-  unsigned long long Size(const Context& context, unsigned long long size);
   void AddNonstationary();
   void AddEnglish();
   void AddSparse();
@@ -31,7 +30,6 @@ class Predictor {
   void AddSSE();
   void AddMixers();
 
-  unsigned long long file_size_;
   std::vector<std::unique_ptr<Model>> models_;
   std::vector<std::unique_ptr<SSE>> sse_;
   std::vector<std::unique_ptr<MixerInput>> layers_;

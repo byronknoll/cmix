@@ -24,6 +24,6 @@ void Indirect::Perceive(int bit) {
 }
 
 void Indirect::ByteUpdate() {
-  if (map_.size() < 257) map_index_ = 0;
-  else map_index_ = (257 * byte_context_) % (map_.size() - 257);
+  map_index_ = (257 * byte_context_) % (map_.size() - 257);
+  if (map_index_ < 0) map_index_ = 0;
 }

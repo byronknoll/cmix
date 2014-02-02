@@ -1,7 +1,5 @@
 #include "sparse.h"
 
-#include <limits.h>
-
 Sparse::Sparse(const std::vector<unsigned long long>& recent_contexts,
     const std::vector<unsigned int>& orders) :
     recent_contexts_(recent_contexts), orders_(orders), factors_(6, 1) {
@@ -11,7 +9,6 @@ Sparse::Sparse(const std::vector<unsigned long long>& recent_contexts,
   factors_[4] = 29 * 31 * 37 * 41;
   factors_[5] = 29 * 31 * 37 * 41 * 43;
   context_ = 0;
-  size_ = ULLONG_MAX;
 }
 
 void Sparse::Update() {
