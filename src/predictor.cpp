@@ -157,9 +157,9 @@ void Predictor::AddMatch() {
 void Predictor::AddBitBuffer() {
   float delta = 0;
   int limit = 200;
-  std::vector<int> params = {216 * 4, 216 * 8 * 3 + 1, 216 * 8 * 3 - 1, 216 * 8 * 3, 216 * 8 * 2, 216 * 8 * 2 + 1,
-      216 * 8 * 2 - 1, 216 * 8 + 2, 216 * 8 + 1, 216 * 8, 216 * 8 - 1,
-      216 * 8 - 2};
+  std::vector<int> params = {216 * 4, 216 * 8 * 3 + 1, 216 * 8 * 3 - 1,
+      216 * 8 * 3, 216 * 8 * 2, 216 * 8 * 2 + 1, 216 * 8 * 2 - 1, 216 * 8 + 2,
+      216 * 8 + 1, 216 * 8, 216 * 8 - 1, 216 * 8 - 2};
   for (int i = 1; i < 8; ++i) params.push_back(i);
   for (int size : params) {
     Add(new BitBuffer(size, delta, limit));
