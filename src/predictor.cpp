@@ -103,6 +103,15 @@ void Predictor::AddSparse() {
     Add(new Indirect(manager_.nonstationary_, context.context_,
         manager_.bit_context_, delta, max_size));
   }
+  std::vector<std::vector<unsigned int>> model_params2 = {{0, 2}, {0, 4},
+      {1, 2}, {2, 3}, {3, 7}};
+  for (const auto& params : model_params2) {
+    std::unique_ptr<Context> hash(new Sparse(manager_.recent_bytes_, params));
+    const Context& context = manager_.AddContext(std::move(hash));
+    Add(new Match(manager_.history_, context.context_, manager_.bit_context_,
+        200, 0.5, 10000000));
+    Add(new ByteRun(context.context_, manager_.bit_context_, 100, 10000000));
+  }
 }
 
 void Predictor::AddDirect() {
