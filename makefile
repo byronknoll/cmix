@@ -2,7 +2,7 @@ CC = g++
 CFLAGS = -std=c++11 -Wall -c
 LFLAGS = -std=c++11 -Wall
 
-OBJS = build/encoder.o build/decoder.o build/predictor.o build/logistic.o build/mixer-input.o build/mixer.o build/sse.o build/manager.o build/direct.o build/indirect.o build/nonstationary.o build/run-map.o build/match.o build/context-hash.o build/sparse.o build/bit-buffer.o
+OBJS = build/encoder.o build/decoder.o build/predictor.o build/logistic.o build/mixer-input.o build/mixer.o build/sse.o build/manager.o build/direct.o build/indirect.o build/nonstationary.o build/run-map.o build/byte-run.o build/match.o build/context-hash.o build/sparse.o build/bit-buffer.o
 
 all: CFLAGS += -Ofast -s
 all: LFLAGS += -Ofast -s
@@ -21,7 +21,7 @@ build/encoder.o: src/coder/encoder.h src/coder/encoder.cpp src/predictor.h
 build/decoder.o: src/coder/decoder.h src/coder/decoder.cpp src/predictor.h
 	$(CC) $(CFLAGS) src/coder/decoder.cpp -o build/decoder.o
 
-build/predictor.o: src/predictor.h src/predictor.cpp src/mixer/mixer-input.h src/mixer/mixer.h src/sse.h src/models/model.h src/models/direct.h src/models/indirect.h src/models/match.h src/manager.h src/contexts/context-hash.h src/contexts/sparse.h src/models/bit-buffer.h src/mixer/logistic.h
+build/predictor.o: src/predictor.h src/predictor.cpp src/mixer/mixer-input.h src/mixer/mixer.h src/sse.h src/models/model.h src/models/direct.h src/models/indirect.h src/models/byte-run.h src/models/match.h src/manager.h src/contexts/context-hash.h src/contexts/sparse.h src/models/bit-buffer.h src/mixer/logistic.h
 	$(CC) $(CFLAGS) src/predictor.cpp -o build/predictor.o
 
 build/logistic.o: src/mixer/logistic.h src/mixer/logistic.cpp
@@ -44,6 +44,9 @@ build/direct.o: src/models/direct.h src/models/direct.cpp src/models/model.h
 
 build/indirect.o: src/models/indirect.h src/models/indirect.cpp src/states/state.h src/models/model.h
 	$(CC) $(CFLAGS) src/models/indirect.cpp -o build/indirect.o
+
+build/byte-run.o: src/models/byte-run.h src/models/byte-run.cpp src/models/model.h
+	$(CC) $(CFLAGS) src/models/byte-run.cpp -o build/byte-run.o
 
 build/match.o: src/models/match.h src/models/match.cpp src/models/model.h
 	$(CC) $(CFLAGS) src/models/match.cpp -o build/match.o

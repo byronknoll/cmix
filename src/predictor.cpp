@@ -1,6 +1,7 @@
 #include "predictor.h"
 #include "models/direct.h"
 #include "models/indirect.h"
+#include "models/byte-run.h"
 #include "models/match.h"
 #include "models/bit-buffer.h"
 #include "contexts/context-hash.h"
@@ -10,6 +11,7 @@
 
 Predictor::Predictor(unsigned long long file_size) : manager_(file_size),
     logistic_(10000, 1000) {
+  AddByteRun();
   AddNonstationary();
   AddEnglish();
   AddSparse();
@@ -17,6 +19,7 @@ Predictor::Predictor(unsigned long long file_size) : manager_(file_size),
   AddRunMap();
   AddMatch();
   AddBitBuffer();
+
   AddMixers();
   AddSSE();
 }
@@ -27,6 +30,20 @@ void Predictor::Add(Model* model) {
 
 void Predictor::Add(int layer, Mixer* mixer) {
   mixers_[layer].push_back(std::unique_ptr<Mixer>(mixer));
+}
+
+void Predictor::AddByteRun() {
+  unsigned long long max_size = 10000000;
+  float delta = 200;
+  std::vector<std::vector<unsigned int>> model_params = {{0, 8}, {1, 5}, {1, 8},
+      {2, 6}, {2, 8}, {3, 8}, {4, 7}, {5, 5}};
+
+  for (const auto& params : model_params) {
+    const Context& context = manager_.AddContext(std::unique_ptr<Context>(
+        new ContextHash(manager_.bit_context_, params[0], params[1])));
+    Add(new ByteRun(context.context_, manager_.bit_context_, delta,
+        std::min(max_size, context.size_)));
+  }
 }
 
 void Predictor::AddNonstationary() {
@@ -57,14 +74,20 @@ void Predictor::AddEnglish() {
         manager_.bit_context_, delta, max_size));
   }
 
-  std::unique_ptr<Context> hash(new Sparse(manager_.words_,
-      std::vector<unsigned int>(1, 1)));
-  const Context& context = manager_.AddContext(std::move(hash));
-  Add(new Indirect(manager_.run_map_, context.context_, manager_.bit_context_,
-      delta, 1000000));
-  Add(new Direct(context.context_, manager_.bit_context_, 30, 0, 1000000));
-  Add(new Match(manager_.history_, context.context_, manager_.bit_context_, 200,
-      0.5, 10000000));
+  std::vector<std::vector<unsigned int>> model_params2 = {{0}, {1}, {7},
+      {1, 3}, {1, 2, 3}, {7, 2}};
+  for (const auto& params : model_params2) {
+    std::unique_ptr<Context> hash(new Sparse(manager_.words_, params));
+    const Context& context = manager_.AddContext(std::move(hash));
+    Add(new Match(manager_.history_, context.context_, manager_.bit_context_,
+        200, 0.5, 10000000));
+    Add(new ByteRun(context.context_, manager_.bit_context_, 100, 10000000));
+    if (params[0] == 1 && params.size() == 1) {
+      Add(new Indirect(manager_.run_map_, context.context_,
+          manager_.bit_context_, delta, 1000000));
+      Add(new Direct(context.context_, manager_.bit_context_, 30, 0, 1000000));
+    }
+  }
 }
 
 void Predictor::AddSparse() {
