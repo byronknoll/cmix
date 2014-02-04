@@ -1,5 +1,6 @@
 #include "predictor.h"
 #include "models/direct.h"
+#include "models/direct-hash.h"
 #include "models/indirect.h"
 #include "models/byte-run.h"
 #include "models/match.h"
@@ -85,7 +86,8 @@ void Predictor::AddEnglish() {
     if (params[0] == 1 && params.size() == 1) {
       Add(new Indirect(manager_.run_map_, context.context_,
           manager_.bit_context_, delta, 1000000));
-      Add(new Direct(context.context_, manager_.bit_context_, 30, 0, 1000000));
+      Add(new DirectHash(context.context_, manager_.bit_context_, 30, 0,
+          1000000));
     }
   }
 }
@@ -117,12 +119,17 @@ void Predictor::AddSparse() {
 void Predictor::AddDirect() {
   float delta = 0;
   int limit = 30;
-  std::vector<std::vector<int>> model_params = {{0, 8}, {1, 8}, {2, 8}};
+  std::vector<std::vector<int>> model_params = {{0, 8}, {1, 8}, {2, 8}, {3, 8}};
   for (const auto& params : model_params) {
     const Context& context = manager_.AddContext(std::unique_ptr<Context>(
         new ContextHash(manager_.bit_context_,params[0], params[1])));
-    Add(new Direct(context.context_, manager_.bit_context_, limit, delta,
-        context.size_));
+    if (params[0] < 3) {
+      Add(new Direct(context.context_, manager_.bit_context_, limit, delta,
+          context.size_));
+    } else {
+      Add(new DirectHash(context.context_, manager_.bit_context_, limit, delta,
+          100000));
+    }
   }
 }
 
