@@ -209,6 +209,8 @@ void Predictor::AddMixers() {
   }
   Add(0, new Mixer(layers_[0]->inputs_, logistic_, context.context_,
       manager_.zero_context_, 0.00005, context.size_));
+  Add(0, new Mixer(layers_[0]->inputs_, logistic_, context.context_,
+      manager_.line_break_, 0.0007, context.size_));
   Add(0, new Mixer(layers_[0]->inputs_, logistic_, manager_.recent_bytes_[1],
       manager_.bit_context_, 0.005, 256));
   Add(0, new Mixer(layers_[0]->inputs_, logistic_, manager_.recent_bytes_[1],

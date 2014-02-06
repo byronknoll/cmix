@@ -1,8 +1,8 @@
 #include "manager.h"
 
 Manager::Manager(unsigned long long file_size) : bit_context_(1),
-    zero_context_(0), history_pos_(0), history_(file_size, 0), words_(8, 0),
-    recent_bytes_(8, 0), recent_bytes2_(4, 0) {}
+    zero_context_(0), history_pos_(0), line_break_(0), history_(file_size, 0),
+    words_(8, 0), recent_bytes_(8, 0), recent_bytes2_(4, 0) {}
 
 const Context& Manager::AddContext(std::unique_ptr<Context> context) {
   for (const auto& old : contexts_) {
@@ -51,6 +51,13 @@ void Manager::UpdateRecentBytes() {
 void Manager::Perceive(int bit) {
   if ((bit_context_ += bit_context_ + bit) >= 256) {
     bit_context_ -= 256;
+
+    if (bit_context_ == '\n') {
+      line_break_ = 0;
+    } else if (line_break_ < 255) {
+      ++line_break_;
+    }
+
     UpdateHistory();
     UpdateWords();
     UpdateRecentBytes();

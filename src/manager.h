@@ -17,6 +17,7 @@ class Manager {
   unsigned int bit_context_;
   unsigned int zero_context_;
   unsigned long long history_pos_;
+  unsigned int line_break_;
   std::vector<unsigned char> history_;
   std::vector<unsigned long long> words_;
   std::vector<unsigned long long> recent_bytes_;
