@@ -4,7 +4,6 @@
 #include "models/indirect.h"
 #include "models/byte-run.h"
 #include "models/match.h"
-#include "models/bit-buffer.h"
 #include "contexts/context-hash.h"
 #include "contexts/sparse.h"
 
@@ -19,7 +18,7 @@ Predictor::Predictor(unsigned long long file_size) : manager_(file_size),
   AddDirect();
   AddRunMap();
   AddMatch();
-  AddBitBuffer();
+  AddPic();
 
   AddMixers();
   AddSSE();
@@ -161,16 +160,21 @@ void Predictor::AddMatch() {
   }
 }
 
-void Predictor::AddBitBuffer() {
-  float delta = 0;
-  int limit = 200;
-  std::vector<int> params = {216 * 4, 216 * 8 * 3 + 1, 216 * 8 * 3 - 1,
-      216 * 8 * 3, 216 * 8 * 2, 216 * 8 * 2 + 1, 216 * 8 * 2 - 1, 216 * 8 + 2,
-      216 * 8 + 1, 216 * 8, 216 * 8 - 1, 216 * 8 - 2};
-  for (int i = 1; i < 8; ++i) params.push_back(i);
-  for (int size : params) {
-    Add(new BitBuffer(size, delta, limit));
+void Predictor::AddPic() {
+  float delta = 600;
+  const Context& context = manager_.AddContext(std::unique_ptr<Context>(
+      new ContextHash(manager_.bit_context_, 0, 8)));
+  for (unsigned int i = 0; i < manager_.pic_context_.size(); ++i) {
+    Add(new Indirect(manager_.nonstationary_, context.context_,
+        manager_.pic_context_[i], delta, context.size_));
   }
+
+  delta = 0;
+  int limit = 250;
+  Add(new Direct(context.context_, manager_.pic_context_[0], limit, delta,
+      context.size_));
+  Add(new Direct(context.context_, manager_.pic_context_[2], limit, delta,
+      context.size_));
 }
 
 void Predictor::AddSSE() {
