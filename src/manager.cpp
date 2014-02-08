@@ -86,7 +86,8 @@ void Manager::UpdatePicContext(int bit) {
       (Bit(216 * 8 * 2) << 1) +
       Bit(216 * 8);
 
-  pic_context_[5] = (Bit(8) << 7) + (Bit(7) << 6) + (Bit(6) << 5) + (Bit(5) << 4) + (Bit(4) << 3) + (Bit(3) << 2) + (Bit(2) << 1) + Bit(1);
+  pic_context_[5] = (Bit(8) << 7) + (Bit(7) << 6) + (Bit(6) << 5) +
+      (Bit(5) << 4) + (Bit(4) << 3) + (Bit(3) << 2) + (Bit(2) << 1) + Bit(1);
 }
 
 void Manager::UpdateRecentBytes() {
