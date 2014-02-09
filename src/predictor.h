@@ -28,6 +28,7 @@ class Predictor {
   void AddRunMap();
   void AddMatch();
   void AddPic();
+  void AddDoubleIndirect();
   void AddSSE();
   void AddMixers();
 

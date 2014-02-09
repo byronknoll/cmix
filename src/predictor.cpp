@@ -6,6 +6,7 @@
 #include "models/match.h"
 #include "contexts/context-hash.h"
 #include "contexts/sparse.h"
+#include "contexts/indirect-hash.h"
 
 #include <vector>
 
@@ -19,6 +20,7 @@ Predictor::Predictor(unsigned long long file_size) : manager_(file_size),
   AddRunMap();
   AddMatch();
   AddPic();
+  AddDoubleIndirect();
 
   AddMixers();
   AddSSE();
@@ -175,6 +177,21 @@ void Predictor::AddPic() {
       context.size_));
   Add(new Direct(context.context_, manager_.pic_context_[2], limit, delta,
       context.size_));
+}
+
+void Predictor::AddDoubleIndirect() {
+  unsigned long long max_size = 100000;
+  float delta = 400;
+  std::vector<std::vector<unsigned int>> model_params = {{1, 8, 1, 8},
+      {2, 8, 1, 8}, {1, 8, 2, 8}, {2, 8, 2, 8}, {1, 8, 3, 8}, {3, 8, 1, 8},
+      {4, 6, 4, 8}, {5, 5, 5, 5}};
+  for (const auto& params : model_params) {
+    const Context& context = manager_.AddContext(std::unique_ptr<Context>(
+        new IndirectHash(manager_.bit_context_, params[0], params[1],
+        params[2], params[3])));
+    Add(new Indirect(manager_.nonstationary_, context.context_,
+        manager_.bit_context_, delta, std::min(max_size, context.size_)));
+  }
 }
 
 void Predictor::AddSSE() {
