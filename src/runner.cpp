@@ -22,11 +22,16 @@ void ReadHeader(std::ifstream* is, unsigned long long* length) {
 void Compress(unsigned long long input_bytes, std::ifstream* is,
     std::ofstream* os, unsigned long long* output_bytes) {
   Encoder e(os, input_bytes);
-  while (true) {
+  int percent = 0;
+  for (unsigned long long pos = 0; pos < input_bytes; ++pos) {
     char c = is->get();
-    if (!is->good()) break;
     for (int j = 7; j >= 0; --j) {
       e.Encode((c>>j)&1);
+    }
+    if ((100.0 * pos) / input_bytes > percent) {
+      printf("%d%%\r", percent);
+      fflush(stdout);
+      ++percent;
     }
   }
   e.Flush();
@@ -36,14 +41,18 @@ void Compress(unsigned long long input_bytes, std::ifstream* is,
 void Decompress(unsigned long long output_length, std::ifstream* is,
                 std::ofstream* os) {
   Decoder d(is, output_length);
-  unsigned long long pos = 0;
-  while (pos < output_length) {
+  int percent = 0;
+  for(unsigned long long pos = 0; pos < output_length; ++pos) {
     int byte = 1;
     while (byte < 256) {
       byte += byte + d.Decode();
     }
     os->put(byte);
-    ++pos;
+    if ((100.0 * pos) / output_length > percent) {
+      printf("%d%%\r", percent);
+      fflush(stdout);
+      ++percent;
+    }
   }
 }
 
