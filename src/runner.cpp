@@ -22,16 +22,15 @@ void ReadHeader(std::ifstream* is, unsigned long long* length) {
 void Compress(unsigned long long input_bytes, std::ifstream* is,
     std::ofstream* os, unsigned long long* output_bytes) {
   Encoder e(os, input_bytes);
-  int percent = 0;
+  unsigned long long percent = 1 + (input_bytes / 100);
   for (unsigned long long pos = 0; pos < input_bytes; ++pos) {
     char c = is->get();
     for (int j = 7; j >= 0; --j) {
       e.Encode((c>>j)&1);
     }
-    if ((100.0 * pos) / input_bytes > percent) {
-      printf("%d%%\r", percent);
+    if (pos % percent == 0) {
+      printf("\r%lld%%", pos / percent);
       fflush(stdout);
-      ++percent;
     }
   }
   e.Flush();
@@ -41,17 +40,16 @@ void Compress(unsigned long long input_bytes, std::ifstream* is,
 void Decompress(unsigned long long output_length, std::ifstream* is,
                 std::ofstream* os) {
   Decoder d(is, output_length);
-  int percent = 0;
+  unsigned long long percent = 1 + (output_length / 100);
   for(unsigned long long pos = 0; pos < output_length; ++pos) {
     int byte = 1;
     while (byte < 256) {
       byte += byte + d.Decode();
     }
     os->put(byte);
-    if ((100.0 * pos) / output_length > percent) {
-      printf("%d%%\r", percent);
+    if (pos % percent == 0) {
+      printf("\r%lld%%", pos / percent);
       fflush(stdout);
-      ++percent;
     }
   }
 }
@@ -89,7 +87,7 @@ int main(int argc, char* argv[]) {
   is.close();
   os.close();
 
-  printf("%lld bytes -> %lld bytes in %1.2f s.\n",
+  printf("\r%lld bytes -> %lld bytes in %1.2f s.\n",
       input_bytes, output_bytes,
       ((double)clock()-start)/CLOCKS_PER_SEC);
   return 0;
