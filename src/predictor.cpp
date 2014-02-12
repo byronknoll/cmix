@@ -4,6 +4,7 @@
 #include "models/indirect.h"
 #include "models/byte-run.h"
 #include "models/match.h"
+#include "models/dmc.h"
 #include "contexts/context-hash.h"
 #include "contexts/sparse.h"
 #include "contexts/indirect-hash.h"
@@ -12,6 +13,7 @@
 
 Predictor::Predictor(unsigned long long file_size) : manager_(file_size),
     logistic_(10000, 1000) {
+  AddDMC();
   AddByteRun();
   AddNonstationary();
   AddEnglish();
@@ -32,6 +34,10 @@ void Predictor::Add(Model* model) {
 
 void Predictor::Add(int layer, Mixer* mixer) {
   mixers_[layer].push_back(std::unique_ptr<Mixer>(mixer));
+}
+
+void Predictor::AddDMC() {
+  Add(new DMC(0.02, 10000000));
 }
 
 void Predictor::AddByteRun() {
