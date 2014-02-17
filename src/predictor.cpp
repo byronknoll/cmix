@@ -5,6 +5,7 @@
 #include "models/byte-run.h"
 #include "models/match.h"
 #include "models/dmc.h"
+#include "models/ppm.h"
 #include "contexts/context-hash.h"
 #include "contexts/sparse.h"
 #include "contexts/indirect-hash.h"
@@ -13,7 +14,8 @@
 
 Predictor::Predictor(unsigned long long file_size) : manager_(file_size),
     logistic_(10000, 1000) {
-  AddDMC();
+  AddPPM();
+  /*AddDMC();
   AddByteRun();
   AddNonstationary();
   AddEnglish();
@@ -25,7 +27,7 @@ Predictor::Predictor(unsigned long long file_size) : manager_(file_size),
   AddDoubleIndirect();
 
   AddMixers();
-  AddSSE();
+  AddSSE();*/
 }
 
 void Predictor::Add(Model* model) {
@@ -34,6 +36,10 @@ void Predictor::Add(Model* model) {
 
 void Predictor::Add(int layer, Mixer* mixer) {
   mixers_[layer].push_back(std::unique_ptr<Mixer>(mixer));
+}
+
+void Predictor::AddPPM() {
+  Add(new PPM(5, manager_.bit_context_));
 }
 
 void Predictor::AddDMC() {
@@ -276,7 +282,7 @@ void Predictor::AddMixers() {
 }
 
 float Predictor::Predict() {
-  //return models_[0]->Predict();
+  return models_[0]->Predict();
   for (unsigned int i = 0; i < models_.size(); ++i) {
     float p = models_[i]->Predict();
     layers_[0]->SetInput(i, p);
@@ -304,10 +310,15 @@ void Predictor::Perceive(int bit) {
   for (const auto& sse : sse_) {
     sse->Perceive(bit);
   }
+
+  bool byte_update = false;
+  if (manager_.bit_context_ >= 128) byte_update = true;
+
   manager_.Perceive(bit);
-  if (manager_.bit_context_ == 1) {
+  if (byte_update) {
     for (const auto& model : models_) {
       model->ByteUpdate();
     }
+    manager_.bit_context_ = 1;
   }
 }

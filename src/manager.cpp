@@ -119,6 +119,5 @@ void Manager::Perceive(int bit) {
     for (const auto& context : contexts_) {
       context->Update();
     }
-    bit_context_ = 1;
   }
 }
