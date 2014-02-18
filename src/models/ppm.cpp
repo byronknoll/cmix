@@ -48,7 +48,7 @@ void PPM::UpdateTable(Table* cur, unsigned int depth, unsigned char byte) {
   for (unsigned int i = 0; i < cur->entries.size(); ++i) {
     if (cur->entries[i].symbol == byte) {
       ++(cur->entries[i].count);
-      if (cur->entries[i].count == 255) {
+      if (cur->entries[i].count == 50) {
         for (unsigned int j = 0; j < cur->entries.size(); ++j) {
           cur->entries[j].count /= 2;
         }
