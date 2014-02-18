@@ -52,6 +52,11 @@ void PPM::UpdateTable(Table* cur, unsigned int depth, unsigned char byte) {
         for (unsigned int j = 0; j < cur->entries.size(); ++j) {
           cur->entries[j].count /= 2;
         }
+        if (depth == 0) {
+          for (unsigned int j = 0; j < cur->entries.size(); ++j) {
+            if (cur->entries[j].count == 0) cur->entries[j].count = 1;
+          }
+        }
       }
       return;
     }
@@ -89,17 +94,9 @@ void PPM::ByteUpdate() {
         probs_[symbol] = factor * node->entries[i].count;
       }
     }
-    escape *= 1.0 / sum;
     node = node->lower_table;
-    if (node == NULL) {
-      factor = escape / 256;
-      for (int i = 0; i < 256; ++i) {
-        if (probs_[i] == 0) {
-          probs_[i] = factor;
-        }
-      }
-      break;
-    }
+    if (node == NULL) break;
+    escape *= 1.0 / sum;
   }
   top_ = 255;
   bot_ = 0;
