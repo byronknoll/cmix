@@ -6,17 +6,17 @@
 #include <vector>
 #include <array>
 
-struct Links;
+struct Table;
 
 struct Entry {
   unsigned char count;
   unsigned char symbol;
+  Table* link;
 };
 
 struct Table {
-  Table() : entries(0, Entry()), links(0, NULL) {}
+  Table() : entries(0, Entry()) {}
   std::vector<Entry> entries;
-  std::vector<Table*> links;  // check merged
   Table* lower_table;
 };
 
@@ -31,12 +31,13 @@ class PPM : public Model {
   Table* AddOrGetTable(Table* cur, unsigned int depth, unsigned char byte);
   void UpdateTable(Table* cur, unsigned int depth, unsigned char byte);
 
-  const unsigned int& bit_context_;
+  const unsigned int& byte_;
   Table* cur_;
   unsigned int cur_depth_;
   unsigned int max_order_;
-  std::array<double, 256> probs_;
+  std::array<float, 256> probs_;
   int top_;
+  int mid_;
   int bot_;
 };
 
