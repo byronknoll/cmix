@@ -4,8 +4,6 @@ PPM::PPM(unsigned int order, const unsigned int& bit_context) :
     bit_context_(bit_context), cur_(NULL), cur_depth_(0), max_order_(order),
     top_(255), bot_(0) {
   cur_ = new Table();
-  cur_->total = 1;
-  cur_->links = new Links();
   probs_.fill(1.0 / 256);
 }
 
@@ -29,11 +27,16 @@ void PPM::Perceive(int bit) {
 }
 
 Table* PPM::AddOrGetTable(Table* cur, unsigned int order, unsigned char byte) {
-  if (cur->links->link[byte] != NULL) return cur->links->link[byte];
+  unsigned int index = 0;
+  for (unsigned int i = 0; i < cur->entries.size(); ++i) {
+    if (cur->entries[i].symbol == byte) {
+      if (cur->links[i] != NULL) return cur->links[i];
+      index = i;
+      break;
+    }
+  }
   Table* next = new Table();
-  next->total = 1;
-  cur->links->link[byte] = next;
-  if (order < max_order_ - 1) next->links = new Links();
+  cur->links[index] = next;
   if (order == 0) {
     next->lower_table = cur;
   } else {
@@ -42,21 +45,32 @@ Table* PPM::AddOrGetTable(Table* cur, unsigned int order, unsigned char byte) {
   return next;
 }
 
-void PPM::UpdateTable(Table* cur, unsigned char byte) {
-  if (cur->counts[byte] == 255) {
-    cur->total = 1;
-    for (int i = 0; i < 256; ++i) {
-      cur->counts[i] /= 2;
-      cur->total += cur->counts[i];
+void PPM::UpdateTable(Table* cur, unsigned int depth, unsigned char byte) {
+  bool found = false;
+  for (unsigned int i = 0; i < cur->entries.size(); ++i) {
+    if (cur->entries[i].symbol == byte) {
+      found = true;
+      ++(cur->entries[i].count);
+      if (cur->entries[i].count == 255) {
+        for (unsigned int j = 0; j < cur->entries.size(); ++j) {
+          cur->entries[j].count /= 2;
+        }
+      }
+      break;
     }
   }
-  ++cur->counts[byte];
-  ++cur->total;
-  if (cur->lower_table != NULL) UpdateTable(cur->lower_table, byte);
+  if (!found) {
+    Entry add;
+    add.symbol = byte;
+    add.count = 1;
+    cur->entries.push_back(add);
+    if (depth != max_order_) cur->links.push_back(NULL);
+  }
+  if (cur->lower_table != NULL) UpdateTable(cur->lower_table, depth - 1, byte);
 }
 
 void PPM::ByteUpdate() {
-  UpdateTable(cur_, bit_context_);
+  UpdateTable(cur_, cur_depth_, bit_context_);
 
   if (cur_depth_ == max_order_) {
     cur_ = cur_->lower_table;
@@ -70,12 +84,13 @@ void PPM::ByteUpdate() {
   double escape = 1;
   while (true) {
     int sum = 1;
-    for (int i = 0; i < 256; ++i) {
-      if (probs_[i] == 0) sum += node->counts[i];
+    for (unsigned int i = 0; i < node->entries.size(); ++i) {
+      if (probs_[node->entries[i].symbol] == 0) sum += node->entries[i].count;
     }
-    for (int i = 0; i < 256; ++i) {
-      if (probs_[i] == 0 && node->counts[i] > 0) {
-        probs_[i] = (escape * node->counts[i]) / sum;
+    for (unsigned int i = 0; i < node->entries.size(); ++i) {
+      unsigned char symbol = node->entries[i].symbol;
+      if (probs_[symbol] == 0) {
+        probs_[symbol] = (escape * node->entries[i].count) / sum;
       }
     }
     bool done = true;

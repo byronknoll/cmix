@@ -8,15 +8,16 @@
 
 struct Links;
 
-struct Table {
-  std::array<unsigned char, 256> counts;
-  unsigned short total;
-  Links* links;
-  Table* lower_table;
+struct Entry {
+  unsigned char count;
+  unsigned char symbol;
 };
 
-struct Links {
-  std::array<Table*, 256> link;
+struct Table {
+  Table() : entries(0, Entry()), links(0, NULL) {}
+  std::vector<Entry> entries;
+  std::vector<Table*> links;  // check merged
+  Table* lower_table;
 };
 
 class PPM : public Model {
@@ -27,8 +28,8 @@ class PPM : public Model {
   void ByteUpdate();
 
  private:
-  Table* AddOrGetTable(Table* cur, unsigned int order, unsigned char byte);
-  void UpdateTable(Table* cur, unsigned char byte);
+  Table* AddOrGetTable(Table* cur, unsigned int depth, unsigned char byte);
+  void UpdateTable(Table* cur, unsigned int depth, unsigned char byte);
 
   const unsigned int& bit_context_;
   Table* cur_;
