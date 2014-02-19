@@ -18,6 +18,7 @@ struct Table {
   Table() : entries(0, Entry()) {}
   std::vector<Entry> entries;
   int lower_table;
+  unsigned char escape;
 };
 
 class PPM : public Model {

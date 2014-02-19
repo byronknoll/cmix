@@ -39,6 +39,7 @@ int PPM::AddOrGetTable(int table_index, unsigned int order,
   tables_.push_back(Table());
   int next = tables_.size() - 1;
   tables_[table_index].entries[index].link = next;
+  tables_[next].escape = 1;
   if (order == 0) {
     tables_[next].lower_table = 0;
   } else {
@@ -57,11 +58,12 @@ void PPM::UpdateTable(int table_index, unsigned int depth, unsigned char byte) {
         for (unsigned int j = 0; j < cur.entries.size(); ++j) {
           cur.entries[j].count /= 2;
         }
+        cur.escape /= 2;
         if (depth == 0) {
           for (unsigned int j = 0; j < cur.entries.size(); ++j) {
             if (cur.entries[j].count == 0) cur.entries[j].count = 1;
           }
-        }
+        } else if (cur.escape == 0) cur.escape = 1;
       }
       return;
     }
@@ -71,6 +73,7 @@ void PPM::UpdateTable(int table_index, unsigned int depth, unsigned char byte) {
   add.count = 1;
   add.link = -1;
   cur.entries.push_back(add);
+  ++cur.escape;
   if (cur.lower_table != -1) UpdateTable(cur.lower_table, depth - 1, byte);
 }
 
@@ -78,6 +81,7 @@ void PPM::Reset() {
   tables_.clear();
   Table t;
   t.lower_table = -1;
+  t.escape = 0;
   tables_.push_back(t);
   cur_ = 0;
   cur_depth_ = 0;
@@ -99,7 +103,7 @@ void PPM::ByteUpdate() {
   probs_.fill(0);
   float escape = 1;
   while (true) {
-    int sum = 1;
+    float sum = node->escape;
     for (unsigned int i = 0; i < node->entries.size(); ++i) {
       if (probs_[node->entries[i].symbol] == 0) sum += node->entries[i].count;
     }
@@ -110,8 +114,8 @@ void PPM::ByteUpdate() {
       }
     }
     if (node->lower_table == -1) break;
+    escape *= (1.0 * node->escape) / sum;
     node = &tables_[node->lower_table];
-    escape *= 1.0 / sum;
   }
   top_ = 255;
   bot_ = 0;
