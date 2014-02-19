@@ -4,10 +4,11 @@
 #include "model.h"
 
 #include <vector>
+#include <array>
 
 struct Node {
-  float count[2];
-  unsigned int next[2];
+  std::array<float, 2> count;
+  std::array<unsigned int, 2> next;
 };
 
 class DMC : public Model {

@@ -7,10 +7,12 @@ DMC::DMC(float delta, unsigned int max_size) : cur_(0), delta_(delta),
 
 void DMC::Reset() {
   nodes_.clear();
-  nodes_.resize(256 * 256, {{1.5, 1.5}, {0, 0}});
+  nodes_.resize(256 * 256, Node());
   for (int i = 0; i < 256; ++i) {
     for (int j = 0; j < 256; ++j) {
       Node& n = nodes_[j * 256 + i];
+      n.count[0] = 1.5;
+      n.count[1] = 1.5;
       if (i < 127) {
         n.next[0] = 256 * j + 2 * i + 1;
         n.next[1] = 256 * j + 2 * i + 2;
