@@ -11,30 +11,34 @@ struct Table;
 struct Entry {
   unsigned char count;
   unsigned char symbol;
-  Table* link;
+  int link;
 };
 
 struct Table {
   Table() : entries(0, Entry()) {}
   std::vector<Entry> entries;
-  Table* lower_table;
+  int lower_table;
 };
 
 class PPM : public Model {
  public:
-  PPM(unsigned int order, const unsigned int& bit_context);
+  PPM(unsigned int order, const unsigned int& bit_context,
+      unsigned int max_size);
   float Predict();
   void Perceive(int bit);
   void ByteUpdate();
 
  private:
-  Table* AddOrGetTable(Table* cur, unsigned int depth, unsigned char byte);
-  void UpdateTable(Table* cur, unsigned int depth, unsigned char byte);
+  int AddOrGetTable(int table_index, unsigned int depth, unsigned char byte);
+  void UpdateTable(int table_index, unsigned int depth, unsigned char byte);
+  void Reset();
 
   const unsigned int& byte_;
-  Table* cur_;
+  std::vector<Table> tables_;
+  unsigned int cur_;
   unsigned int cur_depth_;
   unsigned int max_order_;
+  unsigned int max_size_;
   std::array<float, 256> probs_;
   int top_;
   int mid_;

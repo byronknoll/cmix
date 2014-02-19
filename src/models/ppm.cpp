@@ -1,9 +1,9 @@
 #include "ppm.h"
 
-PPM::PPM(unsigned int order, const unsigned int& bit_context) :
-    byte_(bit_context), cur_(NULL), cur_depth_(0), max_order_(order),
-    top_(255), mid_(0), bot_(0) {
-  cur_ = new Table();
+PPM::PPM(unsigned int order, const unsigned int& bit_context,
+    unsigned int max_size) : byte_(bit_context), cur_(0), cur_depth_(0),
+    max_order_(order), max_size_(max_size), top_(255), mid_(0), bot_(0) {
+  Reset();
   probs_.fill(1.0 / 256);
 }
 
@@ -25,36 +25,41 @@ void PPM::Perceive(int bit) {
   }
 }
 
-Table* PPM::AddOrGetTable(Table* cur, unsigned int order, unsigned char byte) {
+int PPM::AddOrGetTable(int table_index, unsigned int order,
+    unsigned char byte) {
+  Table& cur = tables_[table_index];
   unsigned int index = 0;
-  for (unsigned int i = 0; i < cur->entries.size(); ++i) {
-    if (cur->entries[i].symbol == byte) {
-      if (cur->entries[i].link != NULL) return cur->entries[i].link;
+  for (unsigned int i = 0; i < cur.entries.size(); ++i) {
+    if (cur.entries[i].symbol == byte) {
+      if (cur.entries[i].link != -1) return cur.entries[i].link;
       index = i;
       break;
     }
   }
-  Table* next = new Table();
-  cur->entries[index].link = next;
+  tables_.push_back(Table());
+  int next = tables_.size() - 1;
+  tables_[table_index].entries[index].link = next;
   if (order == 0) {
-    next->lower_table = cur;
+    tables_[next].lower_table = 0;
   } else {
-    next->lower_table = AddOrGetTable(cur->lower_table, order - 1, byte);
+    int temp = AddOrGetTable(tables_[table_index].lower_table, order - 1, byte);
+    tables_[next].lower_table = temp;
   }
   return next;
 }
 
-void PPM::UpdateTable(Table* cur, unsigned int depth, unsigned char byte) {
-  for (unsigned int i = 0; i < cur->entries.size(); ++i) {
-    if (cur->entries[i].symbol == byte) {
-      ++(cur->entries[i].count);
-      if (cur->entries[i].count == 50) {
-        for (unsigned int j = 0; j < cur->entries.size(); ++j) {
-          cur->entries[j].count /= 2;
+void PPM::UpdateTable(int table_index, unsigned int depth, unsigned char byte) {
+  Table& cur = tables_[table_index];
+  for (unsigned int i = 0; i < cur.entries.size(); ++i) {
+    if (cur.entries[i].symbol == byte) {
+      ++(cur.entries[i].count);
+      if (cur.entries[i].count == 50) {
+        for (unsigned int j = 0; j < cur.entries.size(); ++j) {
+          cur.entries[j].count /= 2;
         }
         if (depth == 0) {
-          for (unsigned int j = 0; j < cur->entries.size(); ++j) {
-            if (cur->entries[j].count == 0) cur->entries[j].count = 1;
+          for (unsigned int j = 0; j < cur.entries.size(); ++j) {
+            if (cur.entries[j].count == 0) cur.entries[j].count = 1;
           }
         }
       }
@@ -64,22 +69,33 @@ void PPM::UpdateTable(Table* cur, unsigned int depth, unsigned char byte) {
   Entry add;
   add.symbol = byte;
   add.count = 1;
-  add.link = NULL;
-  cur->entries.push_back(add);
-  if (cur->lower_table != NULL) UpdateTable(cur->lower_table, depth - 1, byte);
+  add.link = -1;
+  cur.entries.push_back(add);
+  if (cur.lower_table != -1) UpdateTable(cur.lower_table, depth - 1, byte);
+}
+
+void PPM::Reset() {
+  tables_.clear();
+  Table t;
+  t.lower_table = -1;
+  tables_.push_back(t);
+  cur_ = 0;
+  cur_depth_ = 0;
 }
 
 void PPM::ByteUpdate() {
+  if (tables_.size() > max_size_) Reset();
+
   UpdateTable(cur_, cur_depth_, byte_);
 
   if (cur_depth_ == max_order_) {
-    cur_ = cur_->lower_table;
+    cur_ = tables_[cur_].lower_table;
     --cur_depth_;
   }
   cur_ = AddOrGetTable(cur_, cur_depth_, byte_);
   ++cur_depth_;
 
-  Table* node = cur_;
+  Table* node = &tables_[cur_];
   probs_.fill(0);
   float escape = 1;
   while (true) {
@@ -89,13 +105,12 @@ void PPM::ByteUpdate() {
     }
     float factor = escape / sum;
     for (unsigned int i = 0; i < node->entries.size(); ++i) {
-      unsigned char symbol = node->entries[i].symbol;
-      if (probs_[symbol] == 0) {
-        probs_[symbol] = factor * node->entries[i].count;
+      if (probs_[node->entries[i].symbol] == 0) {
+        probs_[node->entries[i].symbol] = factor * node->entries[i].count;
       }
     }
-    node = node->lower_table;
-    if (node == NULL) break;
+    if (node->lower_table == -1) break;
+    node = &tables_[node->lower_table];
     escape *= 1.0 / sum;
   }
   top_ = 255;

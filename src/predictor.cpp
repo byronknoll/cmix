@@ -15,7 +15,7 @@
 Predictor::Predictor(unsigned long long file_size) : manager_(file_size),
     logistic_(10000, 1000) {
   AddPPM();
-  AddDMC();
+  /*AddDMC();
   AddByteRun();
   AddNonstationary();
   AddEnglish();
@@ -27,7 +27,7 @@ Predictor::Predictor(unsigned long long file_size) : manager_(file_size),
   AddDoubleIndirect();
 
   AddMixers();
-  AddSSE();
+  AddSSE();*/
 }
 
 void Predictor::Add(Model* model) {
@@ -39,7 +39,7 @@ void Predictor::Add(int layer, Mixer* mixer) {
 }
 
 void Predictor::AddPPM() {
-  Add(new PPM(5, manager_.bit_context_));
+  Add(new PPM(5, manager_.bit_context_, 10000000));
 }
 
 void Predictor::AddDMC() {
@@ -282,7 +282,7 @@ void Predictor::AddMixers() {
 }
 
 float Predictor::Predict() {
-  //return models_[0]->Predict();
+  return models_[0]->Predict();
   for (unsigned int i = 0; i < models_.size(); ++i) {
     float p = models_[i]->Predict();
     layers_[0]->SetInput(i, p);
