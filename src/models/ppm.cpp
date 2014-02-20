@@ -65,8 +65,8 @@ void PPM::UpdateTable(int table_index, unsigned int depth, unsigned char byte) {
   for (unsigned int i = 0; i < cur.entries.size(); ++i) {
     sum += cur.entries[i].count;
     if (cur.entries[i].symbol == byte) {
-      ++(cur.entries[i].count);
-      if (cur.entries[i].count == 255) {
+      cur.entries[i].count += 2;
+      if (cur.entries[i].count >= 40) {
         for (unsigned int j = 0; j < cur.entries.size(); ++j) {
           cur.entries[j].count /= 2;
         }
@@ -82,6 +82,16 @@ void PPM::UpdateTable(int table_index, unsigned int depth, unsigned char byte) {
       }
       int escape_context = EscapeContext(cur.escape, sum, depth);
       escape_map_[escape_context] -= escape_map_[escape_context] * divisor_;
+
+      if (cur.lower_table != -1) {
+        Table& low = tables_[cur.lower_table];
+        for (unsigned int j = 0; j < low.entries.size(); ++j) {
+          if (low.entries[j].symbol == byte) {
+            ++(low.entries[j].count);
+          }
+        }
+      }
+
       return;
     }
   }
