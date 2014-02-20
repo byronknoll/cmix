@@ -1,10 +1,20 @@
 #include "ppm.h"
 
-PPM::PPM(unsigned int order, const unsigned int& bit_context,
-    unsigned int max_size) : byte_(bit_context), cur_(0), cur_depth_(0),
-    max_order_(order), max_size_(max_size), top_(255), mid_(0), bot_(0) {
+PPM::PPM(unsigned int order, const unsigned int& bit_context, float delta,
+    unsigned int max_size) : byte_(bit_context), divisor_(1.0 / delta),
+    escape_map_(256 * 256, 0), cur_(0), cur_depth_(0), max_order_(order),
+    max_size_(max_size), top_(255), mid_(0), bot_(0) {
   Reset();
   probs_.fill(1.0 / 256);
+  for (int escape = 1; escape < 128; ++escape) {
+    for (int sum = 0; sum < 256; ++sum) {
+      for (unsigned int order = 0; order <= max_order_; ++order) {
+        float prob = (1.0 * escape) / (escape + sum);
+        int context = EscapeContext(escape, sum, order);
+        escape_map_[context] = prob;
+      }
+    }
+  }
 }
 
 float PPM::Predict() {
@@ -51,7 +61,9 @@ int PPM::AddOrGetTable(int table_index, unsigned int order,
 
 void PPM::UpdateTable(int table_index, unsigned int depth, unsigned char byte) {
   Table& cur = tables_[table_index];
+  int sum = 0;
   for (unsigned int i = 0; i < cur.entries.size(); ++i) {
+    sum += cur.entries[i].count;
     if (cur.entries[i].symbol == byte) {
       ++(cur.entries[i].count);
       if (cur.entries[i].count == 255) {
@@ -65,6 +77,11 @@ void PPM::UpdateTable(int table_index, unsigned int depth, unsigned char byte) {
           }
         } else if (cur.escape == 0) cur.escape = 1;
       }
+      for (unsigned int j = i + 1; j < cur.entries.size(); ++j) {
+        sum += cur.entries[j].count;
+      }
+      int escape_context = EscapeContext(cur.escape, sum, depth);
+      escape_map_[escape_context] -= escape_map_[escape_context] * divisor_;
       return;
     }
   }
@@ -73,6 +90,8 @@ void PPM::UpdateTable(int table_index, unsigned int depth, unsigned char byte) {
   add.count = 1;
   add.link = -1;
   cur.entries.push_back(add);
+  int escape_context = EscapeContext(cur.escape, sum, depth);
+  escape_map_[escape_context] += (1 - escape_map_[escape_context]) * divisor_;
   ++cur.escape;
   if (cur.lower_table != -1) UpdateTable(cur.lower_table, depth - 1, byte);
 }
@@ -85,6 +104,14 @@ void PPM::Reset() {
   tables_.push_back(t);
   cur_ = 0;
   cur_depth_ = 0;
+}
+
+int PPM::EscapeContext(int escape_count, int match_count, int order) {
+  if (match_count > 255) match_count = 255;
+  if (escape_count > 127) escape_count = 127;
+  if (order > 3) order = 1;
+  else order = 0;
+  return order + escape_count * 2 + match_count * 256;
 }
 
 void PPM::ByteUpdate() {
@@ -102,20 +129,23 @@ void PPM::ByteUpdate() {
   Table* node = &tables_[cur_];
   probs_.fill(0);
   float escape = 1;
+  int order = cur_depth_;
   while (true) {
-    float sum = node->escape;
+    int sum = 0;
     for (unsigned int i = 0; i < node->entries.size(); ++i) {
       if (probs_[node->entries[i].symbol] == 0) sum += node->entries[i].count;
     }
-    float factor = escape / sum;
+    float escape_prob = escape_map_[EscapeContext(node->escape, sum, order)];
+    float factor = (1 - escape_prob) * escape / sum;
     for (unsigned int i = 0; i < node->entries.size(); ++i) {
       if (probs_[node->entries[i].symbol] == 0) {
         probs_[node->entries[i].symbol] = factor * node->entries[i].count;
       }
     }
     if (node->lower_table == -1) break;
-    escape *= (1.0 * node->escape) / sum;
+    escape *= escape_prob;
     node = &tables_[node->lower_table];
+    --order;
   }
   top_ = 255;
   bot_ = 0;

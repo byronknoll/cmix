@@ -23,7 +23,7 @@ struct Table {
 
 class PPM : public Model {
  public:
-  PPM(unsigned int order, const unsigned int& bit_context,
+  PPM(unsigned int order, const unsigned int& bit_context, float delta,
       unsigned int max_size);
   float Predict();
   void Perceive(int bit);
@@ -33,9 +33,12 @@ class PPM : public Model {
   int AddOrGetTable(int table_index, unsigned int depth, unsigned char byte);
   void UpdateTable(int table_index, unsigned int depth, unsigned char byte);
   void Reset();
+  int EscapeContext(int escape_count, int match_count, int order);
 
   const unsigned int& byte_;
+  float divisor_;
   std::vector<Table> tables_;
+  std::vector<float> escape_map_;
   unsigned int cur_;
   unsigned int cur_depth_;
   unsigned int max_order_;

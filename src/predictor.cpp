@@ -39,7 +39,7 @@ void Predictor::Add(int layer, Mixer* mixer) {
 }
 
 void Predictor::AddPPM() {
-  Add(new PPM(5, manager_.bit_context_, 10000000));
+  Add(new PPM(6, manager_.bit_context_, 100, 10000000));
 }
 
 void Predictor::AddDMC() {
