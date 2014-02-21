@@ -66,7 +66,7 @@ void PPM::UpdateTable(int table_index, unsigned int depth, unsigned char byte) {
     sum += cur.entries[i].count;
     if (cur.entries[i].symbol == byte) {
       cur.entries[i].count += 2;
-      if (cur.entries[i].count >= 40) {
+      if (cur.entries[i].count >= 254) {
         for (unsigned int j = 0; j < cur.entries.size(); ++j) {
           cur.entries[j].count /= 2;
         }
