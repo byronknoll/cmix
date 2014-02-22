@@ -64,7 +64,7 @@ void Predictor::AddNonstationary() {
   unsigned long long max_size = 1000000;
   float delta = 500;
   std::vector<std::vector<unsigned int>> model_params = {{0, 8}, {2, 8}, {4, 7},
-      {8, 3}, {12, 1}};
+      {8, 3}, {12, 1}, {16, 1}};
   for (const auto& params : model_params) {
     const Context& context = manager_.AddContext(std::unique_ptr<Context>(
         new ContextHash(manager_.bit_context_, params[0], params[1])));
@@ -117,8 +117,8 @@ void Predictor::AddSparse() {
     Add(new Indirect(manager_.nonstationary_, context.context_,
         manager_.bit_context_, delta, max_size));
   }
-  std::vector<std::vector<unsigned int>> model_params2 = {{0, 2}, {0, 4},
-      {1, 2}, {2, 3}, {3, 7}};
+  std::vector<std::vector<unsigned int>> model_params2 = {{1}, {0, 2}, {0, 4},
+      {1, 2}, {2, 3}, {3, 4}, {3, 7}};
   for (const auto& params : model_params2) {
     std::unique_ptr<Context> hash(new Sparse(manager_.recent_bytes_, params));
     const Context& context = manager_.AddContext(std::move(hash));
@@ -162,8 +162,8 @@ void Predictor::AddMatch() {
   float delta = 0.5;
   int limit = 200;
   unsigned long long max_size = 20000000;
-  std::vector<std::vector<int>> model_params = {{0, 8}, {1, 8}, {2, 8}, {11, 3},
-      {13, 2}, {15, 2}};
+  std::vector<std::vector<int>> model_params = {{0, 8}, {1, 8}, {2, 8}, {7, 4},
+      {11, 3}, {13, 2}, {15, 2}, {17, 2}, {20, 1}, {25, 1}};
 
   for (const auto& params : model_params) {
     const Context& context = manager_.AddContext(std::unique_ptr<Context>(
@@ -193,7 +193,7 @@ void Predictor::AddDoubleIndirect() {
   float delta = 400;
   std::vector<std::vector<unsigned int>> model_params = {{1, 8, 1, 8},
       {2, 8, 1, 8}, {1, 8, 2, 8}, {2, 8, 2, 8}, {1, 8, 3, 8}, {3, 8, 1, 8},
-      {4, 6, 4, 8}, {5, 5, 5, 5}};
+      {4, 6, 4, 8}, {5, 5, 5, 5}, {1, 8, 4, 8}, {1, 8, 5, 6}, {6, 4, 6, 4}};
   for (const auto& params : model_params) {
     const Context& context = manager_.AddContext(std::unique_ptr<Context>(
         new IndirectHash(manager_.bit_context_, params[0], params[1],
