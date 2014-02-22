@@ -50,7 +50,7 @@ void Predictor::AddByteRun() {
   unsigned long long max_size = 10000000;
   float delta = 200;
   std::vector<std::vector<unsigned int>> model_params = {{0, 8}, {1, 5}, {1, 8},
-      {2, 6}, {2, 8}, {3, 8}, {4, 7}, {5, 5}};
+      {2, 8}};
 
   for (const auto& params : model_params) {
     const Context& context = manager_.AddContext(std::unique_ptr<Context>(
@@ -63,9 +63,8 @@ void Predictor::AddByteRun() {
 void Predictor::AddNonstationary() {
   unsigned long long max_size = 1000000;
   float delta = 500;
-  std::vector<std::vector<unsigned int>> model_params = {{0, 8}, {1, 5},
-      {1, 8}, {2, 6}, {2, 8}, {3, 7}, {4, 7}, {5, 4}, {6, 4}, {7, 3}, {8, 3},
-      {9, 2}, {10,2}, {11, 2}, {12, 1}};
+  std::vector<std::vector<unsigned int>> model_params = {{0, 8}, {2, 8}, {4, 7},
+      {8, 3}, {12, 1}};
   for (const auto& params : model_params) {
     const Context& context = manager_.AddContext(std::unique_ptr<Context>(
         new ContextHash(manager_.bit_context_, params[0], params[1])));
@@ -109,7 +108,7 @@ void Predictor::AddSparse() {
   float delta = 300;
   unsigned long long max_size = 256;
   std::vector<std::vector<unsigned int>> model_params = {{1}, {2}, {3}, {4},
-      {5}, {6}, {7}, {0, 2}, {0, 3}, {0, 4}, {0, 5}, {0, 6}, {0, 7}, {1, 2},
+      {5}, {0, 2}, {0, 3}, {0, 4}, {0, 5}, {0, 6}, {0, 7}, {1, 2},
       {1, 3}, {2, 3}, {2, 5}, {3, 4}, {3, 5}, {3, 7}};
   for (const auto& params : model_params) {
     if (params.size() > 1) max_size = 256 * 256;
@@ -163,8 +162,8 @@ void Predictor::AddMatch() {
   float delta = 0.5;
   int limit = 200;
   unsigned long long max_size = 20000000;
-  std::vector<std::vector<int>> model_params = {{0, 8}, {1, 8}, {2, 8}, {3, 8},
-    {5, 6}, {7, 5}, {9, 4}, {11, 3}, {13, 2}, {15, 2}};
+  std::vector<std::vector<int>> model_params = {{0, 8}, {1, 8}, {2, 8}, {11, 3},
+      {13, 2}, {15, 2}};
 
   for (const auto& params : model_params) {
     const Context& context = manager_.AddContext(std::unique_ptr<Context>(
@@ -186,8 +185,6 @@ void Predictor::AddPic() {
   delta = 0;
   int limit = 250;
   Add(new Direct(context.context_, manager_.pic_context_[0], limit, delta,
-      context.size_));
-  Add(new Direct(context.context_, manager_.pic_context_[2], limit, delta,
       context.size_));
 }
 
@@ -225,7 +222,8 @@ void Predictor::AddMixers() {
   }
 
   std::vector<std::vector<double>> model_params = {{0, 8, 0.005},
-      {0, 8, 0.0005}, {1, 8, 0.005}, {1, 8, 0.0005}, {3, 3, 0.002}};
+      {0, 8, 0.0005}, {1, 8, 0.005}, {1, 8, 0.0005}, {2, 4, 0.005},
+      {3, 3, 0.002}};
   for (const auto& params : model_params) {
     const Context& context = manager_.AddContext(std::unique_ptr<Context>(
         new ContextHash(manager_.bit_context_, params[0], params[1])));
@@ -233,7 +231,7 @@ void Predictor::AddMixers() {
         manager_.bit_context_, params[2], context.size_));
   }
 
-  model_params = {{0, 0.001}, {1, 0.01}, {2, 0.002}, {3, 0.005}};
+  model_params = {{0, 0.001}, {2, 0.002}, {3, 0.005}};
   const Context& context = manager_.AddContext(std::unique_ptr<Context>(
       new ContextHash(manager_.bit_context_, 0, 8)));
   for (const auto& params : model_params) {
@@ -259,6 +257,8 @@ void Predictor::AddMixers() {
       manager_.bit_context_, 0.005, context.size_));
   Add(1, new Mixer(layers_[1]->inputs_, logistic_, context.context_,
       manager_.bit_context_, 0.0005, context.size_));
+  Add(1, new Mixer(layers_[1]->inputs_, logistic_, context.context_,
+      manager_.bit_context_, 0.00001, context.size_));
   Add(1, new Mixer(layers_[1]->inputs_, logistic_, context.context_,
       manager_.recent_bytes2_[0], 0.005, context.size_));
   Add(1, new Mixer(layers_[1]->inputs_, logistic_, context.context_,
