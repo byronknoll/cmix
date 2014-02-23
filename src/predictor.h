@@ -20,6 +20,7 @@ class Predictor {
  private:
   void Add(Model* model);
   void Add(int layer, Mixer* mixer);
+  void AddPAQ8();
   void AddPPM();
   void AddDMC();
   void AddByteRun();
