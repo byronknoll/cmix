@@ -22,11 +22,11 @@ class Match : public Model {
   unsigned long long history_pos_;
   unsigned long long cur_match_;
   unsigned char cur_byte_;
+  unsigned char bit_pos_;
   unsigned char match_length_;
   int limit_;
   float delta_;
   float divisor_;
-  std::array<unsigned char, 256> reverse_table_;
   std::vector<unsigned int> map_;
   std::array<float, 256> predictions_;
   std::array<int, 256> counts_;
