@@ -6,7 +6,8 @@
 #include "models/match.h"
 #include "models/dmc.h"
 #include "models/ppm.h"
-#include "models/paq8.h"
+#include "models/paq8l.h"
+#include "models/paq8hp.h"
 #include "contexts/context-hash.h"
 #include "contexts/sparse.h"
 #include "contexts/indirect-hash.h"
@@ -15,7 +16,8 @@
 
 Predictor::Predictor(unsigned long long file_size) : manager_(file_size),
     logistic_(10000, 1000) {
-  AddPAQ8();
+  AddPAQ8HP();
+  AddPAQ8L();
   AddPPM();
   AddDMC();
   AddByteRun();
@@ -40,8 +42,12 @@ void Predictor::Add(int layer, Mixer* mixer) {
   mixers_[layer].push_back(std::unique_ptr<Mixer>(mixer));
 }
 
-void Predictor::AddPAQ8() {
-  Add(new PAQ8());
+void Predictor::AddPAQ8HP() {
+  Add(new PAQ8HP());
+}
+
+void Predictor::AddPAQ8L() {
+  Add(new PAQ8L());
 }
 
 void Predictor::AddPPM() {

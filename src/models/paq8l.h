@@ -1,11 +1,11 @@
-#ifndef PAQ8_H
-#define PAQ8_H
+#ifndef PAQ8L_H
+#define PAQ8L_H
 
 #include "model.h"
 
-class PAQ8 : public Model {
+class PAQ8L : public Model {
  public:
-  PAQ8();
+  PAQ8L();
   float Predict();
   void Perceive(int bit);
   void ByteUpdate() {};

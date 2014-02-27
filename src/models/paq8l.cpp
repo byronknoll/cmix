@@ -1,3 +1,5 @@
+// This is adapted from paq8l
+
 /*
     Copyright (C) 2006 Matt Mahoney, Serge Osnach, Alexander Ratushnyak,
     Bill Pettis, Przemyslaw Skibinski, Matthew Fite, wowtiger, Andrew Paterson,
@@ -16,7 +18,7 @@
     Visit <http://www.gnu.org/copyleft/gpl.html>.
 */
 
-#include "paq8.h"
+#include "paq8l.h"
 
 #include <stdio.h>
 #include <stdlib.h>
@@ -2061,15 +2063,15 @@ void PAQ8Perceive(int bit) {
 
 }  // namespace
 
-PAQ8::PAQ8() {
+PAQ8L::PAQ8L() {
   PAQ8Init();
 }
 
-float PAQ8::Predict() {
+float PAQ8L::Predict() {
   int p = PAQ8Predict();
   return (1.0 + p) / 4097;
 }
 
-void PAQ8::Perceive(int bit) {
+void PAQ8L::Perceive(int bit) {
   PAQ8Perceive(bit);
 }
