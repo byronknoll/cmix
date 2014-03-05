@@ -43,11 +43,11 @@ void Predictor::Add(int layer, Mixer* mixer) {
 }
 
 void Predictor::AddPAQ8HP() {
-  Add(new PAQ8HP());
+  Add(new PAQ8HP(8));
 }
 
 void Predictor::AddPAQ8L() {
-  Add(new PAQ8L());
+  Add(new PAQ8L(9));
 }
 
 void Predictor::AddPPM() {

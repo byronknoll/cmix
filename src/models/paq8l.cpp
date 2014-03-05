@@ -2048,7 +2048,8 @@ void Predictor::update() {
 
 Predictor paq8;
 
-void PAQ8Init() {
+void PAQ8Init(int memory) {
+  level = memory;
   buf.setsize(MEM*8);
 }
 
@@ -2063,8 +2064,8 @@ void PAQ8Perceive(int bit) {
 
 }  // namespace
 
-PAQ8L::PAQ8L() {
-  PAQ8Init();
+PAQ8L::PAQ8L(int memory) {
+  PAQ8Init(memory);
 }
 
 float PAQ8L::Predict() {

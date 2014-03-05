@@ -5,7 +5,7 @@
 
 class PAQ8HP : public Model {
  public:
-  PAQ8HP();
+  PAQ8HP(int memory);
   float Predict();
   void Perceive(int bit);
   void ByteUpdate() {};
