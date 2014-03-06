@@ -43,10 +43,12 @@ void Predictor::Add(int layer, Mixer* mixer) {
 }
 
 void Predictor::AddPAQ8HP() {
+  auxiliary_.push_back(models_.size());
   Add(new PAQ8HP(8));
 }
 
 void Predictor::AddPAQ8L() {
+  auxiliary_.push_back(models_.size());
   Add(new PAQ8L(9));
 }
 
@@ -286,9 +288,9 @@ void Predictor::AddMixers() {
     mixer->SetNumModels(models_.size());
   }
   for (unsigned int i = 1; i < layers_.size(); ++i) {
-    layers_[i]->SetNumModels(mixers_[i-1].size());
+    layers_[i]->SetNumModels(mixers_[i-1].size() + auxiliary_.size());
     for (const auto& mixer : mixers_[i]) {
-      mixer->SetNumModels(mixers_[i-1].size());
+      mixer->SetNumModels(mixers_[i-1].size() + auxiliary_.size());
     }
   }
 }
@@ -302,6 +304,10 @@ float Predictor::Predict() {
   for (unsigned int layer = 1; layer <= 2; ++layer) {
     for (unsigned int i = 0; i < mixers_[layer - 1].size(); ++i) {
       layers_[layer]->SetInput(i, mixers_[layer - 1][i]->Mix());
+    }
+    for (unsigned int i = 0; i < auxiliary_.size(); ++i) {
+      layers_[layer]->inputs_[mixers_[layer - 1].size() + i] =
+          layers_[0]->inputs_[auxiliary_[i]];
     }
   }
   float p = mixers_[2][0]->Mix();
