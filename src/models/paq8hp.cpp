@@ -2286,6 +2286,11 @@ int PAQ8Predict() {
 
 void PAQ8Perceive(int bit) {
   y = bit;
+  if (bit) {
+    sm_add_y = sm_add;
+  } else {
+    sm_add_y = 0;
+  }
   paq8.update();
 }
 
