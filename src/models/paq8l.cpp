@@ -1903,20 +1903,7 @@ int contextModel2() {
   static RunContextMap rcm7(MEM), rcm9(MEM), rcm10(MEM);
   static Mixer m(800, 3088, 7, 128);
   static U32 cxt[16];  // order 0-11 contexts
-  static Filetype filetype=DEFAULT;
-  static int size=0;  // bytes remaining in block
-//  static const char* typenames[4]={"", "jpeg ", "exe ", "text "};
-
-  // Parse filetype and size
-  if (bpos==0) {
-    --size;
-    if (size==-1) filetype=(Filetype)buf(1);
-    if (size==-5) {
-      size=buf(4)<<24|buf(3)<<16|buf(2)<<8|buf(1);
-//      if (filetype<=3) printf("(%s%d)", typenames[filetype], size);
-      if (filetype==EXE) size+=8;
-    }
-  }
+  static Filetype filetype=EXE;
 
   m.update();
   m.add(256);
@@ -1971,8 +1958,6 @@ int contextModel2() {
     dmcModel(m);
     if (filetype==EXE) exeModel(m);
   }
-
-
 
   order = order-2;
   if(order<0) order=0;
