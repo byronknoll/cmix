@@ -56,23 +56,6 @@ void quit(const char* message=0) {
   throw message;
 }
 
-#if 0
-// strings are equal ignoring case?
-int equals(const char* a, const char* b) {
-  assert(a && b);
-  while (*a && *b) {
-    int c1=*a;
-    if (c1>='A'&&c1<='Z') c1+='a'-'A';
-    int c2=*b;
-    if (c2>='A'&&c2<='Z') c2+='a'-'A';
-    if (c1!=c2) return 0;
-    ++a;
-    ++b;
-  }
-  return *a==*b;
-}
-#endif
-
 typedef enum {DEFAULT, JPEG, EXE, BINTEXT, TEXT } Filetype; 
 
 #define preprocFlag 1220
@@ -344,7 +327,6 @@ inline int llog(U32 x) {
 // Also, when a bit is observed and the count of the opposite bit is large,
 // then part of this count is discarded to favor newer data over old.
 
-#if 1 // change to #if 0 to generate this table at run time (4% slower)
 static const U8 State_table[256][4]={
   {  1,  2, 0, 0},{  3,  5, 1, 0},{  4,  6, 0, 1},{  7, 10, 2, 0}, // 0-3
   {  8, 12, 1, 1},{  9, 13, 1, 1},{ 11, 14, 0, 2},{ 15, 19, 3, 0}, // 4-7
@@ -412,141 +394,6 @@ static const U8 State_table[256][4]={
   {140,252, 0,41}};  // 252, 253-255 are reserved
 
 #define nex(state,sel) State_table[state][sel]
-
-// The code used to generate the above table at run time (4% slower).
-// To print the table, uncomment the 4 lines of print statements below.
-// In this code x,y = n0,n1 is the number of 0,1 bits represented by a state.
-#else
-
-class StateTable {
-  Array<U8> ns;  // state*4 -> next state if 0, if 1, n0, n1
-  enum {B=5, N=64}; // sizes of b, t
-  static const int b[B];  // x -> max y, y -> max x
-  static U8 t[N][N][2];  // x,y -> state number, number of states
-  int num_states(int x, int y);  // compute t[x][y][1]
-  void discount(int& x);  // set new value of x after 1 or y after 0
-  void next_state(int& x, int& y, int b);  // new (x,y) after bit b
-public:
-  int operator()(int state, int sel) {return ns[state*4+sel];}
-  StateTable();
-} nex;
-
-const int StateTable::b[B]={42,41,13,6,5};  // x -> max y, y -> max x
-U8 StateTable::t[N][N][2];
-
-int StateTable::num_states(int x, int y) {
-  if (x<y) return num_states(y, x);
-  if (x<0 || y<0 || x>=N || y>=N || y>=B || x>=b[y]) return 0;
-
-  // States 0-30 are a history of the last 0-4 bits
-  if (x+y<=4) {  // x+y choose x = (x+y)!/x!y!
-    int r=1;
-    for (int i=x+1; i<=x+y; ++i) r*=i;
-    for (int i=2; i<=y; ++i) r/=i;
-    return r;
-  }
-
-  // States 31-255 represent a 0,1 count and possibly the last bit
-  // if the state is reachable by either a 0 or 1.
-  else
-    return 1+(y>0 && x+y<16);
-}
-
-// New value of count x if the opposite bit is observed
-void StateTable::discount(int& x) {
-  if (x>2) x=ilog(x)/6-1;
-}
-
-// compute next x,y (0 to N) given input b (0 or 1)
-void StateTable::next_state(int& x, int& y, int b) {
-  if (x<y)
-    next_state(y, x, 1-b);
-  else {
-    if (b) {
-      ++y;
-      discount(x);
-    }
-    else {
-      ++x;
-      discount(y);
-    }
-    while (!t[x][y][1]) {
-      if (y<2) --x;
-      else {
-        x=(x*(y-1)+(y/2))/y;
-        --y;
-      }
-    }
-  }
-}
-
-// Initialize next state table ns[state*4] -> next if 0, next if 1, x, y
-StateTable::StateTable(): ns(1024) {
-
-  // Assign states
-  int state=0;
-  for (int i=0; i<256; ++i) {
-    for (int y=0; y<=i; ++y) {
-      int x=i-y;
-      int n=num_states(x, y);
-      if (n) {
-        t[x][y][0]=state;
-        t[x][y][1]=n;
-        state+=n;
-      }
-    }
-  }
-
-  // Print/generate next state table
-  state=0;
-  for (int i=0; i<N; ++i) {
-    for (int y=0; y<=i; ++y) {
-      int x=i-y;
-      for (int k=0; k<t[x][y][1]; ++k) {
-        int x0=x, y0=y, x1=x, y1=y;  // next x,y for input 0,1
-        int ns0=0, ns1=0;
-        if (state<15) {
-          ++x0;
-          ++y1;
-          ns0=t[x0][y0][0]+state-t[x][y][0];
-          ns1=t[x1][y1][0]+state-t[x][y][0];
-          if (x>0) ns1+=t[x-1][y+1][1];
-          ns[state*4]=ns0;
-          ns[state*4+1]=ns1;
-          ns[state*4+2]=x;
-          ns[state*4+3]=y;
-        }
-        else if (t[x][y][1]) {
-          next_state(x0, y0, 0);
-          next_state(x1, y1, 1);
-          ns[state*4]=ns0=t[x0][y0][0];
-          ns[state*4+1]=ns1=t[x1][y1][0]+(t[x1][y1][1]>1);
-          ns[state*4+2]=x;
-          ns[state*4+3]=y;
-        }
-          // uncomment to print table above
-//        printf("{%3d,%3d,%2d,%2d},", ns[state*4], ns[state*4+1], 
-//          ns[state*4+2], ns[state*4+3]);
-//        if (state%4==3) printf(" // %d-%d\n  ", state-3, state);
-        assert(state>=0 && state<256);
-        assert(t[x][y][1]>0);
-        assert(t[x][y][0]<=state);
-        assert(t[x][y][0]+t[x][y][1]>state);
-        assert(t[x][y][1]<=6);
-        assert(t[x0][y0][1]>0);
-        assert(t[x1][y1][1]>0);
-        assert(ns0-t[x0][y0][0]<t[x0][y0][1]);
-        assert(ns0-t[x0][y0][0]>=0);
-        assert(ns1-t[x1][y1][0]<t[x1][y1][1]);
-        assert(ns1-t[x1][y1][0]>=0);
-        ++state;
-      }
-    }
-  }
-//  printf("%d states\n", state); exit(0);  // uncomment to print table above
-}
-
-#endif
 
 ///////////////////////////// Squash //////////////////////////////
 
@@ -801,18 +648,10 @@ StateMap::StateMap(): cxt(0) {
 //////////////////////////// hash //////////////////////////////
 
 // Hash 2-5 ints.
-#if 0
-inline U32 hash(U32 a, U32 b, U32 c=0xffffffff, U32 d=0xffffffff,
-    U32 e=0xffffffff) {
-  U32 h=a*200002979u+b*30005491u+c*50004239u+d*70004807u+e*110002499u;
-  return h^h>>9^a>>2^b>>3^c>>4^d>>5^e>>6;
-}
-#else
 inline U32 hash(U32 a, U32 b, U32 c=0xffffffff) {
-  U32 h=a*110002499u+b*30005491u+c*50004239u; //+d*70004807u+e*110002499u;
+  U32 h=a*110002499u+b*30005491u+c*50004239u;
   return h^h>>9^a>>3^b>>3^c>>4;
 }
-#endif
 
 ///////////////////////////// BH ////////////////////////////////
 
@@ -858,19 +697,6 @@ inline  U8* BH<B>::operator[](U32 i) {
     if (*(U16*)p==chk) break;  // found
   }
   if (j==0) return p;  // front
-#if 0
-  static U8 tmp[B];  // element to move to front
-  if (j==M) {
-    --j;
-    memset(tmp, 0, B);
-    *(U16*)tmp=chk;
-    if ( /*M>2&&*/ p[2]>p[2-B]) --j;
-  }
-  else memcpy(tmp, p, B);
-  p = &t[i*B];
-  memmove(p+B, p, j*B);
-  memcpy(p, tmp, B);
-#else
   if (j==M) {
     --j;
     if ( /*M>2&&*/ p[2]>p[-2]) --j;
@@ -879,7 +705,6 @@ inline  U8* BH<B>::operator[](U32 i) {
   p = &t[i*4];
   memmove(p+4, p, j*4);
   *(int*)p=chk;
-#endif
   return p;
 }
 
@@ -1219,41 +1044,7 @@ int matchModel(Mixer& m) {
   return result;
 }
 
-#if 0
-//////////////////////////// picModel //////////////////////////
-
-// Model a 1728 by 2376 2-color CCITT bitmap image, left to right scan,
-// MSB first (216 bytes per row, 513216 bytes total).  Insert predictions
-// into m.
-
-void picModel(Mixer& m) {
-  static U32 r0, r1, r2, r3;  // last 5 rows, bit 8 is over current pixel
-  static Array<U8> t(0x10200);  // model: cxt -> state
-  const int N=3;  // number of contexts
-  static int cxt[N];  // contexts
-  static StateMap sm[N];
-  int i;
-
-  // update the model
-  for (i=0; i<N; ++i)
-    t[cxt[i]]=nex(t[cxt[i]],y);
-
-  // update the contexts (pixels surrounding the predicted one)
-  r0+=r0+y;
-  r1+=r1+((buf(215)>>(7-bpos))&1);
-  r2+=r2+((buf(431)>>(7-bpos))&1);
-  r3+=r3+((buf(647)>>(7-bpos))&1);
-  cxt[0]=r0&0x7|r1>>4&0x38|r2>>3&0xc0;
-  cxt[1]=0x100+(r0&1|r1>>4&0x3e|r2>>2&0x40|r3>>1&0x80);
-  cxt[2]=0x200+(r0&0x3f^r1&0x3ffe^r2<<2&0x7f00^r3<<5&0xf800);
-
-  // predict
-  for (i=0; i<N; ++i)
-    m.add(stretch(sm[i].p(t[cxt[i]])));
-}
-#endif
-
-  static U32 col, frstchar=0, spafdo=0, spaces=0, spacecount=0, words=0, wordcount=0, fails=0, failz=0, failcount=0;
+static U32 col, frstchar=0, spafdo=0, spaces=0, spacecount=0, words=0, wordcount=0, fails=0, failz=0, failcount=0;
 
 //////////////////////////// wordModel /////////////////////////
 
@@ -1386,32 +1177,13 @@ void wordModel(Mixer& m) {
 void recordModel(Mixer& m) {
   static int cpos1[256]; //, cpos2[256], cpos3[256], cpos4[256]; //buf(1)->last 3 pos
   static int wpos1[0x10000]; // buf(1..2) -> last position
-///  static int rlen=2, rlen1=3, rlen2=4;  // run length and 2 candidates
-///  static int rcount1=0, rcount2=0;  // candidate counts
   static ContextMap cm(32768/4, 2), cn(32768/2, 5), co(32768, 4), cp(32768*2, 3), cq(32768*4, 3);
 
   // Find record length
   if (!bpos) {
     int c=b1, w=(b2<<8)+c, d=w&0xf0ff, e=c4&0xffffff;
-#if 0
-    int r=pos-cpos1[c];
-    if (r>1 && r==cpos1[c]-cpos2[c]
-        && r==cpos2[c]-cpos3[c] && r==cpos3[c]-cpos4[c]
-        && (r>15 || (c==buf(r*5+1)) && c==buf(r*6+1))) {
-      if (r==rlen1) ++rcount1;
-      else if (r==rlen2) ++rcount2;
-      else if (rcount1>rcount2) rlen2=r, rcount2=1;
-      else rlen1=r, rcount1=1;
-    }
-    if (rcount1>15 && rlen!=rlen1) rlen=rlen1, rcount1=rcount2=0;
-    if (rcount2>15 && rlen!=rlen2) rlen=rlen2, rcount1=rcount2=0;
-
-    // Set 2 dimensional contexts
-    assert(rlen>0);
-#endif
     cm.set(c<<8| (min(255, pos-cpos1[c])/4) );
     cm.set(w<<9| llog(pos-wpos1[w])>>2);
-///    cm.set(rlen|buf(rlen)<<10|buf(rlen*2)<<18);
     cn.set(w    );
     cn.set(d<<8 );
     cn.set(c<<16);
@@ -1433,9 +1205,6 @@ void recordModel(Mixer& m) {
     cq.set(e);
 
     // update last context positions
-///    cpos4[c]=cpos3[c];
-///    cpos3[c]=cpos2[c];
-///    cpos2[c]=cpos1[c];
     cpos1[c]=pos;
     wpos1[w]=pos;
   }
@@ -1488,572 +1257,6 @@ void sparseModel(Mixer& m) {
   scma.mix(m);
 }
 
-#if 0
-//////////////////////////// bmpModel /////////////////////////////////
-
-// Model a 24-bit color uncompressed .bmp or .tif file.  Return
-// width in pixels if an image file is detected, else 0.
-
-// 32-bit little endian number at buf(i)..buf(i-3)
-inline U32 i4(int i) {
-  assert(i>3);
-  return buf(i)+256*buf(i-1)+65536*buf(i-2)+16777216*buf(i-3);
-}
-
-// 16-bit
-inline int i2(int i) {
-  assert(i>1);
-  return buf(i)+256*buf(i-1);
-}
-
-// Square buf(i)
-inline int sqrbuf(int i) {
-  assert(i>0);
-  return buf(i)*buf(i);
-}
-
-int bmpModel(Mixer& m) {
-  static int w=0;  // width of image in bytes (pixels * 3)
-  static int eoi=0;     // end of image
-  static U32 tiff=0;  // offset of tif header
-  const int SC=0x20000;
-  static SmallStationaryContextMap scm1(SC), scm2(SC),
-    scm3(SC), scm4(SC), scm5(SC), scm6(SC*2);
-  static ContextMap cm(MEM*4, 8);
-
-  // Detect .bmp file header (24 bit color, not compressed)
-  if (!bpos && buf(54)=='B' && buf(53)=='M'
-      && i4(44)==54 && i4(40)==40 && i4(24)==0) {
-    w=(i4(36)+3&-4)*3;  // image width
-    const int height=i4(32);
-    eoi=pos;
-    if (w<0x30000 && height<0x10000) {
-      eoi=pos+w*height;  // image size in bytes
-      printf("BMP %dx%d ", w/3, height);
-    }
-    else
-      eoi=pos;
-  }
-
-  // Detect .tif file header (24 bit color, not compressed).
-  // Parsing is crude, won't work with weird formats.
-  if (!bpos) {
-    if (c4==0x49492a00) tiff=pos;  // Intel format only
-    if (pos-tiff==4 && c4!=0x08000000) tiff=0; // 8=normal offset to directory
-    if (tiff && pos-tiff==200) {  // most of directory should be read by now
-      int dirsize=i2(pos-tiff-4);  // number of 12-byte directory entries
-      w=0;
-      int bpp=0, compression=0, width=0, height=0;
-      for (int i=tiff+6; i<pos-12 && --dirsize>0; i+=12) {
-        int tag=i2(pos-i);  // 256=width, 257==height, 259: 1=no compression
-          // 277=3 samples/pixel
-        int tagfmt=i2(pos-i-2);  // 3=short, 4=long
-        int taglen=i4(pos-i-4);  // number of elements in tagval
-        int tagval=i4(pos-i-8);  // 1 long, 1-2 short, or points to array
-        if ((tagfmt==3||tagfmt==4) && taglen==1) {
-          if (tag==256) width=tagval;
-          if (tag==257) height=tagval;
-          if (tag==259) compression=tagval; // 1 = no compression
-          if (tag==277) bpp=tagval;  // should be 3
-        }
-      }
-      if (width>0 && height>0 && width*height>50 && compression==1
-          && (bpp==1||bpp==3))
-        eoi=tiff+width*height*bpp, w=width*bpp;
-      if (eoi>pos)
-        printf("TIFF %dx%dx%d ", width, height, bpp);
-      else
-        tiff=w=0;
-    }
-  }
-  if (pos>eoi) return w=0;
-
-  // Select nearby pixels as context
-  if (!bpos) {
-    assert(w>3);
-    int color=pos%3;
-    int mean=buf(3)+buf(w-3)+buf(w)+buf(w+3);
-    const int var=sqrbuf(3)+sqrbuf(w-3)+sqrbuf(w)+sqrbuf(w+3)-mean*mean/4>>2;
-    mean>>=2;
-    const int logvar=ilog(var);
-    int i=0;
-    cm.set(hash(++i, buf(3)>>2, buf(w)>>2, color));
-    cm.set(hash(++i, buf(3)>>2, buf(1)>>2, color));
-    cm.set(hash(++i, buf(3)>>2, buf(2)>>2, color));
-    cm.set(hash(++i, buf(w)>>2, buf(1)>>2, color));
-    cm.set(hash(++i, buf(w)>>2, buf(1)>>2, color));
-    cm.set(hash(++i, buf(3)+buf(w)>>1, color));
-    cm.set(hash(++i, buf(3)+buf(w)>>3, buf(1)>>5, buf(2)>>5, color));
-    cm.set(hash(++i, mean, logvar>>5, color));
-    scm1.set(buf(3)+buf(w)>>1);
-    scm2.set(buf(3)+buf(w)-buf(w+3)>>1);
-    scm3.set(buf(3)*2-buf(6)>>1);
-    scm4.set(buf(w)*2-buf(w*2)>>1);
-    scm5.set(buf(3)+buf(w)-buf(w-3)>>1);
-    scm6.set(mean>>1|logvar<<1&0x180);
-  }
-
-  // Predict next bit
-  scm1.mix(m);
-  scm2.mix(m);
-  scm3.mix(m);
-  scm4.mix(m);
-  scm5.mix(m);
-  scm6.mix(m);
-  cm.mix(m);
-  return w;
-}
-
-//////////////////////////// jpegModel /////////////////////////
-
-// Model JPEG. Return 1 if a JPEG file is detected or else 0.
-// Only the baseline and 8 bit extended Huffman coded DCT modes are
-// supported.  The model partially decodes the JPEG image to provide
-// context for the Huffman coded symbols.
-
-// Print a JPEG segment at buf[p...] for debugging
-void dump(const char* msg, int p) {
-  printf("%s:", msg);
-  int len=buf[p+2]*256+buf[p+3];
-  for (int i=0; i<len+2; ++i)
-    printf(" %02X", buf[p+i]);
-  printf("\n");
-}
-
-// Detect invalid JPEG data.  The proper response is to silently
-// fall back to a non-JPEG model.
-#define jassert(x) if (!(x)) { \
-/*  printf("JPEG error at %d, line %d: %s\n", pos, __LINE__, #x); */ \
-  jpeg=0; \
-  return next_jpeg;}
-
-struct HUF {U32 min, max; int val;}; // Huffman decode tables
-  // huf[Tc][Th][m] is the minimum, maximum+1, and pointer to codes for
-  // coefficient type Tc (0=DC, 1=AC), table Th (0-3), length m+1 (m=0-15)
-
-int jpegModel(Mixer& m) {
-
-  // State of parser
-  enum {SOF0=0xc0, SOF1, SOF2, SOF3, DHT, RST0=0xd0, SOI=0xd8, EOI, SOS, DQT,
-    DNL, DRI, APP0=0xe0, COM=0xfe, FF};  // Second byte of 2 byte codes
-  static int jpeg=0;  // 1 if JPEG is header detected, 2 if image data
-  static int next_jpeg=0;  // updated with jpeg on next byte boundary
-  static int app;  // Bytes remaining to skip in APPx or COM field
-  static int sof=0, sos=0, data=0;  // pointers to buf
-  static Array<int> ht(8);  // pointers to Huffman table headers
-  static int htsize=0;  // number of pointers in ht
-
-  // Huffman decode state
-  static U32 huffcode=0;  // Current Huffman code including extra bits
-  static int huffbits=0;  // Number of valid bits in huffcode
-  static int huffsize=0;  // Number of bits without extra bits
-  static int rs=-1;  // Decoded huffcode without extra bits.  It represents
-    // 2 packed 4-bit numbers, r=run of zeros, s=number of extra bits for
-    // first nonzero code.  huffcode is complete when rs >= 0.
-    // rs is -1 prior to decoding incomplete huffcode.
-  static int mcupos=0;  // position in MCU (0-639).  The low 6 bits mark
-    // the coefficient in zigzag scan order (0=DC, 1-63=AC).  The high
-    // bits mark the block within the MCU, used to select Huffman tables.
-
-  // Decoding tables
-  static Array<HUF> huf(128);  // Tc*64+Th*16+m -> min, max, val
-  static int mcusize=0;  // number of coefficients in an MCU
-  static int linesize=0; // width of image in MCU
-  static int hufsel[2][10];  // DC/AC, mcupos/64 -> huf decode table
-  static Array<U8> hbuf(2048);  // Tc*1024+Th*256+hufcode -> RS
-
-  // Image state
-  static Array<int> color(10);  // block -> component (0-3)
-  static Array<int> pred(4);  // component -> last DC value
-  static int dc=0;  // DC value of the current block
-  static int width=0;  // Image width in MCU
-  static int row=0, column=0;  // in MCU (column 0 to width-1)
-  static Buf cbuf(0x20000); // Rotating buffer of coefficients, coded as:
-    // DC: level shifted absolute value, low 4 bits discarded, i.e.
-    //   [-1023...1024] -> [0...255].
-    // AC: as an RS code: a run of R (0-15) zeros followed by an S (0-15)
-    //   bit number, or 00 for end of block (in zigzag order).
-    //   However if R=0, then the format is ssss11xx where ssss is S,
-    //   xx is the first 2 extra bits, and the last 2 bits are 1 (since
-    //   this never occurs in a valid RS code).
-  static int cpos=0;  // position in cbuf
-  static U32 huff1=0, huff2=0, huff3=0, huff4=0;  // hashes of last codes
-  static int rs1, rs2, rs3, rs4;  // last 4 RS codes
-  static int ssum=0, ssum1=0, ssum2=0, ssum3=0, ssum4=0;
-    // sum of S in RS codes in block and last 4 values
-
-  // Be sure to quit on a byte boundary
-  if (!bpos) next_jpeg=jpeg>1;
-  if (bpos && !jpeg) return next_jpeg;
-  if (!bpos && app>0) --app;
-  if (app>0) return next_jpeg;
-  if (!bpos) {
-
-    // Parse.  Baseline DCT-Huffman JPEG syntax is:
-    // SOI APPx... misc... SOF0 DHT... SOS data EOI
-    // SOI (= FF D8) start of image.
-    // APPx (= FF Ex) len ... where len is always a 2 byte big-endian length
-    //   including the length itself but not the 2 byte preceding code.
-    //   Application data is ignored.  There may be more than one APPx.
-    // misc codes are DQT, DNL, DRI, COM (ignored).
-    // SOF0 (= FF C0) len 08 height width Nf [C HV Tq]...
-    //   where len, height, width (in pixels) are 2 bytes, Nf is the repeat
-    //   count (1 byte) of [C HV Tq], where C is a component identifier
-    //   (color, 0-3), HV is the horizontal and vertical dimensions
-    //   of the MCU (high, low bits, packed), and Tq is the quantization
-    //   table ID (not used).  An MCU (minimum compression unit) consists
-    //   of 64*H*V DCT coefficients for each color.
-    // DHT (= FF C4) len [TcTh L1...L16 V1,1..V1,L1 ... V16,1..V16,L16]...
-    //   defines Huffman table Th (1-4) for Tc (0=DC (first coefficient)
-    //   1=AC (next 63 coefficients)).  L1..L16 are the number of codes
-    //   of length 1-16 (in ascending order) and Vx,y are the 8-bit values.
-    //   A V code of RS means a run of R (0-15) zeros followed by S (0-15)
-    //   additional bits to specify the next nonzero value, negative if
-    //   the first additional bit is 0 (e.g. code x63 followed by the
-    //   3 bits 1,0,1 specify 7 coefficients: 0, 0, 0, 0, 0, 0, 5.
-    //   Code 00 means end of block (remainder of 63 AC coefficients is 0).
-    // SOS (= FF DA) len Ns [Cs TdTa]... 0 3F 00
-    //   Start of scan.  TdTa specifies DC/AC Huffman tables (0-3, packed
-    //   into one byte) for component Cs matching C in SOF0, repeated
-    //   Ns (1-4) times.
-    // EOI (= FF D9) is end of image.
-    // Huffman coded data is between SOI and EOI.  Codes may be embedded:
-    // RST0-RST7 (= FF D0 to FF D7) mark the start of an independently
-    //   compressed region.
-    // DNL (= FF DC) 04 00 height
-    //   might appear at the end of the scan (ignored).
-    // FF 00 is interpreted as FF (to distinguish from RSTx, DNL, EOI).
-
-    // Detect JPEG (SOI, APPx)
-    if (!jpeg && buf(4)==FF && buf(3)==SOI && buf(2)==FF && buf(1)>>4==0xe) {
-      jpeg=1;
-      app=sos=sof=htsize=data=mcusize=linesize=0;
-      huffcode=huffbits=huffsize=mcupos=cpos=0, rs=-1;
-      memset(&huf[0], 0, huf.size()*sizeof(HUF));
-      memset(&pred[0], 0, pred.size()*sizeof(int));
-    }
-
-    // Detect end of JPEG when data contains a marker other than RSTx
-    // or byte stuff (00).
-    if (jpeg && data && buf(2)==FF && buf(1) && (buf(1)&0xf8)!=RST0) {
-      jassert(buf(1)==EOI);
-      jpeg=0;
-    }
-    if (!jpeg) return next_jpeg;
-
-    // Detect APPx or COM field
-    if (!data && !app && buf(4)==FF && (buf(3)>>4==0xe || buf(3)==COM))
-      app=buf(2)*256+buf(1)+2;
-
-    // Save pointers to sof, ht, sos, data,
-    if (buf(5)==FF && buf(4)==SOS) {
-      int len=buf(3)*256+buf(2);
-      if (len==6+2*buf(1) && buf(1) && buf(1)<=4)  // buf(1) is Ns
-        sos=pos-5, data=sos+len+2, jpeg=2;
-    }
-    if (buf(4)==FF && buf(3)==DHT && htsize<8) ht[htsize++]=pos-4;
-    if (buf(4)==FF && buf(3)==SOF0) sof=pos-4;
-
-    // Restart
-    if (buf(2)==FF && (buf(1)&0xf8)==RST0) {
-      huffcode=huffbits=huffsize=mcupos=0, rs=-1;
-      memset(&pred[0], 0, pred.size()*sizeof(int));
-    }
-  }
-
-  {
-	int i,j;
-    // Build Huffman tables
-    // huf[Tc][Th][m] = min, max+1 codes of length m, pointer to byte values
-    if (pos==data && bpos==1) {
-      jassert(htsize>0);
-      for (i=0; i<htsize; ++i) {
-        int p=ht[i]+4;  // pointer to current table after length field
-        int end=p+buf[p-2]*256+buf[p-1]-2;  // end of Huffman table
-        int count=0;  // sanity check
-        while (p<end && end<pos && end<p+2100 && ++count<10) {
-          int tc=buf[p]>>4, th=buf[p]&15;
-          if (tc>=2 || th>=4) break;
-          jassert(tc>=0 && tc<2 && th>=0 && th<4);
-          HUF* h=&huf[tc*64+th*16]; // [tc][th][0]; 
-          int val=p+17;  // pointer to values
-          int hval=tc*1024+th*256;  // pointer to RS values in hbuf
-          for (j=0; j<256; ++j) // copy RS codes
-            hbuf[hval+j]=buf[val+j];
-          int code=0;
-          for (j=0; j<16; ++j) {
-            h[j].min=code;
-            h[j].max=code+=buf[p+j+1];
-            h[j].val=hval;
-            val+=buf[p+j+1];
-            hval+=buf[p+j+1];
-            code*=2;
-          }
-          p=val;
-          jassert(hval>=0 && hval<2048);
-        }
-        jassert(p==end);
-      }
-      huffcode=huffbits=huffsize=0, rs=-1;
-
-      // Build Huffman table selection table (indexed by mcupos).
-      // Get image width.
-      if (!sof && sos) return next_jpeg;
-      int ns=buf[sos+4];
-      int nf=buf[sof+9];
-      jassert(ns<=4 && nf<=4);
-      mcusize=0;  // blocks per MCU
-      int hmax=0;  // MCU horizontal dimension
-      for (i=0; i<ns; ++i) {
-        for (j=0; j<nf; ++j) {
-          if (buf[sos+2*i+5]==buf[sof+3*j+10]) { // Cs == C ?
-            int hv=buf[sof+3*j+11];  // packed dimensions H x V
-            if (hv>>4>hmax) hmax=hv>>4;
-            hv=(hv&15)*(hv>>4);  // number of blocks in component C
-            jassert(hv>=1 && hv+mcusize<=10);
-            while (hv) {
-              jassert(mcusize<10);
-              hufsel[0][mcusize]=buf[sos+2*i+6]>>4&15;
-              hufsel[1][mcusize]=buf[sos+2*i+6]&15;
-              jassert (hufsel[0][mcusize]<4 && hufsel[1][mcusize]<4);
-              color[mcusize]=i;
-              --hv;
-              ++mcusize;
-            }
-          }
-        }
-      }
-      jassert(hmax>=1 && hmax<=10);
-      width=buf[sof+7]*256+buf[sof+8];  // in pixels
-      int height=buf[sof+5]*256+buf[sof+6];
-      printf("JPEG %dx%d ", width, height);
-      width=(width-1)/(hmax*8)+1;  // in MCU
-      jassert(width>0);
-      mcusize*=64;  // coefficients per MCU
-      row=column=0;
-    }
-  }
-
-
-  // Decode Huffman
-  {
-    if (mcusize && buf(1+(!bpos))!=FF) {  // skip stuffed byte
-      jassert(huffbits<=32);
-      huffcode+=huffcode+y;
-      ++huffbits;
-      if (rs<0) {
-        jassert(huffbits>=1 && huffbits<=16);
-        const int ac=(mcupos&63)>0;
-        jassert(mcupos>=0 && (mcupos>>6)<10);
-        jassert(ac==0 || ac==1);
-        const int sel=hufsel[ac][mcupos>>6];
-        jassert(sel>=0 && sel<4);
-        const int i=huffbits-1;
-        jassert(i>=0 && i<16);
-        const HUF *h=&huf[ac*64+sel*16]; // [ac][sel];
-        jassert(h[i].min<=h[i].max && h[i].val<2048 && huffbits>0);
-        if (huffcode<h[i].max) {
-          jassert(huffcode>=h[i].min);
-          int k=h[i].val+huffcode-h[i].min;
-          jassert(k>=0 && k<2048);
-          rs=hbuf[k];
-          huffsize=huffbits;
-        }
-      }
-      if (rs>=0) {
-        if (huffsize+(rs&15)==huffbits) { // done decoding
-          huff4=huff3;
-          huff3=huff2;
-          huff2=huff1;
-          huff1=hash(huffcode, huffbits);
-          rs4=rs3;
-          rs3=rs2;
-          rs2=rs1;
-          rs1=rs;
-          int x=0;  // decoded extra bits
-          if (mcupos&63) {  // AC
-            if (rs==0) { // EOB
-              mcupos=mcupos+63&-64;
-              jassert(mcupos>=0 && mcupos<=mcusize && mcupos<=640);
-              while (cpos&63) cbuf[cpos++]=0;
-            }
-            else {  // rs = r zeros + s extra bits for the next nonzero value
-                    // If first extra bit is 0 then value is negative.
-              jassert((rs&15)<=10);
-              const int r=rs>>4;
-              const int s=rs&15;
-              jassert(mcupos>>6==mcupos+r>>6);
-              mcupos+=r+1;
-              x=huffcode&(1<<s)-1;
-              if (s && !(x>>s-1)) x-=(1<<s)-1;
-              for (int i=r; i>=1; --i) cbuf[cpos++]=i<<4|s;
-              cbuf[cpos++]=s<<4|huffcode<<2>>s&3|12;
-              ssum+=s;
-            }
-          }
-          else {  // DC: rs = 0S, s<12
-            jassert(rs<12);
-            ++mcupos;
-            x=huffcode&(1<<rs)-1;
-            if (rs && !(x>>rs-1)) x-=(1<<rs)-1;
-            jassert(mcupos>=0 && mcupos>>6<10);
-            const int comp=color[mcupos>>6];
-            jassert(comp>=0 && comp<4);
-            dc=pred[comp]+=x;
-            jassert((cpos&63)==0);
-            cbuf[cpos++]=dc+1023>>3;
-            ssum4=ssum3;
-            ssum3=ssum2;
-            ssum2=ssum1;
-            ssum1=ssum;
-            ssum=rs;
-          }
-          jassert(mcupos>=0 && mcupos<=mcusize);
-          if (mcupos>=mcusize) {
-            mcupos=0;
-            if (++column==width) column=0, ++row;
-          }
-          huffcode=huffsize=huffbits=0, rs=-1;
-        }
-      }
-    }
-  }
-
-  // Estimate next bit probability
-  if (!jpeg || !data) return next_jpeg;
-
-  // Context model
-  const int N=19;  // size of t, number of contexts
-  static BH<9> t(MEM);  // context hash -> bit history
-    // As a cache optimization, the context does not include the last 1-2
-    // bits of huffcode if the length (huffbits) is not a multiple of 3.
-    // The 7 mapped values are for context+{"", 0, 00, 01, 1, 10, 11}.
-  static Array<U32> cxt(N);  // context hashes
-  static Array<U8*> cp(N);  // context pointers
-  static StateMap sm[N];
-  static Mixer m1(32, 800, 4);
-  static APM a1(1024), a2(0x10000);
-  const static U8 zzu[64]={  // zigzag coef -> u,v
-    0,1,0,0,1,2,3,2,1,0,0,1,2,3,4,5,4,3,2,1,0,0,1,2,3,4,5,6,7,6,5,4,
-    3,2,1,0,1,2,3,4,5,6,7,7,6,5,4,3,2,3,4,5,6,7,7,6,5,4,5,6,7,7,6,7};
-  const static U8 zzv[64]={
-    0,0,1,2,1,0,0,1,2,3,4,3,2,1,0,0,1,2,3,4,5,6,5,4,3,2,1,0,0,1,2,3,
-    4,5,6,7,7,6,5,4,3,2,1,2,3,4,5,6,7,7,6,5,4,3,4,5,6,7,7,6,5,6,7,7};
-
-
-  // Update model
-  if (cp[N-1]) {
-    for (int i=0; i<N; ++i)
-      *cp[i]=nex(*cp[i],y);
-  }
-  m1.update();
-
-  // Update context
-  const int comp=color[mcupos>>6];
-  const int coef=(mcupos&63)|comp<<6;
-  const int hc=huffcode|1<<huffbits;
-  static int hbcount=2;
-  if (++hbcount>2 || huffbits==0) hbcount=0;
-  jassert(coef>=0 && coef<256);
-  const int zu=zzu[mcupos&63], zv=zzv[mcupos&63];
-  if (hbcount==0) {
-    const int mpos=mcupos>>4|!(mcupos&-64)<<7;
-    int n=0;
-    cxt[0]=hash(++n, hc, mcupos>>2, min(3, mcupos&63));
-    cxt[1]=hash(++n, hc, mpos>>4, cbuf[cpos-mcusize]);
-    cxt[2]=hash(++n, hc, mpos>>4, cbuf[cpos-width*mcusize]);
-    cxt[3]=hash(++n, hc, ilog(ssum3), coef);
-    cxt[4]=hash(++n, hc, coef, column>>3);
-    cxt[5]=hash(++n, hc, coef, column>>1);
-    cxt[6]=hash(++n, hc, rs1, mpos);
-    cxt[7]=hash(++n, hc, rs1, rs2);
-    cxt[8]=hash(++n, hc, rs1, rs2, rs3);
-    cxt[9]=hash(++n, hc, ssum>>4, mcupos);
-    cxt[10]=hash(++n, hc, mpos, cbuf[cpos-1]);
-    cxt[11]=hash(++n, hc, dc);
-    cxt[12]=hash(++n, hc, rs1, coef);
-    cxt[13]=hash(++n, hc, rs1, rs2, coef);
-    cxt[14]=hash(++n, hc, mcupos>>3, ssum3>>3);
-    cxt[15]=hash(++n, hc, huff1);
-    cxt[16]=hash(++n, hc, coef, huff1);
-    cxt[17]=hash(++n, hc, zu, comp);
-    cxt[18]=hash(++n, hc, zv, comp);
-  }
-
-  // Predict next bit
-  m1.add(128);
-  assert(hbcount<=2);
-  for (int i=0; i<N; ++i) {
-    if (hbcount==0) cp[i]=t[cxt[i]]+1;
-    else if (hbcount==1) cp[i]+=1+(huffcode&1)*3;
-    else cp[i]+=1+(huffcode&1);
-    int sp=stretch(sm[i].p(*cp[i]));
-    m1.add(sp);
-  }
-  m1.set(0, 1);
-  m1.set(coef, 64);
-  m1.set(mcupos, 640);
-  int pr=m1.p();
-  pr=a1.p(pr, hc&1023);
-  pr=a2.p(pr, hc&255|coef<<8);
-  m.add(stretch(pr));
-  return 1;
-}
-
-//////////////////////////// exeModel /////////////////////////
-
-// Model x86 code.  The contexts are sparse containing only those
-// bits relevant to parsing (2 prefixes, opcode, and mod and r/m fields
-// of modR/M byte).
-
-// Get context at buf(i) relevant to parsing 32-bit x86 code
-U32 execxt(int i, int x=0) {
-  int prefix=(buf(i+2)==0x0f)+2*(buf(i+2)==0x66)+3*(buf(i+2)==0x67)
-    +4*(buf(i+3)==0x0f)+8*(buf(i+3)==0x66)+12*(buf(i+3)==0x67);
-  int opcode=buf(i+1);
-  int modrm=i ? buf(i)&0xc7 : 0;
-  return prefix|opcode<<4|modrm<<12|x<<20;
-}
-
-void exeModel(Mixer& m) {
-  const int N=12;
-  static ContextMap cm(MEM*2, N);
-  if (!bpos) {
-    for (int i=0; i<N; ++i)
-      cm.set(execxt(i, buf(1)*(i>4)));
-  }
-  cm.mix(m);
-}
-//#endif
-
-//////////////////////////// indirectModel /////////////////////
-
-// The context is a byte string history that occurs within a
-// 1 or 2 byte context.
-
-void indirectModel(Mixer& m) {
-  static ContextMap cm(MEM*8, 5);
-  static U32 t1[256];
-  static U16 t2[0x10000];
-
-  if (!bpos) {
-    U32 d=c4&0xffff, c=d&255;
-    U32& r1=t1[d>>8];
-    r1=r1<<8|c;
-    U16& r2=t2[c4>>8&0xffff];
-    r2=r2<<8|c;
-    U32 t=c|t1[c]<<8;
-    cm.set(t&0xffff);
-    cm.set(t&0xffffff);
-    cm.set(t);
-    t=d|t2[d]<<16;
-    cm.set(t&0xffffff);
-    cm.set(t);
-  }
-  cm.mix(m);
-}
-#endif
-
 int primes[]={ 0, 257,251,241,239,233,229,227,223,211,199,197,193,191 };
 static U32 WRT_mpw[16]= { 3, 3, 3, 2, 2, 2, 1, 1,  1, 1, 1, 1, 1, 0, 0, 0 }, tri[4]={0,4,3,7}, trj[4]={0,6,6,12};
 static U32 WRT_mtt[16]= { 0, 0, 1, 2, 3, 4, 5, 5,  6, 6, 6, 6, 6, 7, 7, 7 };
@@ -2076,41 +1279,13 @@ int contextModel2() {
   // Parse filetype and size
   if (bpos==0) {
     --size;
-    //if (size==-1) filetype=(Filetype)b1;
     if (size==-5) {
       size=c4;
-//      if (filetype<=3) printf("(%s%d)", typenames[filetype], size);
-/////      if (filetype==EXE) size+=8;
     }
   }
 
   m.update();
   m.add(64);
-
-  // Test for special file types
-/////  int isjpeg=jpegModel(m);  // 1 if JPEG is detected, else 0
- // int ismatch=matchModel(m);  // Length of longest matching context
-/////  int isbmp=bmpModel(m);  // Image width (bytes) if BMP or TIFF detected, or 0
-
-  //if (ismatch>1024) {   // Model long matches directly
-  //  m.set(0, 8);
-  //  return m.p();
-  //}
-/////  else if (isjpeg) {
-/////    m.set(1, 8);
-/////    m.set(c0, 256);
-/////    m.set(buf(1), 256);
-/////    return m.p();
-/////  }
-/////  else if (isbmp>0) {
-/////    static int col=0;
-/////    if (++col>=24) col=0;
-/////    m.set(2, 8);
-/////    m.set(col, 24);
-/////    m.set(buf(isbmp)+buf(3)>>4, 32);
-/////    m.set(c0, 256);
-/////    return m.p();
-/////  }
 
   // Normal model
   if (bpos==0) {
@@ -2157,14 +1332,8 @@ int contextModel2() {
     wordModel(m);
     sparseModel(m);
     recordModel(m);
-    //indirectModel(m);
-/////    if (filetype==EXE) exeModel(m);
-/////    if (fsize==513216) picModel(m);
   }
 
-//m.tx[420]=0;
-//m.tx[425]=0;
-//m.tx[430]=0;
 		U32 c1=b1, c2=b2, c;
 		if (c1==9 || c1==10 || c1==32) c1=16;
 		if (c2==9 || c2==10 || c2==32) c2=16;
