@@ -66,23 +66,29 @@ int main(int argc, char* argv[]) {
 
   clock_t start = clock();
 
+  bool enable_preprocess = true;
+
   std::string temp_path = argv[3];
-  temp_path += ".cmix.temp";
+  if (enable_preprocess) temp_path += ".cmix.temp";
 
   unsigned long long input_bytes, output_bytes;
 
   if (argv[1][1]=='c') {
-    FILE* data_in = fopen(argv[2], "rb");
-    FILE* temp_out = fopen(temp_path.c_str(), "wb");
-    if (!data_in || !temp_out) abort();
+    if (enable_preprocess) {
+      FILE* data_in = fopen(argv[2], "rb");
+      FILE* temp_out = fopen(temp_path.c_str(), "wb");
+      if (!data_in || !temp_out) abort();
 
-    fseek(data_in, 0L, SEEK_END);
-    input_bytes = ftell(data_in);
-    fseek(data_in, 0L, SEEK_SET);
+      fseek(data_in, 0L, SEEK_END);
+      input_bytes = ftell(data_in);
+      fseek(data_in, 0L, SEEK_SET);
 
-    preprocessor::encode(data_in, temp_out, input_bytes);
-    fclose(data_in);
-    fclose(temp_out);
+      preprocessor::encode(data_in, temp_out, input_bytes);
+      fclose(data_in);
+      fclose(temp_out);
+    } else {
+      temp_path = argv[2];
+    }
 
     std::ifstream temp_in(temp_path, std::ios::in | std::ios::binary);
     std::ofstream data_out(argv[3], std::ios::out | std::ios::binary);
@@ -90,6 +96,7 @@ int main(int argc, char* argv[]) {
 
     temp_in.seekg(0, std::ios::end);
     unsigned long long temp_bytes = temp_in.tellg();
+    if (!enable_preprocess) input_bytes = temp_bytes;
     temp_in.seekg(0, std::ios::beg);
 
     WriteHeader(temp_bytes, &data_out);
@@ -105,26 +112,27 @@ int main(int argc, char* argv[]) {
     input_bytes = data_in.tellg();
     data_in.seekg(0, std::ios::beg);
 
-    unsigned long long temp_bytes;
-    ReadHeader(&data_in, &temp_bytes);
-    Decompress(temp_bytes, &data_in, &temp_out);
+    ReadHeader(&data_in, &output_bytes);
+    Decompress(output_bytes, &data_in, &temp_out);
     data_in.close();
     temp_out.close();
 
-    FILE* temp_in = fopen(temp_path.c_str(), "rb");
-    FILE* data_out = fopen(argv[3], "wb");
-    if (!temp_in || !data_out) abort();
+    if (enable_preprocess) {
+      FILE* temp_in = fopen(temp_path.c_str(), "rb");
+      FILE* data_out = fopen(argv[3], "wb");
+      if (!temp_in || !data_out) abort();
 
-    preprocessor::decode(temp_in, data_out);
-    fseek(data_out, 0L, SEEK_END);
-    output_bytes = ftell(data_out);
-    fclose(temp_in);
-    fclose(data_out);
+      preprocessor::decode(temp_in, data_out);
+      fseek(data_out, 0L, SEEK_END);
+      output_bytes = ftell(data_out);
+      fclose(temp_in);
+      fclose(data_out);
+    }
   }
-  remove(temp_path.c_str());
+  if (enable_preprocess) remove(temp_path.c_str());
 
   printf("\r%lld bytes -> %lld bytes in %1.2f s.\n",
       input_bytes, output_bytes,
-      ((double)clock()-start)/CLOCKS_PER_SEC);
+      ((double)clock() - start) / CLOCKS_PER_SEC);
   return 0;
 }
