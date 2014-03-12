@@ -2,7 +2,7 @@ CC = g++
 CFLAGS = -std=c++11 -Wall -c
 LFLAGS = -std=c++11 -Wall
 
-OBJS = build/encoder.o build/decoder.o build/predictor.o build/logistic.o build/mixer-input.o build/mixer.o build/sse.o build/manager.o build/direct.o build/direct-hash.o build/indirect.o build/nonstationary.o build/run-map.o build/byte-run.o build/match.o build/dmc.o build/ppm.o build/paq8l.o build/paq8hp.o build/context-hash.o build/sparse.o build/indirect-hash.o
+OBJS = build/preprocessor.o build/encoder.o build/decoder.o build/predictor.o build/logistic.o build/mixer-input.o build/mixer.o build/sse.o build/manager.o build/direct.o build/direct-hash.o build/indirect.o build/nonstationary.o build/run-map.o build/byte-run.o build/match.o build/dmc.o build/ppm.o build/paq8l.o build/paq8hp.o build/context-hash.o build/sparse.o build/indirect-hash.o
 
 all: CFLAGS += -Ofast -s
 all: LFLAGS += -Ofast -s
@@ -14,6 +14,9 @@ debug: cmix
 
 cmix: $(OBJS) src/runner.cpp
 	$(CC) $(LFLAGS) $(OBJS) src/runner.cpp -o cmix
+
+build/preprocessor.o: src/preprocess/preprocessor.h src/preprocess/preprocessor.cpp
+	$(CC) $(CFLAGS) src/preprocess/preprocessor.cpp -o build/preprocessor.o
 
 build/encoder.o: src/coder/encoder.h src/coder/encoder.cpp src/predictor.h
 	$(CC) $(CFLAGS) src/coder/encoder.cpp -o build/encoder.o

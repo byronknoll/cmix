@@ -1,6 +1,8 @@
 #include <fstream>
 #include <ctime>
+#include <stdio.h>
 
+#include "preprocess/preprocessor.h"
 #include "coder/encoder.h"
 #include "coder/decoder.h"
 
@@ -64,28 +66,62 @@ int main(int argc, char* argv[]) {
 
   clock_t start = clock();
 
-  std::ifstream is(argv[2], std::ios::in | std::ios::binary);
-  std::ofstream os(argv[3], std::ios::out | std::ios::binary);
-  if (!is.is_open() || !os.is_open()) {
-    printf("Error opening file.\n");
-    abort();
-  }
+  std::string temp_path = argv[3];
+  temp_path += ".cmix.temp";
 
-  is.seekg(0, std::ios::end);
-  unsigned long long input_bytes = is.tellg();
-  is.seekg(0, std::ios::beg);
-  unsigned long long output_bytes;
+  unsigned long long input_bytes, output_bytes;
 
   if (argv[1][1]=='c') {
-    WriteHeader(input_bytes, &os);
-    Compress(input_bytes, &is, &os, &output_bytes);
-  } else {
-    ReadHeader(&is, &output_bytes);
-    Decompress(output_bytes, &is, &os);
-  }
+    FILE* data_in = fopen(argv[2], "rb");
+    FILE* temp_out = fopen(temp_path.c_str(), "wb");
+    if (!data_in || !temp_out) abort();
 
-  is.close();
-  os.close();
+    fseek(data_in, 0L, SEEK_END);
+    input_bytes = ftell(data_in);
+    fseek(data_in, 0L, SEEK_SET);
+
+    preprocessor::encode(data_in, temp_out, input_bytes);
+    fclose(data_in);
+    fclose(temp_out);
+
+    std::ifstream temp_in(temp_path, std::ios::in | std::ios::binary);
+    std::ofstream data_out(argv[3], std::ios::out | std::ios::binary);
+    if (!temp_in.is_open() || !data_out.is_open()) abort();
+
+    temp_in.seekg(0, std::ios::end);
+    unsigned long long temp_bytes = temp_in.tellg();
+    temp_in.seekg(0, std::ios::beg);
+
+    WriteHeader(temp_bytes, &data_out);
+    Compress(temp_bytes, &temp_in, &data_out, &output_bytes);
+    temp_in.close();
+    data_out.close();
+  } else {
+    std::ifstream data_in(argv[2], std::ios::in | std::ios::binary);
+    std::ofstream temp_out(temp_path, std::ios::out | std::ios::binary);
+    if (!data_in.is_open() || !temp_out.is_open()) abort();
+
+    data_in.seekg(0, std::ios::end);
+    input_bytes = data_in.tellg();
+    data_in.seekg(0, std::ios::beg);
+
+    unsigned long long temp_bytes;
+    ReadHeader(&data_in, &temp_bytes);
+    Decompress(temp_bytes, &data_in, &temp_out);
+    data_in.close();
+    temp_out.close();
+
+    FILE* temp_in = fopen(temp_path.c_str(), "rb");
+    FILE* data_out = fopen(argv[3], "wb");
+    if (!temp_in || !data_out) abort();
+
+    preprocessor::decode(temp_in, data_out);
+    fseek(data_out, 0L, SEEK_END);
+    output_bytes = ftell(data_out);
+    fclose(temp_in);
+    fclose(data_out);
+  }
+  remove(temp_path.c_str());
 
   printf("\r%lld bytes -> %lld bytes in %1.2f s.\n",
       input_bytes, output_bytes,
