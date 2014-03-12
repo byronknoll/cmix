@@ -80,32 +80,6 @@ typedef enum {DEFAULT, JPEG, EXE, BINTEXT, TEXT } Filetype;
 #define OPTION_SPACE_AFTER_CC_FLAG			131072
 #define IF_OPTION(option) ((preprocFlag & option)!=0)
 
-//////////////////////// Program Checker /////////////////////
-
-// Track time and memory used
-class ProgramChecker {
-  int memused;  // bytes allocated by Array<T> now
-  clock_t start_time;  // in ticks
-public:
-  int maxmem;   // most bytes allocated ever
-  void alloc(int n) {  // report memory allocated, may be negative
-    memused+=n;
-    if (memused>maxmem) maxmem=memused;
-  }
-  ProgramChecker(): memused(0), maxmem(0) {
-    start_time=clock();
-    assert(sizeof(U8)==1);
-    assert(sizeof(U16)==2);
-    assert(sizeof(U32)==4);
-    assert(sizeof(short)==2);
-    assert(sizeof(int)==4);
-  }
-  void print() const {  // print time and memory used
-    printf("Time %1.2f sec, used %d bytes of memory\n",
-      double(clock()-start_time)/CLOCKS_PER_SEC, maxmem);
-  }
-} programChecker;
-
 //////////////////////////// Array ////////////////////////////
 
 // Array<T, ALIGN> a(n); creates n elements of T initialized to 0 bits.
@@ -129,15 +103,9 @@ public:
   explicit Array(int i=0) {create(i);}
   ~Array();
   T& operator[](int i) {
-#ifndef NDEBUG
-    if (i<0 || i>=n) fprintf(stderr, "%d out of bounds %d\n", i, n), quit();
-#endif
     return data[i];
   }
   const T& operator[](int i) const {
-#ifndef NDEBUG
-    if (i<0 || i>=n) fprintf(stderr, "%d out of bounds %d\n", i, n), quit();
-#endif
     return data[i];
   }
   int size() const {return n;}
@@ -160,7 +128,6 @@ template<class T, int ALIGN> void Array<T, ALIGN>::resize(int i) {
   create(i);
   if (savedata && saveptr) {
     memcpy(data, savedata, sizeof(T)*min(i, saven));
-    programChecker.alloc(-ALIGN-n*sizeof(T));
     free(saveptr);
   }
 }
@@ -173,7 +140,6 @@ template<class T, int ALIGN> void Array<T, ALIGN>::create(int i) {
     return;
   }
   const int sz=ALIGN+n*sizeof(T);
-  programChecker.alloc(sz);
   ptr = (char*)calloc(sz, 1);
   if (!ptr) quit("Out of memory");
   data = (ALIGN ? (T*)(ptr+ALIGN-(((long)ptr)&(ALIGN-1))) : (T*)ptr);
@@ -181,7 +147,6 @@ template<class T, int ALIGN> void Array<T, ALIGN>::create(int i) {
 }
 
 template<class T, int ALIGN> Array<T, ALIGN>::~Array() {
-  programChecker.alloc(-ALIGN-n*sizeof(T));
   free(ptr);
 }
 
@@ -1028,7 +993,6 @@ int matchModel(Mixer& m) {
     }
     t[h]=pos;  // update hash table
     result=len;
-//    if (result>0 && !(result&0xfff)) printf("pos=%d len=%d ptr=%d\n", pos, len, ptr);
   }
 
   // predict

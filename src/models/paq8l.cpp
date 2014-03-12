@@ -79,32 +79,6 @@ int equals(const char* a, const char* b) {
   return *a==*b;
 }
 
-//////////////////////// Program Checker /////////////////////
-
-// Track time and memory used
-class ProgramChecker {
-  int memused;  // bytes allocated by Array<T> now
-  int maxmem;   // most bytes allocated ever
-  clock_t start_time;  // in ticks
-public:
-  void alloc(int n) {  // report memory allocated, may be negative
-    memused+=n;
-    if (memused>maxmem) maxmem=memused;
-  }
-  ProgramChecker(): memused(0), maxmem(0) {
-    start_time=clock();
-    assert(sizeof(U8)==1);
-    assert(sizeof(U16)==2);
-    assert(sizeof(U32)==4);
-    assert(sizeof(short)==2);
-    assert(sizeof(int)==4);
-  }
-  void print() const {  // print time and memory used
-    printf("Time %1.2f sec, used %d bytes of memory\n",
-      double(clock()-start_time)/CLOCKS_PER_SEC, maxmem);
-  }
-} programChecker;
-
 //////////////////////////// Array ////////////////////////////
 
 // Array<T, ALIGN> a(n); creates n elements of T initialized to 0 bits.
@@ -128,15 +102,9 @@ public:
   explicit Array(int i=0) {create(i);}
   ~Array();
   T& operator[](int i) {
-#ifndef NDEBUG
-    if (i<0 || i>=n) fprintf(stderr, "%d out of bounds %d\n", i, n), quit();
-#endif
     return data[i];
   }
   const T& operator[](int i) const {
-#ifndef NDEBUG
-    if (i<0 || i>=n) fprintf(stderr, "%d out of bounds %d\n", i, n), quit();
-#endif
     return data[i];
   }
   int size() const {return n;}
@@ -160,7 +128,6 @@ template<class T, int ALIGN> void Array<T, ALIGN>::resize(int i) {
   if (saveptr) {
     if (savedata) {
       memcpy(data, savedata, sizeof(T)*min(i, saven));
-      programChecker.alloc(-ALIGN-n*sizeof(T));
     }
     free(saveptr);
   }
@@ -174,7 +141,6 @@ template<class T, int ALIGN> void Array<T, ALIGN>::create(int i) {
     return;
   }
   const int sz=ALIGN+n*sizeof(T);
-  programChecker.alloc(sz);
   ptr = (char*)calloc(sz, 1);
   if (!ptr) quit("Out of memory");
   data = (ALIGN ? (T*)(ptr+ALIGN-(((long)ptr)&(ALIGN-1))) : (T*)ptr);
@@ -182,7 +148,6 @@ template<class T, int ALIGN> void Array<T, ALIGN>::create(int i) {
 }
 
 template<class T, int ALIGN> Array<T, ALIGN>::~Array() {
-  programChecker.alloc(-ALIGN-n*sizeof(T));
   free(ptr);
 }
 
@@ -1002,7 +967,6 @@ int matchModel(Mixer& m) {
     }
     t[h]=pos;  // update hash table
     result=len;
-//    if (result>0 && !(result&0xfff)) printf("pos=%d len=%d ptr=%d\n", pos, len, ptr);
     scm1.set(pos);
   }
 
@@ -1285,7 +1249,6 @@ int bmpModel(Mixer& m) {
     eoi=pos;
     if (w<0x30000 && height<0x10000) {
       eoi=pos+w*height;  // image size in bytes
-      printf("BMP %dx%d ", w/3, height);
     }
     else
       eoi=pos;
@@ -1316,8 +1279,7 @@ int bmpModel(Mixer& m) {
       if (width>0 && height>0 && width*height>50 && compression==1
           && (bpp==1||bpp==3))
         eoi=tiff+width*height*bpp, w=width*bpp;
-      if (eoi>pos)
-        printf("TIFF %dx%dx%d ", width, height, bpp);
+      if (eoi>pos) {}
       else
         tiff=w=0;
     }
@@ -1366,15 +1328,6 @@ int bmpModel(Mixer& m) {
 // Only the baseline and 8 bit extended Huffman coded DCT modes are
 // supported.  The model partially decodes the JPEG image to provide
 // context for the Huffman coded symbols.
-
-// Print a JPEG segment at buf[p...] for debugging
-void dump(const char* msg, int p) {
-  printf("%s:", msg);
-  int len=buf[p+2]*256+buf[p+3];
-  for (int i=0; i<len+2; ++i)
-    printf(" %02X", buf[p+i]);
-  printf("\n");
-}
 
 // Detect invalid JPEG data.  The proper response is to silently
 // fall back to a non-JPEG model.
@@ -1580,8 +1533,6 @@ int jpegModel(Mixer& m) {
       }
       jassert(hmax>=1 && hmax<=10);
       width=buf[sof+7]*256+buf[sof+8];  // in pixels
-      int height=buf[sof+5]*256+buf[sof+6];
-      printf("JPEG %dx%d ", width, height);
       width=(width-1)/(hmax*8)+1;  // in MCU
       jassert(width>0);
       mcusize*=64;  // coefficients per MCU
