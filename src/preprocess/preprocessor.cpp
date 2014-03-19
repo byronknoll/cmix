@@ -327,7 +327,7 @@ void reset_text_decoder(FILE* in) {
 }
 
 int decode_text(FILE* in) {
-	return wrt_decoder->WRT_decode_char(wrt_temp, NULL, 0);
+  return wrt_decoder->WRT_decode_char(wrt_temp, NULL, 0);
 }
 
 // Split n bytes into blocks by type.  For each block, output
