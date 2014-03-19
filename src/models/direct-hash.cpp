@@ -9,6 +9,7 @@ DirectHash::DirectHash(const unsigned long long& byte_context,
     checksums_(size, 0) {
   for (int i = 0; i < size; ++i) {
     predictions_[i].fill(0.5);
+    counts_[i].fill(0);
   }
 }
 

@@ -8,6 +8,7 @@ Direct::Direct(const unsigned long long& byte_context,
     counts_(size, std::array<unsigned char, 256>()) {
   for (int i = 0; i < size; ++i) {
     predictions_[i].fill(0.5);
+    counts_[i].fill(0);
   }
 }
 

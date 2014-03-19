@@ -10,6 +10,7 @@ Match::Match(const std::vector<unsigned char>& history,
   for (int i = 0; i < 256; ++i) {
     predictions_[i] = 0.5 + (i + 0.5) / 512;
   }
+  counts_.fill(0);
 }
 
 float Match::Predict() {

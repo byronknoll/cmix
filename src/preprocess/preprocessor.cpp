@@ -1,7 +1,32 @@
+// This preprocessor is adapted from paq8l and paq8hp12any.
+
 #include <stdio.h>
 #include <vector>
 #include <cstdlib>
 #include <string.h>
+
+#define preprocFlag 1220
+#define OPTION_UTF8							1
+#define OPTION_USE_NGRAMS					2
+#define OPTION_CAPITAL_CONVERSION			4
+#define OPTION_WORD_SURROROUNDING_MODELING	8
+#define OPTION_SPACE_AFTER_EOL				16
+#define OPTION_EOL_CODING					32
+#define OPTION_NORMAL_TEXT_FILTER			64
+#define OPTION_USE_DICTIONARY				128
+#define OPTION_RECORD_INTERLEAVING			256
+#define OPTION_DNA_QUARTER_BYTE				512
+#define OPTION_TRY_SHORTER_WORD				1024
+#define OPTION_TO_LOWER_AFTER_PUNCTUATION	2048
+#define OPTION_SPACELESS_WORDS				4096
+#define OPTION_ADD_SYMBOLS_0_5				8192
+#define OPTION_ADD_SYMBOLS_14_31			16384
+#define OPTION_ADD_SYMBOLS_A_Z				32768
+#define OPTION_ADD_SYMBOLS_MISC				65536
+#define OPTION_SPACE_AFTER_CC_FLAG			131072
+#define IF_OPTION(option) ((preprocFlag & option)!=0)
+
+#include "textfilter.cpp"
 
 namespace preprocessor {
 
@@ -59,7 +84,13 @@ inline int max(int a, int b) {return a<b?b:a;}
 // decodes one byte from en and returns it.  decode() and decode_X()
 // maintain state information using static variables.
 
-// Detect EXE or JPEG data
+bool IsAscii(int byte) {
+  if (byte >= 9 && byte <= 13) return true;
+  if (byte >= 32 && byte <= 126) return true;
+  return false;
+}
+
+// Detect data type
 Filetype detect(FILE* in, int n, Filetype type) {
   U32 buf1=0, buf0=0;  // last 8 bytes
   long start=ftell(in);
@@ -73,6 +104,10 @@ Filetype detect(FILE* in, int n, Filetype type) {
 
   // For JPEG detection
   int soi=0, sof=0, sos=0;  // position where found
+
+  // For TEXT detection
+  int ascii_start = -1;
+  int ascii_run = 0;
 
   for (int i=0; i<n; ++i) {
     int c=getc(in);
@@ -122,6 +157,32 @@ Filetype detect(FILE* in, int n, Filetype type) {
     }
     if (type==EXE && i-e8e9last>0x1000)
       return fseek(in, start+e8e9last, SEEK_SET), DEFAULT;
+
+    // Detect TEXT
+    if (type == DEFAULT) {
+      if (IsAscii(c)) {
+        if (ascii_start == -1) {
+          ascii_start = i;
+          ascii_run = 0;
+        }
+        ++ascii_run;
+        if (ascii_run > 2000) {
+          return fseek(in, start + ascii_start, SEEK_SET), TEXT;
+        }
+      } else {
+        ascii_start = -1;
+      }
+    } else if (type == TEXT) {
+      if (IsAscii(c)) {
+        ascii_run -= 2;
+        if (ascii_run < 0) ascii_run = 0;
+      } else {
+        ascii_run += 3;
+        if (ascii_run > 300) {
+          return fseek(in, ftell(in) - 100, SEEK_SET), DEFAULT;
+        }
+      }
+    }
   }
   return type;
 }
@@ -225,6 +286,50 @@ int decode_exe(FILE* in) {
   return c[--q];
 }
 
+void encode_text(FILE* in, FILE* out, int len) {
+  FILE* temp = tmpfile();
+  if (!temp) abort();
+
+  for (int i = 0; i < len; ++i) {
+    putc(getc(in), temp);
+  }
+  rewind(temp);
+
+  WRT wrt;
+  wrt.defaultSettings(0, NULL);
+  wrt.WRT_start_encoding(temp, out, len, false);
+  fclose(temp);
+}
+
+FILE* wrt_temp;
+WRT* wrt_decoder = NULL;
+
+void reset_text_decoder(FILE* in) {
+  if (wrt_temp) fclose(wrt_temp);
+  wrt_temp = tmpfile();
+  if (!wrt_temp) abort();
+
+  unsigned int size = 0;
+  for (int i = 4; i != 0; --i) {
+    int c = getc(in);
+    size = size * 256 + c;
+    putc(c, wrt_temp);
+  }
+  size -= 8;
+
+  for (unsigned int i = 0; i < size; ++i) putc(getc(in), wrt_temp);
+  rewind(wrt_temp);
+
+  if (wrt_decoder != NULL) delete wrt_decoder;
+  wrt_decoder = new WRT();
+  wrt_decoder->defaultSettings(0, NULL);
+  wrt_decoder->WRT_prepare_decoding();
+}
+
+int decode_text(FILE* in) {
+	return wrt_decoder->WRT_decode_char(wrt_temp, NULL, 0);
+}
+
 // Split n bytes into blocks by type.  For each block, output
 // <type> <size> and call encode_X to convert to type X.
 void encode(FILE* in, FILE* out, int n) {
@@ -237,9 +342,11 @@ void encode(FILE* in, FILE* out, int n) {
     int len=int(end-begin);
     if (len>0) {
       fprintf(out, "%c%c%c%c%c", type, len>>24, len>>16, len>>8, len);
+      //printf("type: %d\tlength: %d\n", type, len);
       switch(type) {
         case JPEG: encode_jpeg(in, out, len); break;
         case EXE:  encode_exe(in, out, len, begin); break;
+        case TEXT: encode_text(in, out, len); break;
         default:   encode_default(in, out, len); break;
       }
     }
@@ -262,11 +369,13 @@ int decode2(FILE* in) {
     len|=getc(in)<<8;
     len|=getc(in);
     if (len<0) len=1;
+    if (type == TEXT) reset_text_decoder(in);
   }
   --len;
   switch (type) {
     case JPEG: return decode_jpeg(in);
     case EXE:  return decode_exe(in);
+    case TEXT: return decode_text(in);
     default:   return decode_default(in);
   }
 }
