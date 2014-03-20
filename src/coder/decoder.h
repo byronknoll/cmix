@@ -7,7 +7,7 @@
 
 class Decoder {
  public:
-  Decoder(std::ifstream* is, unsigned long long file_size);
+  Decoder(std::ifstream* is);
   int Decode();  // Returns 0 or 1.
 
  private:

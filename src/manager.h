@@ -10,7 +10,7 @@
 
 class Manager {
  public:
-  Manager(unsigned long long file_size);
+  Manager();
   const Context& AddContext(std::unique_ptr<Context> context);
   void Perceive(int bit);
 

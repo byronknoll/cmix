@@ -1,9 +1,8 @@
 #include "manager.h"
 
-Manager::Manager(unsigned long long file_size) : bit_context_(1),
-    zero_context_(0), history_pos_(0), line_break_(0), recent_bits_pos_(0),
-    history_(file_size, 0), words_(8, 0), recent_bytes_(8, 0),
-    recent_bytes2_(4, 0), pic_context_(6, 0),
+Manager::Manager() : bit_context_(1), zero_context_(0), history_pos_(0),
+    line_break_(0), recent_bits_pos_(0), history_(100000000, 0), words_(8, 0),
+    recent_bytes_(8, 0), recent_bytes2_(4, 0), pic_context_(6, 0),
     recent_bits_(216 * 8 * 7, false) {}
 
 const Context& Manager::AddContext(std::unique_ptr<Context> context) {
@@ -17,6 +16,7 @@ const Context& Manager::AddContext(std::unique_ptr<Context> context) {
 void Manager::UpdateHistory() {
   history_[history_pos_] = bit_context_;
   ++history_pos_;
+  if (history_pos_ == history_.size()) history_pos_ = 0;
 }
 
 void Manager::UpdateWords() {

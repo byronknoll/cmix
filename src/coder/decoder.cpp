@@ -1,7 +1,6 @@
 #include "decoder.h"
 
-Decoder::Decoder(std::ifstream* is, unsigned long long file_size) :
-    is_(is), x1_(0), x2_(0xffffffff), x_(0), p_(file_size) {
+Decoder::Decoder(std::ifstream* is) : is_(is), x1_(0), x2_(0xffffffff), x_(0) {
   // Initialize x_ to the first four bytes.
   for (int i = 0; i < 4; ++i) {
     x_ = (x_ << 8) + (ReadByte() & 0xff);

@@ -1,7 +1,6 @@
 #include "encoder.h"
 
-Encoder::Encoder(std::ofstream* os, unsigned long long file_size) :
-    os_(os), x1_(0), x2_(0xffffffff), p_(file_size) {}
+Encoder::Encoder(std::ofstream* os) : os_(os), x1_(0), x2_(0xffffffff) {}
 
 void Encoder::WriteByte(unsigned int byte) {
   os_->put(byte);

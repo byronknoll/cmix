@@ -7,7 +7,7 @@
 
 class Encoder {
  public:
-  Encoder(std::ofstream* os, unsigned long long file_size);
+  Encoder(std::ofstream* os);
   void Encode(int bit);
   void Flush();
 

@@ -14,8 +14,7 @@
 
 #include <vector>
 
-Predictor::Predictor(unsigned long long file_size) : manager_(file_size),
-    logistic_(10000, 1000) {
+Predictor::Predictor() : manager_(), logistic_(10000, 1000) {
   AddPAQ8HP();
   AddPAQ8L();
   AddPPM();

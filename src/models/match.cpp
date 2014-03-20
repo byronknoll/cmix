@@ -49,6 +49,7 @@ void Match::ByteUpdate() {
   } else {
     ++cur_match_;
   }
+  cur_match_ %= history_.size();
   cur_byte_ = history_.at(cur_match_);
   bit_pos_ = 128;
 }

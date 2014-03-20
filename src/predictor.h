@@ -13,7 +13,7 @@
 
 class Predictor {
  public:
-  Predictor(unsigned long long file_size);
+  Predictor();
   float Predict();
   void Perceive(int bit);
 
