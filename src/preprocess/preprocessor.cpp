@@ -287,22 +287,44 @@ int decode_exe(FILE* in) {
 }
 
 void encode_text(FILE* in, FILE* out, int len) {
-  FILE* temp = tmpfile();
-  if (!temp) abort();
+  FILE* temp_input = tmpfile();
+  if (!temp_input) abort();
 
   for (int i = 0; i < len; ++i) {
-    putc(getc(in), temp);
+    putc(getc(in), temp_input);
   }
-  rewind(temp);
+  rewind(temp_input);
+
+  FILE* temp_output = tmpfile();
+  if (!temp_output) abort();
 
   WRT wrt;
   wrt.defaultSettings(0, NULL);
-  wrt.WRT_start_encoding(temp, out, len, false);
-  fclose(temp);
+  wrt.WRT_start_encoding(temp_input, temp_output, len, false);
+
+  int size = ftell(temp_output);
+  if (size > len - 50) {
+    for (int i = 0; i < 4; ++i) {
+      putc(0, out);
+    }
+    rewind(temp_input);
+    for (int i = 0; i < len; ++i) {
+      putc(getc(temp_input), out);
+    }
+  } else {
+    rewind(temp_output);
+    for (int i = 0; i < size; ++i) {
+      putc(getc(temp_output), out);
+    }
+  }
+
+  fclose(temp_input);
+  fclose(temp_output);
 }
 
 FILE* wrt_temp;
 WRT* wrt_decoder = NULL;
+bool wrt_enabled = true;
 
 void reset_text_decoder(FILE* in) {
   if (wrt_temp) fclose(wrt_temp);
@@ -315,6 +337,11 @@ void reset_text_decoder(FILE* in) {
     size = size * 256 + c;
     putc(c, wrt_temp);
   }
+  if (size == 0) {
+    wrt_enabled = false;
+    return;
+  }
+  wrt_enabled = true;
   size -= 8;
 
   for (unsigned int i = 0; i < size; ++i) putc(getc(in), wrt_temp);
@@ -327,6 +354,7 @@ void reset_text_decoder(FILE* in) {
 }
 
 int decode_text(FILE* in) {
+  if (!wrt_enabled) return getc(in);
   return wrt_decoder->WRT_decode_char(wrt_temp, NULL, 0);
 }
 
