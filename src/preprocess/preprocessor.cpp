@@ -166,7 +166,7 @@ Filetype detect(FILE* in, int n, Filetype type) {
           ascii_run = 0;
         }
         ++ascii_run;
-        if (ascii_run > 2000) {
+        if (ascii_run > 500) {
           return fseek(in, start + ascii_start, SEEK_SET), TEXT;
         }
       } else {
