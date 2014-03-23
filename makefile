@@ -15,7 +15,7 @@ debug: cmix
 cmix: $(OBJS) src/runner.cpp
 	$(CC) $(LFLAGS) $(OBJS) src/runner.cpp -o cmix
 
-build/preprocessor.o: src/preprocess/preprocessor.h src/preprocess/preprocessor.cpp src/preprocess/textfilter.cpp
+build/preprocessor.o: src/preprocess/preprocessor.h src/preprocess/preprocessor.cpp src/preprocess/textfilter.cpp src/preprocess/english-dictionary.cpp
 	$(CC) $(CFLAGS) src/preprocess/preprocessor.cpp -o build/preprocessor.o
 
 build/encoder.o: src/coder/encoder.h src/coder/encoder.cpp src/predictor.h

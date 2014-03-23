@@ -27,6 +27,7 @@
 #define IF_OPTION(option) ((preprocFlag & option)!=0)
 
 #include "textfilter.cpp"
+#include "english-dictionary.cpp"
 
 namespace preprocessor {
 
@@ -286,7 +287,21 @@ int decode_exe(FILE* in) {
   return c[--q];
 }
 
+bool dictionary_created = false;
+FILE* english_dictionary;
+
+void create_dictionary() {
+  english_dictionary = tmpfile();
+  if (!english_dictionary) abort();
+  int len = sizeof(dictionary::english_dictionary);
+  for (int i = 0; i < len; ++i) {
+    putc(dictionary::english_dictionary[i], english_dictionary);
+  }
+  dictionary_created = true;
+}
+
 void encode_text(FILE* in, FILE* out, int len) {
+  if (!dictionary_created) create_dictionary();
   FILE* temp_input = tmpfile();
   if (!temp_input) abort();
 
@@ -300,7 +315,7 @@ void encode_text(FILE* in, FILE* out, int len) {
 
   WRT wrt;
   wrt.defaultSettings(0, NULL);
-  wrt.WRT_start_encoding(temp_input, temp_output, len, false);
+  wrt.WRT_start_encoding(temp_input, temp_output, len, false, english_dictionary);
 
   int size = ftell(temp_output);
   if (size > len - 50) {
@@ -327,6 +342,7 @@ WRT* wrt_decoder = NULL;
 bool wrt_enabled = true;
 
 void reset_text_decoder(FILE* in) {
+  if (!dictionary_created) create_dictionary();
   if (wrt_temp) fclose(wrt_temp);
   wrt_temp = tmpfile();
   if (!wrt_temp) abort();
@@ -355,7 +371,7 @@ void reset_text_decoder(FILE* in) {
 
 int decode_text(FILE* in) {
   if (!wrt_enabled) return getc(in);
-  return wrt_decoder->WRT_decode_char(wrt_temp, NULL, 0);
+  return wrt_decoder->WRT_decode_char(wrt_temp, NULL, 0, english_dictionary);
 }
 
 // Split n bytes into blocks by type.  For each block, output

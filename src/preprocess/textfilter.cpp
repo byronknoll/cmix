@@ -75,7 +75,6 @@ static uint flen( FILE* f )
 	return len;
 }
 
-
 class WRT
 {
 public:
@@ -1246,7 +1245,7 @@ void initializeCodeWords()
 
 
 // read dictionary from files to arrays
-bool initialize(unsigned char* dictName,unsigned char* shortDictName,bool encoding)
+bool initialize(unsigned char* dictName,unsigned char* shortDictName,bool encoding, FILE* english_dictionary)
 {
 	PRINT_DICT(("dictName=%s shortDictName=%s\n",dictName,shortDictName));
 
@@ -1282,7 +1281,8 @@ bool initialize(unsigned char* dictName,unsigned char* shortDictName,bool encodi
 		/////if (WRT_verbose)
 		/////	printf("- loading dictionary %s\n",dictName); 
 
-		file=fopen((const char*)dictName,"rb");
+		//file=fopen((const char*)dictName,"rb");
+    file = english_dictionary;
 		if (file==NULL)
 		{
 			printf("Can't open dictionary %s\n",dictName);
@@ -1403,7 +1403,7 @@ bool initialize(unsigned char* dictName,unsigned char* shortDictName,bool encodi
 			memset(upperSetRev,0,sizeof(upperSetRev));
 		}
 
-		fclose(file);
+		//fclose(file);
 
 		/////if (WRT_verbose)
 		/////	printf("- loaded dictionary %d/%d words\n",sizeDict,dictionary);
@@ -1580,8 +1580,7 @@ inline bool addWord(std::string s,int& sizeFullDict)
 	return true;
 }
 
-
-bool readDicts(const char* pattern,char* dictPath,int dictPathLen)
+bool readDicts(const char* pattern,char* dictPath,int dictPathLen, FILE* english_dictionary)
 {
 	FILE* file;
 	bool nonlatin;
@@ -1625,7 +1624,9 @@ bool readDicts(const char* pattern,char* dictPath,int dictPathLen)
 		dictPath[dictPathLen]=0;
 		strcat(dictPath,filename);
 
-		file=fopen((const char*)dictPath,"rb");
+		//file=fopen((const char*)dictPath,"rb");
+    file = english_dictionary;
+    rewind(file);
 		if (file==NULL)
 			return false; //continue;
 		
@@ -1721,7 +1722,7 @@ bool readDicts(const char* pattern,char* dictPath,int dictPathLen)
 
 		langCount++;
 
-		fclose(file);
+		//fclose(file);
 	}
 #ifdef WIN32
 	while (_findnext( hFile, &c_file ) == 0);
@@ -1769,7 +1770,7 @@ int getSourcePath(char* buf, int buf_size)
 #endif
 }
 
-int WRT_getFileType(FILE* file,int& recordLen)
+int WRT_getFileType(FILE* file,int& recordLen,FILE* english_dictionary)
 {
 	int dictPathLen;
 	unsigned char dictPath[256];
@@ -1780,7 +1781,7 @@ int WRT_getFileType(FILE* file,int& recordLen)
 		strcat((char*)dictPath,WRT_DICT_DIR);
 		dictPathLen=strlen((char*)dictPath);
 
-		readDicts(DICTNAME "*" DICTNAME_EXT,(char*)dictPath,dictPathLen);
+		readDicts(DICTNAME "*" DICTNAME_EXT,(char*)dictPath,dictPathLen,english_dictionary);
 	}
 
 	return WRT_detectFileType(file,10240,5,recordLen);
@@ -2551,7 +2552,7 @@ inline void WRT_decode(FILE* file)
 
 
 
-void WRT_start_encoding(FILE* file,FILE* fileout,unsigned int fileLen,bool type_detected)
+void WRT_start_encoding(FILE* file,FILE* fileout,unsigned int fileLen,bool type_detected,FILE* english_dictionary)
 {
   unsigned int start_pos = ftell(fileout);
 	int i,c,c2,recordLen=0,dictPathLen;
@@ -2571,7 +2572,7 @@ void WRT_start_encoding(FILE* file,FILE* fileout,unsigned int fileLen,bool type_
 
 	
 	if (!type_detected)
-		WRT_getFileType(file,recordLen);
+		WRT_getFileType(file,recordLen,english_dictionary);
 
 	if (IF_OPTION(OPTION_USE_DICTIONARY) && longDictLen>0)
 		memcpy(s,langName[longDict],strlen((const char*)langName[longDict])+1);
@@ -2609,8 +2610,7 @@ restart:
 	/////WRT_print_options();
 
 	WRT_deinitialize();
-
-	if (!initialize((longDictLen<=0)?NULL:s,(shortDictLen<=0)?NULL:t,true))
+	if (!initialize((longDictLen<=0)?NULL:s,(shortDictLen<=0)?NULL:t,true,english_dictionary))
 		return;
 
 	if (IF_OPTION(OPTION_USE_DICTIONARY))
@@ -2684,7 +2684,7 @@ restart:
 }
 
 
-void WRT_start_decoding(FILE* file,FILE* fileout,int header)
+void WRT_start_decoding(FILE* file,FILE* fileout,int header,FILE* english_dictionary)
 {
 	int i,c,c2,dictPathLen;
 	unsigned char s[256];
@@ -2774,7 +2774,7 @@ void WRT_start_decoding(FILE* file,FILE* fileout,int header)
 
 	WRT_deinitialize();
 
-	if (!initialize((longDictLen<=0)?NULL:s,(shortDictLen<=0)?NULL:t,false))
+	if (!initialize((longDictLen<=0)?NULL:s,(shortDictLen<=0)?NULL:t,false,english_dictionary))
 		return;
 
 
@@ -2840,13 +2840,13 @@ void WRT_prepare_decoding()
 	WRTd_type=0;
 }
 
-int WRT_decode_char(FILE* file,FILE* fileout,int header)
+int WRT_decode_char(FILE* file,FILE* fileout,int header,FILE* english_dictionary)
 {
 	switch (WRTd_type)
 	{
 		default:
 		case 0:
-			WRT_start_decoding(file,fileout,header);
+			WRT_start_decoding(file,fileout,header,english_dictionary);
 			WRTd_qstart=WRTd_qend=0;
 			WRTd_type=1;
 			/////if (IF_OPTION(OPTION_DNA_QUARTER_BYTE) || IF_OPTION(OPTION_RECORD_INTERLEAVING))
