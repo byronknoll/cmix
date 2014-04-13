@@ -31,6 +31,19 @@ Predictor::Predictor() : manager_(), logistic_(10000, 1000) {
 
   AddMixers();
   AddSSE();
+
+  // printf("Number of models: %lu\n", models_.size());
+  // printf("Number of mixer neurons: %llu\n", GetNumNeurons());
+}
+
+unsigned long long Predictor::GetNumNeurons() {
+  unsigned long long neurons = models_.size();
+  for (unsigned int i = 0; i < layers_.size(); ++i) {
+    for (const auto& mixer : mixers_[i]) {
+      neurons += mixer->GetNumNeurons();
+    }
+  }
+  return neurons;
 }
 
 void Predictor::Add(Model* model) {
@@ -43,12 +56,12 @@ void Predictor::Add(int layer, Mixer* mixer) {
 
 void Predictor::AddPAQ8HP() {
   auxiliary_.push_back(models_.size());
-  Add(new PAQ8HP(8));
+  Add(new PAQ8HP(10));
 }
 
 void Predictor::AddPAQ8L() {
   auxiliary_.push_back(models_.size());
-  Add(new PAQ8L(9));
+  Add(new PAQ8L(10));
 }
 
 void Predictor::AddPPM() {

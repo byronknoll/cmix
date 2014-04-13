@@ -14,6 +14,7 @@ class Mixer {
   void SetNumModels(int num_models);
   float Mix();
   void Perceive(int bit);
+  unsigned long long GetNumNeurons();
 
  private:
   const std::vector<float>& inputs_;

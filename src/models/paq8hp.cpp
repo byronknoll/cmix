@@ -1016,7 +1016,7 @@ static U32 col, frstchar=0, spafdo=0, spaces=0, spacecount=0, words=0, wordcount
 
 void wordModel(Mixer& m) {
   static U32 word0=0, word1=0, word2=0, word3=0, word4=0;  // hashes
-  static ContextMap cm(MEM*64, 46);
+  static ContextMap cm(MEM*31, 46);
   static int nl1=-3, nl=-2;  // previous, current newline position
   static U32 t1[256];
   static U16 t2[0x10000];
@@ -1232,7 +1232,7 @@ static U32 WRT_mtt[16]= { 0, 0, 1, 2, 3, 4, 5, 5,  6, 6, 6, 6, 6, 7, 7, 7 };
 // This combines all the context models with a Mixer.
 
 int contextModel2() {
-  static ContextMap cm(MEM*32, 7);
+  static ContextMap cm(MEM*31, 7);
   static RunContextMap rcm7(MEM/4,14), rcm9(MEM/4,18), rcm10(MEM/2,20);
   static Mixer m(456, 128*(16+14+14+12+14+16), 6, 512);
   static U32 cxt[16];  // order 0-11 contexts

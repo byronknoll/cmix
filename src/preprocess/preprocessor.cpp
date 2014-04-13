@@ -315,7 +315,8 @@ void encode_text(FILE* in, FILE* out, int len) {
 
   WRT wrt;
   wrt.defaultSettings(0, NULL);
-  wrt.WRT_start_encoding(temp_input, temp_output, len, false, english_dictionary);
+  wrt.WRT_start_encoding(temp_input, temp_output, len, false,
+      english_dictionary);
 
   int size = ftell(temp_output);
   if (size > len - 50) {
@@ -360,7 +361,9 @@ void reset_text_decoder(FILE* in) {
   wrt_enabled = true;
   size -= 8;
 
-  for (unsigned int i = 0; i < size; ++i) putc(getc(in), wrt_temp);
+  for (unsigned int i = 0; i < size; ++i) {
+    putc(getc(in), wrt_temp);
+  }
   rewind(wrt_temp);
 
   if (wrt_decoder != NULL) delete wrt_decoder;
@@ -379,6 +382,34 @@ int decode_text(FILE* in) {
 void encode(FILE* in, FILE* out, int n) {
   Filetype type=DEFAULT;
   long begin=ftell(in);
+
+  // Make a first pass to estimate the amount of text.
+  long start = begin;
+  int remainder = n;
+  int text_bytes = 0;
+  while (remainder > 0) {
+    Filetype nextType=detect(in, n, type);
+    long end=ftell(in);
+    int len=int(end-begin);
+    if (type == TEXT) text_bytes += len;
+    remainder-=len;
+    type=nextType;
+    begin=end;
+  }
+  fseek(in, start, SEEK_SET);
+  type = DEFAULT;
+  begin = start;
+
+  // If mostly text, assume everything is text.
+  double text_fraction = text_bytes;
+  text_fraction /= n;
+  // printf("Text fraction: %.4f\n", text_fraction);
+  if (text_fraction > 0.95) {
+    fprintf(out, "%c%c%c%c%c", TEXT, n>>24, n>>16, n>>8, n);    
+    encode_text(in, out, n);
+    return;
+  }
+
   while (n>0) {
     Filetype nextType=detect(in, n, type);
     long end=ftell(in);
@@ -386,7 +417,7 @@ void encode(FILE* in, FILE* out, int n) {
     int len=int(end-begin);
     if (len>0) {
       fprintf(out, "%c%c%c%c%c", type, len>>24, len>>16, len>>8, len);
-      //printf("type: %d\tlength: %d\n", type, len);
+      // printf("type: %d\tlength: %d\n", type, len);
       switch(type) {
         case JPEG: encode_jpeg(in, out, len); break;
         case EXE:  encode_exe(in, out, len, begin); break;

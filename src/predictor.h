@@ -18,6 +18,7 @@ class Predictor {
   void Perceive(int bit);
 
  private:
+  unsigned long long GetNumNeurons();
   void Add(Model* model);
   void Add(int layer, Mixer* mixer);
   void AddPAQ8L();

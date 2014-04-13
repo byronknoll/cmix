@@ -31,3 +31,7 @@ void Mixer::Perceive(int bit) {
     weights_[byte_context_][bit_context_][i] += update * inputs_[i];
   }
 }
+
+unsigned long long Mixer::GetNumNeurons() {
+  return weights_.size() * 256;
+}

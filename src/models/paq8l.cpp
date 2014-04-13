@@ -1030,7 +1030,7 @@ void wordModel(Mixer& m) {
     int c=c4&255;
     if (c>='A' && c<='Z')
       c+='a'-'A';
-    if ((c>='a' && c<='z') || c>=128) {
+    if ((c>='a' && c<='z') || c == 6 || c == 8 || c>=128) {
       word0=word0*263*32+c;
       text0=text0*997*16+c;
     }
@@ -1850,7 +1850,7 @@ typedef enum {DEFAULT, JPEG, EXE, TEXT} Filetype;
 // This combines all the context models with a Mixer.
 
 int contextModel2() {
-  static ContextMap cm(MEM*32, 9);
+  static ContextMap cm(MEM*31, 9);
   static RunContextMap rcm7(MEM), rcm9(MEM), rcm10(MEM);
   static Mixer m(800, 3088, 7, 128);
   static U32 cxt[16];  // order 0-11 contexts
