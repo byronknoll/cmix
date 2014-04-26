@@ -2,7 +2,7 @@ CC = g++
 CFLAGS = -std=c++11 -Wall -c
 LFLAGS = -std=c++11 -Wall
 
-OBJS = build/preprocessor.o build/encoder.o build/decoder.o build/predictor.o build/logistic.o build/mixer-input.o build/mixer.o build/sse.o build/manager.o build/direct.o build/direct-hash.o build/indirect.o build/nonstationary.o build/run-map.o build/byte-run.o build/match.o build/dmc.o build/ppm.o build/paq8l.o build/paq8hp.o build/context-hash.o build/sparse.o build/indirect-hash.o
+OBJS = build/preprocessor.o build/encoder.o build/decoder.o build/predictor.o build/logistic.o build/mixer-input.o build/mixer.o build/sse.o build/manager.o build/direct.o build/direct-hash.o build/indirect.o build/nonstationary.o build/run-map.o build/byte-run.o build/match.o build/dmc.o build/ppm.o build/paq8l.o build/paq8hp.o build/paq8pxd.o build/context-hash.o build/sparse.o build/indirect-hash.o
 
 all: CFLAGS += -Ofast -s
 all: LFLAGS += -Ofast -s
@@ -24,7 +24,7 @@ build/encoder.o: src/coder/encoder.h src/coder/encoder.cpp src/predictor.h
 build/decoder.o: src/coder/decoder.h src/coder/decoder.cpp src/predictor.h
 	$(CC) $(CFLAGS) src/coder/decoder.cpp -o build/decoder.o
 
-build/predictor.o: src/predictor.h src/predictor.cpp src/mixer/mixer-input.h src/mixer/mixer.h src/sse.h src/models/model.h src/models/direct.h src/models/direct-hash.h src/models/indirect.h src/models/byte-run.h src/models/match.h src/models/dmc.h src/models/ppm.h src/models/paq8l.h src/models/paq8hp.h src/manager.h src/contexts/context-hash.h src/contexts/sparse.h src/contexts/indirect-hash.h src/mixer/logistic.h
+build/predictor.o: src/predictor.h src/predictor.cpp src/mixer/mixer-input.h src/mixer/mixer.h src/sse.h src/models/model.h src/models/direct.h src/models/direct-hash.h src/models/indirect.h src/models/byte-run.h src/models/match.h src/models/dmc.h src/models/ppm.h src/models/paq8l.h src/models/paq8hp.h src/models/paq8pxd.h src/manager.h src/contexts/context-hash.h src/contexts/sparse.h src/contexts/indirect-hash.h src/mixer/logistic.h
 	$(CC) $(CFLAGS) src/predictor.cpp -o build/predictor.o
 
 build/logistic.o: src/mixer/logistic.h src/mixer/logistic.cpp
@@ -68,6 +68,9 @@ build/paq8l.o: src/models/paq8l.h src/models/paq8l.cpp src/models/model.h
 
 build/paq8hp.o: src/models/paq8hp.h src/models/paq8hp.cpp src/models/model.h
 	$(CC) $(CFLAGS) src/models/paq8hp.cpp -o build/paq8hp.o
+
+build/paq8pxd.o: src/models/paq8pxd.h src/models/paq8pxd.cpp src/models/model.h
+	$(CC) $(CFLAGS) src/models/paq8pxd.cpp -o build/paq8pxd.o
 
 build/nonstationary.o: src/states/nonstationary.h src/states/nonstationary.cpp src/states/state.h
 	$(CC) $(CFLAGS) src/states/nonstationary.cpp -o build/nonstationary.o

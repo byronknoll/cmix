@@ -8,6 +8,7 @@
 #include "models/ppm.h"
 #include "models/paq8l.h"
 #include "models/paq8hp.h"
+#include "models/paq8pxd.h"
 #include "contexts/context-hash.h"
 #include "contexts/sparse.h"
 #include "contexts/indirect-hash.h"
@@ -17,6 +18,7 @@
 Predictor::Predictor() : manager_(), logistic_(10000, 1000) {
   AddPAQ8HP();
   AddPAQ8L();
+  AddPAQ8PXD();
   AddPPM();
   AddDMC();
   AddByteRun();
@@ -62,6 +64,11 @@ void Predictor::AddPAQ8HP() {
 void Predictor::AddPAQ8L() {
   auxiliary_.push_back(models_.size());
   Add(new PAQ8L(10));
+}
+
+void Predictor::AddPAQ8PXD() {
+  auxiliary_.push_back(models_.size());
+  Add(new PAQ8PXD(10));
 }
 
 void Predictor::AddPPM() {
@@ -308,7 +315,7 @@ void Predictor::AddMixers() {
 }
 
 float Predictor::Predict() {
-  //return models_[0]->Predict();
+  // return models_[0]->Predict();
   for (unsigned int i = 0; i < models_.size(); ++i) {
     float p = models_[i]->Predict();
     layers_[0]->SetInput(i, p);

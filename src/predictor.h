@@ -23,6 +23,7 @@ class Predictor {
   void Add(int layer, Mixer* mixer);
   void AddPAQ8L();
   void AddPAQ8HP();
+  void AddPAQ8PXD();
   void AddPPM();
   void AddDMC();
   void AddByteRun();
