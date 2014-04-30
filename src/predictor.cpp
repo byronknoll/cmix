@@ -72,11 +72,11 @@ void Predictor::AddPAQ8PXD() {
 }
 
 void Predictor::AddPPM() {
-  Add(new PPM(6, manager_.bit_context_, 100, 10000000));
+  Add(new PPM(7, manager_.bit_context_, 100, 100000000));
 }
 
 void Predictor::AddDMC() {
-  Add(new DMC(0.02, 10000000));
+  Add(new DMC(0.02, 100000000));
 }
 
 void Predictor::AddByteRun() {
@@ -108,7 +108,7 @@ void Predictor::AddNonstationary() {
 
 void Predictor::AddEnglish() {
   float delta = 200;
-  unsigned long long max_size = 1500000;
+  unsigned long long max_size = 200000;
   std::vector<std::vector<unsigned int>> model_params = {{0}, {0, 1}, {7, 2},
       {7}, {1}, {1, 2}, {1, 2, 3}, {1, 3}, {1, 4}, {1, 5}, {2, 3}, {3, 4},
       {1, 2, 4}, {1, 2, 3, 4}, {2, 3, 4}, {2}, {1, 2, 3, 4, 5},
@@ -132,7 +132,7 @@ void Predictor::AddEnglish() {
       Add(new Indirect(manager_.run_map_, context.context_,
           manager_.bit_context_, delta, 1000000));
       Add(new DirectHash(context.context_, manager_.bit_context_, 30, 0,
-          1000000));
+          2000000));
     }
   }
 }
