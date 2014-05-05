@@ -28,7 +28,6 @@ Predictor::Predictor() : manager_(), logistic_(10000, 1000) {
   AddDirect();
   AddRunMap();
   AddMatch();
-  AddPic();
   AddDoubleIndirect();
 
   AddMixers();
@@ -204,21 +203,6 @@ void Predictor::AddMatch() {
     Add(new Match(manager_.history_, context.context_, manager_.bit_context_,
         limit, delta, std::min(max_size, context.size_)));
   }
-}
-
-void Predictor::AddPic() {
-  float delta = 600;
-  const Context& context = manager_.AddContext(std::unique_ptr<Context>(
-      new ContextHash(manager_.bit_context_, 0, 8)));
-  for (unsigned int i = 0; i < manager_.pic_context_.size(); ++i) {
-    Add(new Indirect(manager_.nonstationary_, context.context_,
-        manager_.pic_context_[i], delta, context.size_));
-  }
-
-  delta = 0;
-  int limit = 250;
-  Add(new Direct(context.context_, manager_.pic_context_[0], limit, delta,
-      context.size_));
 }
 
 void Predictor::AddDoubleIndirect() {
