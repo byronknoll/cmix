@@ -1,9 +1,10 @@
 #include "manager.h"
 
-Manager::Manager() : bit_context_(1), zero_context_(0), history_pos_(0),
-    line_break_(0), recent_bits_pos_(0), history_(100000000, 0), words_(8, 0),
-    recent_bytes_(8, 0), recent_bytes2_(4, 0), pic_context_(6, 0),
-    recent_bits_(216 * 8 * 7, false) {}
+Manager::Manager() : bit_context_(1), zero_context_(0), zero_context2_(0),
+    history_pos_(0), line_break_(0), recent_bits_pos_(0),
+    history_(100000000, 0), words_(8, 0), recent_bytes_(8, 0),
+    recent_bytes2_(4, 0), pic_context_(6, 0), recent_bits_(216 * 8 * 7, false)
+    {}
 
 const Context& Manager::AddContext(std::unique_ptr<Context> context) {
   for (const auto& old : contexts_) {

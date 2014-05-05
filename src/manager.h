@@ -16,6 +16,7 @@ class Manager {
 
   unsigned int bit_context_;
   unsigned int zero_context_;
+  unsigned long long zero_context2_;
   unsigned long long history_pos_;
   unsigned int line_break_;
   unsigned int recent_bits_pos_;

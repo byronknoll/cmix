@@ -265,16 +265,14 @@ void Predictor::AddMixers() {
   }
 
   model_params = {{0, 0.001}, {2, 0.002}, {3, 0.005}};
-  const Context& context = manager_.AddContext(std::unique_ptr<Context>(
-      new ContextHash(manager_.bit_context_, 0, 8)));
   for (const auto& params : model_params) {
-    Add(0, new Mixer(layers_[0]->inputs_, logistic_, context.context_,
-        manager_.recent_bytes2_[params[0]], params[1], context.size_));
+    Add(0, new Mixer(layers_[0]->inputs_, logistic_, manager_.zero_context2_,
+        manager_.recent_bytes2_[params[0]], params[1], 1));
   }
-  Add(0, new Mixer(layers_[0]->inputs_, logistic_, context.context_,
-      manager_.zero_context_, 0.00005, context.size_));
-  Add(0, new Mixer(layers_[0]->inputs_, logistic_, context.context_,
-      manager_.line_break_, 0.0007, context.size_));
+  Add(0, new Mixer(layers_[0]->inputs_, logistic_, manager_.zero_context2_,
+      manager_.zero_context_, 0.00005, 1));
+  Add(0, new Mixer(layers_[0]->inputs_, logistic_, manager_.zero_context2_,
+      manager_.line_break_, 0.0007, 1));
   Add(0, new Mixer(layers_[0]->inputs_, logistic_, manager_.recent_bytes_[1],
       manager_.bit_context_, 0.005, 256));
   Add(0, new Mixer(layers_[0]->inputs_, logistic_, manager_.recent_bytes_[1],
@@ -282,25 +280,25 @@ void Predictor::AddMixers() {
   Add(0, new Mixer(layers_[0]->inputs_, logistic_, manager_.recent_bytes_[2],
       manager_.recent_bytes2_[1], 0.003, 256));
 
-  Add(1, new Mixer(layers_[1]->inputs_, logistic_, context.context_,
-      manager_.zero_context_, 0.005, context.size_));
-  Add(1, new Mixer(layers_[1]->inputs_, logistic_, context.context_,
-      manager_.zero_context_, 0.0005, context.size_));
-  Add(1, new Mixer(layers_[1]->inputs_, logistic_, context.context_,
-      manager_.bit_context_, 0.005, context.size_));
-  Add(1, new Mixer(layers_[1]->inputs_, logistic_, context.context_,
-      manager_.bit_context_, 0.0005, context.size_));
-  Add(1, new Mixer(layers_[1]->inputs_, logistic_, context.context_,
-      manager_.bit_context_, 0.00001, context.size_));
-  Add(1, new Mixer(layers_[1]->inputs_, logistic_, context.context_,
-      manager_.recent_bytes2_[0], 0.005, context.size_));
-  Add(1, new Mixer(layers_[1]->inputs_, logistic_, context.context_,
-      manager_.recent_bytes2_[1], 0.005, context.size_));
-  Add(1, new Mixer(layers_[1]->inputs_, logistic_, context.context_,
-      manager_.recent_bytes2_[2], 0.005, context.size_));
+  Add(1, new Mixer(layers_[1]->inputs_, logistic_, manager_.zero_context2_,
+      manager_.zero_context_, 0.005, 1));
+  Add(1, new Mixer(layers_[1]->inputs_, logistic_, manager_.zero_context2_,
+      manager_.zero_context_, 0.0005, 1));
+  Add(1, new Mixer(layers_[1]->inputs_, logistic_, manager_.zero_context2_,
+      manager_.bit_context_, 0.005, 1));
+  Add(1, new Mixer(layers_[1]->inputs_, logistic_, manager_.zero_context2_,
+      manager_.bit_context_, 0.0005, 1));
+  Add(1, new Mixer(layers_[1]->inputs_, logistic_, manager_.zero_context2_,
+      manager_.bit_context_, 0.00001, 1));
+  Add(1, new Mixer(layers_[1]->inputs_, logistic_, manager_.zero_context2_,
+      manager_.recent_bytes2_[0], 0.005, 1));
+  Add(1, new Mixer(layers_[1]->inputs_, logistic_, manager_.zero_context2_,
+      manager_.recent_bytes2_[1], 0.005, 1));
+  Add(1, new Mixer(layers_[1]->inputs_, logistic_, manager_.zero_context2_,
+      manager_.recent_bytes2_[2], 0.005, 1));
 
-  Add(2, new Mixer(layers_[2]->inputs_, logistic_, context.context_,
-      manager_.zero_context_, 0.0003, context.size_));
+  Add(2, new Mixer(layers_[2]->inputs_, logistic_, manager_.zero_context2_,
+      manager_.zero_context_, 0.0003, 1));
 
   layers_[0]->SetNumModels(models_.size());
   for (const auto& mixer : mixers_[0]) {
