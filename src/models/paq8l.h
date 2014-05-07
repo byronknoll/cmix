@@ -2,6 +2,7 @@
 #define PAQ8L_H
 
 #include "model.h"
+#include <vector>
 
 class PAQ8L : public Model {
  public:
@@ -9,6 +10,7 @@ class PAQ8L : public Model {
   float Predict();
   void Perceive(int bit);
   void ByteUpdate() {};
+  const std::vector<float>& ModelPredictions();
 };
 
 #endif

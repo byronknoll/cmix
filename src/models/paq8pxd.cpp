@@ -84,32 +84,6 @@ int equals(const char* a, const char* b) {
   return *a==*b;
 }
 
-//////////////////////// Program Checker /////////////////////
-
-// Track time and memory used
-class ProgramChecker {
-  int memused;  // bytes allocated by Array<T> now
-  int maxmem;   // most bytes allocated ever
-  clock_t start_time;  // in ticks
-public:
-  void alloc(int n) {  // report memory allocated, may be negative
-    memused+=n;
-    if (memused>maxmem) maxmem=memused;
-  }
-  ProgramChecker(): memused(0), maxmem(0) {
-    start_time=clock();
-    assert(sizeof(U8)==1);
-    assert(sizeof(U16)==2);
-    assert(sizeof(U32)==4);
-    assert(sizeof(short)==2);
-    assert(sizeof(int)==4);
-  }
-  void print() const {  // print time and memory used
-    printf("Time %1.2f sec, used %d bytes of memory\n",
-      double(clock()-start_time)/CLOCKS_PER_SEC, maxmem);
-  }
-} programChecker;
-
 //////////////////////////// Array ////////////////////////////
 
 // Array<T, ALIGN> a(n); creates n elements of T initialized to 0 bits.
@@ -133,15 +107,9 @@ public:
   explicit Array(int i=0) {create(i);}
   ~Array();
   T& operator[](int i) {
-#ifndef NDEBUG
-    if (i<0 || i>=n) fprintf(stderr, "%d out of bounds %d\n", i, n), quit();
-#endif
     return data[i];
   }
   const T& operator[](int i) const {
-#ifndef NDEBUG
-    if (i<0 || i>=n) fprintf(stderr, "%d out of bounds %d\n", i, n), quit();
-#endif
     return data[i];
   }
   int size() const {return n;}
@@ -165,7 +133,6 @@ template<class T, int ALIGN> void Array<T, ALIGN>::resize(int i) {
   if (saveptr) {
     if (savedata) {
       memcpy(data, savedata, sizeof(T)*min(i, saven));
-      programChecker.alloc(-ALIGN-n*sizeof(T));
     }
     free(saveptr);
   }
@@ -179,7 +146,6 @@ template<class T, int ALIGN> void Array<T, ALIGN>::create(int i) {
     return;
   }
   const int sz=ALIGN+n*sizeof(T);
-  programChecker.alloc(sz);
   ptr = (char*)calloc(sz, 1);
   if (!ptr) quit("Out of memory");
   data = (ALIGN ? (T*)(ptr+ALIGN-(((long)ptr)&(ALIGN-1))) : (T*)ptr);
@@ -187,7 +153,6 @@ template<class T, int ALIGN> void Array<T, ALIGN>::create(int i) {
 }
 
 template<class T, int ALIGN> Array<T, ALIGN>::~Array() {
-  programChecker.alloc(-ALIGN-n*sizeof(T));
   free(ptr);
 }
 
@@ -346,7 +311,6 @@ inline int llog(U32 x) {
 // Also, when a bit is observed and the count of the opposite bit is large,
 // then part of this count is discarded to favor newer data over old.
 
-#if 1 // change to #if 0 to generate this table at run time (4% slower)
 static const U8 State_table[256][4]={
   {  1,  2, 0, 0},{  3,  5, 1, 0},{  4,  6, 0, 1},{  7, 10, 2, 0}, // 0-3
   {  8, 12, 1, 1},{  9, 13, 1, 1},{ 11, 14, 0, 2},{ 15, 19, 3, 0}, // 4-7
@@ -415,23 +379,9 @@ static const U8 State_table[256][4]={
 
 #define nex(state,sel) State_table[state][sel]
 
-#endif
-
 ///////////////////////////// Squash //////////////////////////////
 
 // return p = 1/(1 + exp(-d)), d scaled by 8 bits, p scaled by 12 bits
-/*int squash(int d) {
-  static const int t[33]={
-    1,2,3,6,10,16,27,45,73,120,194,310,488,747,1101,
-    1546,2047,2549,2994,3348,3607,3785,3901,3975,4022,
-    4050,4068,4079,4085,4089,4092,4093,4094};
-  if (d>2047) return 4095;
-  if (d<-2047) return 0;
-  int w=d&127;
-  d=(d>>7)+16;
-  return (t[d]*(128-w)+t[(d+1)]*w+64) >> 7;
-} 
-*/
 class Squash {
   Array<U16> t;
 public:
@@ -503,36 +453,6 @@ Stretch::Stretch(): t(4096) {
 
 // dot_product returns dot product t*w of n elements.  n is rounded
 // up to a multiple of 8.  Result is scaled down by 8 bits.
-/*#ifdef NOASM  // no assembly language
-int dot_product(short *t, short *w, int n) {
-  int sum=0;
-  n=(n+7)&-8;
-  for (int i=0; i<n; i+=2)
-    sum+=(t[i]*w[i]+t[i+1]*w[i+1]) >> 8;
-  return sum;
-}
-#else  // The NASM version uses MMX and is about 8 times faster.
-extern "C" int dot_product(short *t, short *w, int n);  // in NASM
-#endif
-
-// Train neural network weights w[n] given inputs t[n] and err.
-// w[i] += t[i]*err, i=0..n-1.  t, w, err are signed 16 bits (+- 32K).
-// err is scaled 16 bits (representing +- 1/2).  w[i] is clamped to +- 32K
-// and rounded.  n is rounded up to a multiple of 8.
-#ifdef NOASM
-void train(short *t, short *w, int n, int err) {
-  n=(n+7)&-8;
-  for (int i=0; i<n; ++i) {
-    int wt=w[i]+(((t[i]*err*2>>16)+1)>>1);
-    if (wt<-32768) wt=-32768;
-    if (wt>32767) wt=32767;
-    w[i]=wt;
-  }
-}
-#else
-extern "C" void train(short *t, short *w, int n, int err);  // in NASM
-#endif
-*/
 
 #if !defined(__GNUC__)
 
@@ -662,6 +582,8 @@ void train(short *t, short *w, int n, int err) {
 }
 #endif // slow!
 
+std::vector<float> model_predictions_(742, 0);
+unsigned int prediction_index_ = 0;
 
 class Mixer {
   const int N, M, S;   // max inputs, max contexts, max context sets
@@ -692,6 +614,9 @@ public:
   // Input x (call up to N times)
   void add(int x) {
     assert(nx<N);
+    float prediction = (1.0 + squash(x)) / 4097;
+    model_predictions_[prediction_index_] = prediction;
+    ++prediction_index_;
     tx[nx++]=x;
   }
 
@@ -708,6 +633,7 @@ public:
   int p() {
     while (nx&7) tx[nx++]=0;  // pad
     if (mp) {  // combine outputs
+      prediction_index_ = 0;
       mp->update2();
       for (int i=0; i<ncxt; ++i) {
          int dp=((dot_product(&tx[0], &wx[cxt[i]*N], nx)));//*7)>>8);
@@ -727,7 +653,6 @@ public:
   }
   ~Mixer();
 };
-
 
 Mixer::~Mixer() {
   delete mp;
@@ -862,7 +787,6 @@ APM::APM(int n): StateMap(n*24) {
   }
 }
 
-
 //////////////////////////// hash //////////////////////////////
 
 // Hash 2-5 ints.
@@ -961,7 +885,6 @@ inline  U8* BH<B>::operator[](U32 i) {
 
 // Predict to mixer m from bit history state s, using sm to map s to
 // a probability.
-
 inline int mix2(Mixer& m, int s, StateMap& sm) {
   int p1=sm.p(s);
   int n0=-!nex(s,2);
@@ -2194,6 +2117,10 @@ void PAQ8Perceive(int bit) {
   paq8.update();
 }
 
+const std::vector<float>& PAQ8ModelPredictions() {
+  return model_predictions_;
+}
+
 }  // namespace
 
 PAQ8PXD::PAQ8PXD(int memory) {
@@ -2207,4 +2134,8 @@ float PAQ8PXD::Predict() {
 
 void PAQ8PXD::Perceive(int bit) {
   PAQ8Perceive(bit);
+}
+
+const std::vector<float>& PAQ8PXD::ModelPredictions() {
+  return PAQ8ModelPredictions();
 }

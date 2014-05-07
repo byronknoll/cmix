@@ -12,6 +12,7 @@
 #include "contexts/context-hash.h"
 #include "contexts/sparse.h"
 #include "contexts/indirect-hash.h"
+#include "models/facade.h"
 
 #include <vector>
 
@@ -33,7 +34,7 @@ Predictor::Predictor() : manager_(), logistic_(10000, 1000) {
   AddMixers();
   AddSSE();
 
-  // printf("Number of models: %lu\n", models_.size());
+  printf("Number of models: %lu\n", models_.size());
   // printf("Number of mixer neurons: %llu\n", GetNumNeurons());
 }
 
@@ -62,12 +63,22 @@ void Predictor::AddPAQ8HP() {
 
 void Predictor::AddPAQ8L() {
   auxiliary_.push_back(models_.size());
-  Add(new PAQ8L(10));
+  PAQ8L* paq = new PAQ8L(10);
+  Add(paq);
+  const std::vector<float>& predictions = paq->ModelPredictions();
+  for (unsigned int i = 0; i < predictions.size(); ++i) {
+    Add(new Facade(predictions[i]));
+  }
 }
 
 void Predictor::AddPAQ8PXD() {
   auxiliary_.push_back(models_.size());
-  Add(new PAQ8PXD(10));
+  PAQ8PXD* paq = new PAQ8PXD(10);
+  Add(paq);
+  const std::vector<float>& predictions = paq->ModelPredictions();
+  for (unsigned int i = 0; i < predictions.size(); ++i) {
+    Add(new Facade(predictions[i]));
+  }
 }
 
 void Predictor::AddPPM() {

@@ -24,7 +24,7 @@ build/encoder.o: src/coder/encoder.h src/coder/encoder.cpp src/predictor.h
 build/decoder.o: src/coder/decoder.h src/coder/decoder.cpp src/predictor.h
 	$(CC) $(CFLAGS) src/coder/decoder.cpp -o build/decoder.o
 
-build/predictor.o: src/predictor.h src/predictor.cpp src/mixer/mixer-input.h src/mixer/mixer.h src/sse.h src/models/model.h src/models/direct.h src/models/direct-hash.h src/models/indirect.h src/models/byte-run.h src/models/match.h src/models/dmc.h src/models/ppm.h src/models/paq8l.h src/models/paq8hp.h src/models/paq8pxd.h src/manager.h src/contexts/context-hash.h src/contexts/sparse.h src/contexts/indirect-hash.h src/mixer/logistic.h
+build/predictor.o: src/predictor.h src/predictor.cpp src/mixer/mixer-input.h src/mixer/mixer.h src/sse.h src/models/model.h src/models/direct.h src/models/direct-hash.h src/models/indirect.h src/models/byte-run.h src/models/match.h src/models/dmc.h src/models/ppm.h src/models/facade.h src/models/paq8l.h src/models/paq8hp.h src/models/paq8pxd.h src/manager.h src/contexts/context-hash.h src/contexts/sparse.h src/contexts/indirect-hash.h src/models/facade.h src/mixer/logistic.h
 	$(CC) $(CFLAGS) src/predictor.cpp -o build/predictor.o
 
 build/logistic.o: src/mixer/logistic.h src/mixer/logistic.cpp
