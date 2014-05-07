@@ -34,7 +34,7 @@ Predictor::Predictor() : manager_(), logistic_(10000, 1000) {
   AddMixers();
   AddSSE();
 
-  printf("Number of models: %lu\n", models_.size());
+  // printf("Number of models: %lu\n", models_.size());
   // printf("Number of mixer neurons: %llu\n", GetNumNeurons());
 }
 

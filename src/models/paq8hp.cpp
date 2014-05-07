@@ -1408,16 +1408,18 @@ void Predictor::update() {
 
 Predictor paq8;
 
-void PAQ8Init(int memory) {
+}  // namespace
+
+PAQ8HP::PAQ8HP(int memory) {
   level = memory;
   buf.setsize(MEM*8);
 }
 
-int PAQ8Predict() {
-  return paq8.p();
+float PAQ8HP::Predict() {
+  return (1.0 + paq8.p()) / 4097;
 }
 
-void PAQ8Perceive(int bit) {
+void PAQ8HP::Perceive(int bit) {
   y = bit;
   if (bit) {
     sm_add_y = sm_add;
@@ -1425,19 +1427,4 @@ void PAQ8Perceive(int bit) {
     sm_add_y = 0;
   }
   paq8.update();
-}
-
-}  // namespace
-
-PAQ8HP::PAQ8HP(int memory) {
-  PAQ8Init(memory);
-}
-
-float PAQ8HP::Predict() {
-  int p = PAQ8Predict();
-  return (1.0 + p) / 4097;
-}
-
-void PAQ8HP::Perceive(int bit) {
-  PAQ8Perceive(bit);
 }

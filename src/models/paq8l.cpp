@@ -454,8 +454,8 @@ void train(short *t, short *w, int n, int err) {
 extern "C" void train(short *t, short *w, int n, int err);  // in NASM
 #endif
 
-std::vector<float> model_predictions_(625, 0);
-unsigned int prediction_index_ = 0;
+std::vector<float> model_predictions(625, 0);
+unsigned int prediction_index = 0;
 
 class Mixer {
   const int N, M, S;   // max inputs, max contexts, max context sets
@@ -483,9 +483,8 @@ public:
   // Input x (call up to N times)
   void add(int x) {
     assert(nx<N);
-    float prediction = (1.0 + squash(x)) / 4097;
-    model_predictions_[prediction_index_] = prediction;
-    ++prediction_index_;
+    model_predictions[prediction_index] = (1.0 + squash(x)) / 4097;
+    ++prediction_index;
     tx[nx++]=x;
   }
 
@@ -503,7 +502,7 @@ public:
   int p() {
     while (nx&7) tx[nx++]=0;  // pad
     if (mp) {  // combine outputs
-      prediction_index_ = 0;
+      prediction_index = 0;
       mp->update();
       for (int i=0; i<ncxt; ++i) {
         pr[i]=squash(dot_product(&tx[0], &wx[cxt[i]*N], nx)>>5);
@@ -1991,39 +1990,22 @@ void Predictor::update() {
 
 Predictor paq8;
 
-void PAQ8Init(int memory) {
+}  // namespace
+
+PAQ8L::PAQ8L(int memory) {
   level = memory;
   buf.setsize(MEM*8);
 }
 
-int PAQ8Predict() {
-  return paq8.p();
+float PAQ8L::Predict() {
+  return (1.0 + paq8.p()) / 4097;
 }
 
-void PAQ8Perceive(int bit) {
+void PAQ8L::Perceive(int bit) {
   y = bit;
   paq8.update();
 }
 
-const std::vector<float>& PAQ8ModelPredictions() {
-  return model_predictions_;
-}
-
-}  // namespace
-
-PAQ8L::PAQ8L(int memory) {
-  PAQ8Init(memory);
-}
-
-float PAQ8L::Predict() {
-  int p = PAQ8Predict();
-  return (1.0 + p) / 4097;
-}
-
-void PAQ8L::Perceive(int bit) {
-  PAQ8Perceive(bit);
-}
-
 const std::vector<float>& PAQ8L::ModelPredictions() {
-  return PAQ8ModelPredictions();
+  return model_predictions;
 }
