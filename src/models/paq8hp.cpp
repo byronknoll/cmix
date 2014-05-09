@@ -453,6 +453,9 @@ void train(short *t, short *w, int n, int err) {
 extern "C" void train(short *t, short *w, int n, int err);  // in NASM
 #endif
 
+std::vector<float> model_predictions(460, 0);
+unsigned int prediction_index = 0;
+
 class Mixer {
   const int N, M, S;   // max inputs, max contexts, max context sets
   Array<short, 16> wx; // N*M weights
@@ -484,6 +487,8 @@ public:
   // Input x (call up to N times)
   void add(int x) {
     assert(nx<N);
+    model_predictions[prediction_index] = (1.0 + squash(x)) / 4097;
+    ++prediction_index;
     tx[nx++]=x;
   }
 
@@ -507,6 +512,7 @@ public:
   int p() {
     while (nx&7) tx[nx++]=0;  // pad
     if (mp) {  // combine outputs
+      prediction_index = 0;      
       mp->update2();
       for (int i=0; i<ncxt; ++i) {
         int dp=dot_product(&tx[0], &wx[cxt[i]*N], nx);
@@ -1427,4 +1433,8 @@ void PAQ8HP::Perceive(int bit) {
     sm_add_y = 0;
   }
   paq8.update();
+}
+
+const std::vector<float>& PAQ8HP::ModelPredictions() {
+  return model_predictions;
 }

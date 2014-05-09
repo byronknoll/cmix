@@ -58,7 +58,12 @@ void Predictor::Add(int layer, Mixer* mixer) {
 
 void Predictor::AddPAQ8HP() {
   auxiliary_.push_back(models_.size());
-  Add(new PAQ8HP(10));
+  PAQ8HP* paq = new PAQ8HP(10);
+  Add(paq);
+  const std::vector<float>& predictions = paq->ModelPredictions();
+  for (unsigned int i = 0; i < predictions.size(); ++i) {
+    Add(new Facade(predictions[i]));
+  }
 }
 
 void Predictor::AddPAQ8L() {
@@ -82,11 +87,11 @@ void Predictor::AddPAQ8PXD() {
 }
 
 void Predictor::AddPPM() {
-  Add(new PPM(7, manager_.bit_context_, 100, 100000000));
+  Add(new PPM(7, manager_.bit_context_, 100, 20000000));
 }
 
 void Predictor::AddDMC() {
-  Add(new DMC(0.02, 100000000));
+  Add(new DMC(0.02, 20000000));
 }
 
 void Predictor::AddByteRun() {
