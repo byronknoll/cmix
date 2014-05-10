@@ -87,11 +87,11 @@ void Predictor::AddPAQ8PXD() {
 }
 
 void Predictor::AddPPM() {
-  Add(new PPM(7, manager_.bit_context_, 100, 20000000));
+  Add(new PPM(7, manager_.bit_context_, 100, 50000000));
 }
 
 void Predictor::AddDMC() {
-  Add(new DMC(0.02, 20000000));
+  Add(new DMC(0.02, 50000000));
 }
 
 void Predictor::AddByteRun() {
