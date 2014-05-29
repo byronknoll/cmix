@@ -1,10 +1,12 @@
 cmix version 2
 http://www.byronknoll.com/cmix.html
-Released by Byron Knoll on May 4, 2014.
+Released by Byron Knoll on May 29, 2014.
 cmix is free software distributed under the GNU General Public License.
 
 Changes from version 1 to version 2:
 - Memory tuning
 - Increase PPM order to 7
 - Replaced dictionary with the one used by decmprs8
-- Added paq8pxd_v7 model
+- Added paq8pxd_v7 models
+- Removed pic models
+- Added "facade" models to copy the paq8 model predictions to the cmix mixer.
