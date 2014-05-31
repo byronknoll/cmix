@@ -8,7 +8,6 @@
 #include "models/ppm.h"
 #include "models/paq8l.h"
 #include "models/paq8hp.h"
-#include "models/paq8pxd.h"
 #include "contexts/context-hash.h"
 #include "contexts/sparse.h"
 #include "contexts/indirect-hash.h"
@@ -19,7 +18,6 @@
 Predictor::Predictor() : manager_(), logistic_(10000, 1000) {
   AddPAQ8HP();
   AddPAQ8L();
-  AddPAQ8PXD();
   AddPPM();
   AddDMC();
   AddByteRun();
@@ -69,16 +67,6 @@ void Predictor::AddPAQ8HP() {
 void Predictor::AddPAQ8L() {
   auxiliary_.push_back(models_.size());
   PAQ8L* paq = new PAQ8L(10);
-  Add(paq);
-  const std::vector<float>& predictions = paq->ModelPredictions();
-  for (unsigned int i = 0; i < predictions.size(); ++i) {
-    Add(new Facade(predictions[i]));
-  }
-}
-
-void Predictor::AddPAQ8PXD() {
-  auxiliary_.push_back(models_.size());
-  PAQ8PXD* paq = new PAQ8PXD(10);
   Add(paq);
   const std::vector<float>& predictions = paq->ModelPredictions();
   for (unsigned int i = 0; i < predictions.size(); ++i) {
