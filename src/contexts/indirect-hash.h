@@ -12,6 +12,7 @@ class IndirectHash : public Context {
   void Update();
   bool IsEqual(Context* c);
 
+ private:
   const unsigned int& byte_;
   unsigned long long context1_;
   unsigned int hash_size1_;

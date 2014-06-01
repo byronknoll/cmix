@@ -2,7 +2,7 @@ CC = g++
 CFLAGS = -std=c++11 -Wall -c
 LFLAGS = -std=c++11 -Wall
 
-OBJS = build/preprocessor.o build/encoder.o build/decoder.o build/predictor.o build/logistic.o build/mixer-input.o build/mixer.o build/sse.o build/manager.o build/direct.o build/direct-hash.o build/indirect.o build/nonstationary.o build/run-map.o build/byte-run.o build/match.o build/dmc.o build/ppm.o build/paq8l.o build/paq8hp.o build/context-hash.o build/sparse.o build/indirect-hash.o
+OBJS = build/preprocessor.o build/encoder.o build/decoder.o build/predictor.o build/logistic.o build/mixer-input.o build/mixer.o build/sse.o build/manager.o build/direct.o build/direct-hash.o build/indirect.o build/nonstationary.o build/run-map.o build/byte-run.o build/match.o build/dmc.o build/ppm.o build/paq8l.o build/paq8hp.o build/context-hash.o build/sparse.o build/indirect-hash.o build/bit-context.o
 
 all: CFLAGS += -Ofast -s
 all: LFLAGS += -Ofast -s
@@ -24,7 +24,7 @@ build/encoder.o: src/coder/encoder.h src/coder/encoder.cpp src/predictor.h
 build/decoder.o: src/coder/decoder.h src/coder/decoder.cpp src/predictor.h
 	$(CC) $(CFLAGS) src/coder/decoder.cpp -o build/decoder.o
 
-build/predictor.o: src/predictor.h src/predictor.cpp src/mixer/mixer-input.h src/mixer/mixer.h src/sse.h src/models/model.h src/models/direct.h src/models/direct-hash.h src/models/indirect.h src/models/byte-run.h src/models/match.h src/models/dmc.h src/models/ppm.h src/models/facade.h src/models/paq8l.h src/models/paq8hp.h src/manager.h src/contexts/context-hash.h src/contexts/sparse.h src/contexts/indirect-hash.h src/models/facade.h src/mixer/logistic.h
+build/predictor.o: src/predictor.h src/predictor.cpp src/mixer/mixer-input.h src/mixer/mixer.h src/sse.h src/models/model.h src/models/direct.h src/models/direct-hash.h src/models/indirect.h src/models/byte-run.h src/models/match.h src/models/dmc.h src/models/ppm.h src/models/facade.h src/models/paq8l.h src/models/paq8hp.h src/manager.h src/contexts/context-hash.h src/contexts/sparse.h src/contexts/indirect-hash.h src/contexts/bit-context.h src/models/facade.h src/mixer/logistic.h
 	$(CC) $(CFLAGS) src/predictor.cpp -o build/predictor.o
 
 build/logistic.o: src/mixer/logistic.h src/mixer/logistic.cpp
@@ -39,7 +39,7 @@ build/mixer.o: src/mixer/mixer.h src/mixer/mixer.cpp src/mixer/logistic.h
 build/sse.o: src/sse.h src/sse.cpp
 	$(CC) $(CFLAGS) src/sse.cpp -o build/sse.o
 
-build/manager.o: src/manager.h src/manager.cpp src/contexts/context.h
+build/manager.o: src/manager.h src/manager.cpp src/contexts/context.h src/contexts/bit-context.h
 	$(CC) $(CFLAGS) src/manager.cpp -o build/manager.o
 
 build/direct.o: src/models/direct.h src/models/direct.cpp src/models/model.h
@@ -86,6 +86,9 @@ build/indirect-hash.o: src/contexts/indirect-hash.h src/contexts/indirect-hash.c
 
 build/sparse.o: src/contexts/sparse.h src/contexts/sparse.cpp src/contexts/context.h
 	$(CC) $(CFLAGS) src/contexts/sparse.cpp -o build/sparse.o
+
+build/bit-context.o: src/contexts/bit-context.h src/contexts/bit-context.cpp
+	$(CC) $(CFLAGS) src/contexts/bit-context.cpp -o build/bit-context.o
 
 clean:
 	rm -f -r build/* cmix

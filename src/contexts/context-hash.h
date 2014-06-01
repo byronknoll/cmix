@@ -10,6 +10,7 @@ class ContextHash : public Context {
   void Update();
   bool IsEqual(Context* c);
 
+ private:
   const unsigned int& byte_;
   unsigned int hash_size_;
 };

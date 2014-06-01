@@ -1,8 +1,8 @@
 #include "manager.h"
 
-Manager::Manager() : bit_context_(1), zero_context_(0), zero_context2_(0),
+Manager::Manager() : bit_context_(1), long_bit_context_(1), zero_context_(0),
     history_pos_(0), line_break_(0), history_(100000000, 0), words_(8, 0),
-    recent_bytes_(8, 0), recent_bytes2_(4, 0) {}
+    recent_bytes_(8, 0) {}
 
 const Context& Manager::AddContext(std::unique_ptr<Context> context) {
   for (const auto& old : contexts_) {
@@ -10,6 +10,12 @@ const Context& Manager::AddContext(std::unique_ptr<Context> context) {
   }
   contexts_.push_back(std::move(context));
   return *(contexts_[contexts_.size() - 1]);
+}
+
+const BitContext& Manager::AddBitContext(std::unique_ptr<BitContext>
+    bit_context) {
+  bit_contexts_.push_back(std::move(bit_context));
+  return *(bit_contexts_[bit_contexts_.size() - 1]);
 }
 
 void Manager::UpdateHistory() {
@@ -44,16 +50,14 @@ void Manager::UpdateRecentBytes() {
     recent_bytes_[i] = recent_bytes_[i-1];
   }
   recent_bytes_[0] = bit_context_;
-  for (int i = 3; i >= 1; --i) {
-    recent_bytes2_[i] = recent_bytes2_[i-1];
-  }
-  recent_bytes2_[0] = bit_context_;
 }
 
 void Manager::Perceive(int bit) {
   bit_context_ += bit_context_ + bit;
+  long_bit_context_ = bit_context_;
   if (bit_context_ >= 256) {
     bit_context_ -= 256;
+    long_bit_context_ = 1;
 
     if (bit_context_ == '\n') {
       line_break_ = 0;
@@ -67,5 +71,8 @@ void Manager::Perceive(int bit) {
     for (const auto& context : contexts_) {
       context->Update();
     }
+  }
+  for (const auto& context : bit_contexts_) {
+    context->Update();
   }
 }
