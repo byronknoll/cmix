@@ -61,7 +61,7 @@ void Manager::Perceive(int bit) {
 
     if (bit_context_ == '\n') {
       line_break_ = 0;
-    } else if (line_break_ < 255) {
+    } else if (line_break_ < 99) {
       ++line_break_;
     }
 

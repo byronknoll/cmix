@@ -246,7 +246,7 @@ void Predictor::AddMixers() {
   unsigned long long input_size = models_.size();
   std::vector<std::vector<double>> model_params = {{0, 8, 0.005},
       {0, 8, 0.0005}, {1, 8, 0.005}, {1, 8, 0.0005}, {2, 4, 0.005},
-      {3, 3, 0.002}};
+      {3, 2, 0.002}};
   for (const auto& params : model_params) {
     const Context& context = manager_.AddContext(std::unique_ptr<Context>(
         new ContextHash(manager_.bit_context_, params[0], params[1])));
@@ -265,7 +265,7 @@ void Predictor::AddMixers() {
   Add(0, new Mixer(layers_[0]->inputs_, logistic_, manager_.zero_context_,
       0.00005, 1, input_size));
   Add(0, new Mixer(layers_[0]->inputs_, logistic_, manager_.line_break_,
-      0.0007, 256, input_size));
+      0.0007, 100, input_size));
 
   const BitContext& bit_context1 = manager_.AddBitContext(std::unique_ptr
       <BitContext>(new BitContext(manager_.long_bit_context_,
