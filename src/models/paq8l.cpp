@@ -454,7 +454,7 @@ void train(short *t, short *w, int n, int err) {
 extern "C" void train(short *t, short *w, int n, int err);  // in NASM
 #endif
 
-std::vector<float> model_predictions(625, 0);
+std::vector<float> model_predictions(625, 0.5);
 unsigned int prediction_index = 0;
 
 class Mixer {
