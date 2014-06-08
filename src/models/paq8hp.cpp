@@ -977,43 +977,6 @@ int ContextMap::mix1(Mixer& m, int cc, int c1, int y1) {
 // All of the models below take a Mixer as a parameter and write
 // predictions to it.
 
-//////////////////////////// matchModel ///////////////////////////
-
-// matchModel() finds the longest matching context and returns its length
-
-int matchModel(Mixer& m) {
-  const int MAXLEN=2047;  // longest allowed match + 1
-  static Array<int> t(MEM);  // hash table of pointers to contexts
-  static int h=0;  // hash of last 7 bytes
-  static int ptr=0;  // points to next byte of match if any
-  static int len=0;  // length of match, or 0 if no match
-  static int result=0;
-
-  if (!bpos) {
-    h=(h*887*8+b1+1)&(t.size()-1);  // update context hash
-    if (len) ++len, ++ptr;
-    else {  // find match
-      ptr=t[h];
-      if (ptr && pos-ptr<buf.size())
-        while (buf(len+1)==buf[ptr-len-1] && len<MAXLEN) ++len;
-    }
-    t[h]=pos;  // update hash table
-    result=len;
-  }
-
-  // predict
-  if (len>MAXLEN) len=MAXLEN;
-  int sgn;
-  if (len && b1==buf[ptr-1] && c0==(buf[ptr]+256)>>(8-bpos)) {
-    if ((buf[ptr]>>(7-bpos))&1) sgn=8;
-    else sgn=-8;
-  }
-  else sgn=len=0;
-  m.add(sgn*ilog(len));
-  m.add(sgn*8*min(len, 32));
-  return result;
-}
-
 static U32 col, frstchar=0, spafdo=0, spaces=0, spacecount=0, words=0, wordcount=0, fails=0, failz=0, failcount=0;
 
 //////////////////////////// wordModel /////////////////////////
