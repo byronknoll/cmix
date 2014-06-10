@@ -860,6 +860,7 @@ class ContextMap {
     // mix() with global context passed as arguments to improve speed.
 public:
   ContextMap(int m, int c=1);  // m = memory in bytes, a power of 2, C = c
+  ~ContextMap();
   void set(U32 cx);   // set next whole byte context
   int mix(Mixer& m) {return mix1(m, c0, b1, y);}
 };
@@ -887,6 +888,10 @@ ContextMap::ContextMap(int m, int c): C(c), Sz((m>>6)-1), t(m>>6), cp(c), cp0(c)
     cp0[i]=cp[i]=&t[0].bh[0][0];
     runp[i]=cp[i]+3;
   }
+}
+
+ContextMap::~ContextMap() {
+  delete[] sm;
 }
 
 // Set the i'th context to cx
