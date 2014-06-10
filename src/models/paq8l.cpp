@@ -364,16 +364,28 @@ static const U8 State_table[256][4]={
 ///////////////////////////// Squash //////////////////////////////
 
 // return p = 1/(1 + exp(-d)), d scaled by 8 bits, p scaled by 12 bits
-int squash(int d) {
-  static const int t[33]={
+class Squash {
+  Array<U16> t;
+public:
+  Squash();
+  int operator()(int p) const {
+    if (p>2047) return 4095;
+  if (p<-2047) return 0;
+    return t[p+2048];
+  }
+} squash;
+
+Squash::Squash(): t(4096) {
+                  int ts[33]={
     1,2,3,6,10,16,27,45,73,120,194,310,488,747,1101,
     1546,2047,2549,2994,3348,3607,3785,3901,3975,4022,
     4050,4068,4079,4085,4089,4092,4093,4094};
-  if (d>2047) return 4095;
-  if (d<-2047) return 0;
-  int w=d&127;
-  d=(d>>7)+16;
-  return (t[d]*(128-w)+t[(d+1)]*w+64) >> 7;
+    int w,d;
+  for (int i=-2047; i<=2047; ++i){
+    w=i&127;
+  d=(i>>7)+16;
+  t[i+2048]=(ts[d]*(128-w)+ts[(d+1)]*w+64) >> 7;
+    }
 }
 
 //////////////////////////// Stretch ///////////////////////////////
