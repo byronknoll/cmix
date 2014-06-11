@@ -436,7 +436,111 @@ Stretch::Stretch(): t(4096) {
 
 // dot_product returns dot product t*w of n elements.  n is rounded
 // up to a multiple of 8.  Result is scaled down by 8 bits.
-#ifdef NOASM  // no assembly language
+
+#if !defined(__GNUC__)
+
+#if (2 == _M_IX86_FP) // 2 if /arch:SSE2 was used.
+# define __SSE2__
+#elif (1 == _M_IX86_FP) // 1 if /arch:SSE was used.
+# define __SSE__
+#endif
+
+#endif /* __GNUC__ */
+
+/**
+ * Vector product a*b of n signed words, returning signed integer scaled down by 8 bits.
+ * n is rounded up to a multiple of 8.
+ */
+static int dot_product (const short* const t, const short* const w, int n);
+
+/**
+ * Train n neural network weights w[n] on inputs t[n] and err.
+ * w[i] += ((t[i]*2*err)+(1<<16))>>17 bounded to +- 32K.
+ * n is rounded up to a multiple of 8.
+ */
+static void train (const short* const t, short* const w, int n, const int e);
+
+#if defined(__SSE2__) // faster
+#include <emmintrin.h>
+#define OPTIMIZE "SSE2-"
+
+static int dot_product (const short* const t, const short* const w, int n) {
+  assert(n == ((n + 7) & -8));
+  __m128i sum = _mm_setzero_si128 ();
+  while ((n -= 8) >= 0) { // Each loop sums eight products
+    __m128i tmp = _mm_madd_epi16 (*(__m128i *) &t[n], *(__m128i *) &w[n]); // t[n] * w[n] + t[n+1] * w[n+1]
+    tmp = _mm_srai_epi32 (tmp, 8); //                                        (t[n] * w[n] + t[n+1] * w[n+1]) >> 8
+    sum = _mm_add_epi32 (sum, tmp); //                                sum += (t[n] * w[n] + t[n+1] * w[n+1]) >> 8
+  }
+  sum = _mm_add_epi32 (sum, _mm_srli_si128 (sum, 8)); // Add eight sums together ...
+  sum = _mm_add_epi32 (sum, _mm_srli_si128 (sum, 4));
+  return _mm_cvtsi128_si32 (sum); //                     ...  and scale back to integer
+}
+
+static void train (const short* const t, short* const w, int n, const int e) {
+  assert(n == ((n + 7) & -8));
+  if (e) {
+    const __m128i one = _mm_set1_epi16 (1);
+    const __m128i err = _mm_set1_epi16 (short(e));
+    while ((n -= 8) >= 0) { // Each iteration adjusts eight weights
+      __m128i tmp = _mm_adds_epi16 (*(__m128i *) &t[n], *(__m128i *) &t[n]); // t[n] * 2
+      tmp = _mm_mulhi_epi16 (tmp, err); //                                     (t[n] * 2 * err) >> 16
+      tmp = _mm_adds_epi16 (tmp, one); //                                     ((t[n] * 2 * err) >> 16) + 1
+      tmp = _mm_srai_epi16 (tmp, 1); //                                      (((t[n] * 2 * err) >> 16) + 1) >> 1
+      tmp = _mm_adds_epi16 (tmp, *(__m128i *) &w[n]); //                    ((((t[n] * 2 * err) >> 16) + 1) >> 1) + w[n]
+      *(__m128i *) &w[n] = tmp; //                                          save the new eight weights, bounded to +- 32K
+    }
+  }
+}
+
+#elif defined(__SSE__) // fast
+#include <xmmintrin.h>
+#define OPTIMIZE "SSE-"
+
+static sint32 dot_product (const sint16* const t, const sint16* const w, sint32 n) {
+  assert(n == ((n + 7) & -8));
+  __m64 sum = _mm_setzero_si64 ();
+  while ((n -= 8) >= 0) { // Each loop sums eight products
+    __m64 tmp = _mm_madd_pi16 (*(__m64 *) &t[n], *(__m64 *) &w[n]); //   t[n] * w[n] + t[n+1] * w[n+1]
+    tmp = _mm_srai_pi32 (tmp, 8); //                                    (t[n] * w[n] + t[n+1] * w[n+1]) >> 8
+    sum = _mm_add_pi32 (sum, tmp); //                            sum += (t[n] * w[n] + t[n+1] * w[n+1]) >> 8
+
+    tmp = _mm_madd_pi16 (*(__m64 *) &t[n + 4], *(__m64 *) &w[n + 4]); // t[n+4] * w[n+4] + t[n+5] * w[n+5]
+    tmp = _mm_srai_pi32 (tmp, 8); //                                    (t[n+4] * w[n+4] + t[n+5] * w[n+5]) >> 8
+    sum = _mm_add_pi32 (sum, tmp); //                            sum += (t[n+4] * w[n+4] + t[n+5] * w[n+5]) >> 8
+  }
+  sum = _mm_add_pi32 (sum, _mm_srli_si64 (sum, 32)); // Add eight sums together ...
+  const sint32 retval = _mm_cvtsi64_si32 (sum); //                     ...  and scale back to integer
+  _mm_empty(); // Empty the multimedia state
+  return retval;
+}
+
+static void train (const sint16* const t, sint16* const w, sint32 n, const sint32 e) {
+  assert(n == ((n + 7) & -8));
+  if (e) {
+    const __m64 one = _mm_set1_pi16 (1);
+    const __m64 err = _mm_set1_pi16 (sint16(e));
+    while ((n -= 8) >= 0) { // Each iteration adjusts eight weights
+      __m64 tmp = _mm_adds_pi16 (*(__m64 *) &t[n], *(__m64 *) &t[n]); //   t[n] * 2
+      tmp = _mm_mulhi_pi16 (tmp, err); //                                 (t[n] * 2 * err) >> 16
+      tmp = _mm_adds_pi16 (tmp, one); //                                 ((t[n] * 2 * err) >> 16) + 1
+      tmp = _mm_srai_pi16 (tmp, 1); //                                  (((t[n] * 2 * err) >> 16) + 1) >> 1
+      tmp = _mm_adds_pi16 (tmp, *(__m64 *) &w[n]); //                  ((((t[n] * 2 * err) >> 16) + 1) >> 1) + w[n]
+      *(__m64 *) &w[n] = tmp; //                                       save the new four weights, bounded to +- 32K
+
+      tmp = _mm_adds_pi16 (*(__m64 *) &t[n + 4], *(__m64 *) &t[n + 4]); // t[n+4] * 2
+      tmp = _mm_mulhi_pi16 (tmp, err); //                                 (t[n+4] * 2 * err) >> 16
+      tmp = _mm_adds_pi16 (tmp, one); //                                 ((t[n+4] * 2 * err) >> 16) + 1
+      tmp = _mm_srai_pi16 (tmp, 1); //                                  (((t[n+4] * 2 * err) >> 16) + 1) >> 1
+      tmp = _mm_adds_pi16 (tmp, *(__m64 *) &w[n + 4]); //              ((((t[n+4] * 2 * err) >> 16) + 1) >> 1) + w[n]
+      *(__m64 *) &w[n + 4] = tmp; //                                   save the new four weights, bounded to +- 32K
+    }
+    _mm_empty(); // Empty the multimedia state
+  }
+}
+#else
+// dot_product returns dot product t*w of n elements.  n is rounded
+// up to a multiple of 8.  Result is scaled down by 8 bits.
 int dot_product(short *t, short *w, int n) {
   int sum=0;
   n=(n+7)&-8;
@@ -444,15 +548,12 @@ int dot_product(short *t, short *w, int n) {
     sum+=(t[i]*w[i]+t[i+1]*w[i+1]) >> 8;
   return sum;
 }
-#else  // The NASM version uses MMX and is about 8 times faster.
-extern "C" int dot_product(short *t, short *w, int n);  // in NASM
-#endif
 
 // Train neural network weights w[n] given inputs t[n] and err.
 // w[i] += t[i]*err, i=0..n-1.  t, w, err are signed 16 bits (+- 32K).
 // err is scaled 16 bits (representing +- 1/2).  w[i] is clamped to +- 32K
 // and rounded.  n is rounded up to a multiple of 8.
-#ifdef NOASM
+
 void train(short *t, short *w, int n, int err) {
   n=(n+7)&-8;
   for (int i=0; i<n; ++i) {
@@ -462,9 +563,7 @@ void train(short *t, short *w, int n, int err) {
     w[i]=wt;
   }
 }
-#else
-extern "C" void train(short *t, short *w, int n, int err);  // in NASM
-#endif
+#endif // slow!
 
 std::vector<float> model_predictions(835, 0.5);
 unsigned int prediction_index = 0;
