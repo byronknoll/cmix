@@ -1,7 +1,7 @@
 #include "mixer-input.h"
 
 MixerInput::MixerInput(const Logistic& logistic, float eps) :
-    inputs_(1, 0.5), logistic_(logistic), min_(eps), max_(1 - eps) {}
+    inputs_(0.5, 1), logistic_(logistic), min_(eps), max_(1 - eps) {}
 
 void MixerInput::SetNumModels(int num_models) {
   inputs_.resize(num_models, 0.5);

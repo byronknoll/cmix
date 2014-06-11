@@ -3,7 +3,7 @@
 
 #include "logistic.h"
 
-#include <vector>
+#include <valarray>
 
 class MixerInput {
  public:
@@ -11,7 +11,7 @@ class MixerInput {
   void SetNumModels(int num_models);
   void SetInput(int index, float p);
 
-  std::vector<float> inputs_;
+  std::valarray<float> inputs_;
 
  private:
   const Logistic& logistic_;
