@@ -103,7 +103,6 @@ EEOLType EOLType;
 ESpaceType spaceBefore;
 EPreprocessType preprocType;
 
-
 #ifdef POWERED_BY_PAQ
 #define DECODE_GETC(c,file)\
 {\
@@ -143,353 +142,6 @@ int mOne[MAX_FREQ_ORDER1];
 #define	ENCODE_ORDER1(prev,value)	EncodeOrder1(prev,value)
 #define	DECODE_ORDER1(prev)		DecodeOrder1(prev)
 #define	INIT_ORDER1			InitOrder1(MAX_FREQ_ORDER1)
-
-
-
-// Input/Output using dynamic memory allocation
-
-#if USE_EOLC
-#define OUTPUT_BUFFER_MIN_SIZE 10240
-
-class MemoryBuffer
-{
-public:
-	uc* SourceBuf; 	uint SrcPtr, SrcLen;
-	uc* TargetBuf; 	uint TgtPtr, TgtMarker, TgtLen;
-
-	MemoryBuffer() { SourceBuf=NULL, TargetBuf=NULL, SrcPtr=0; TgtPtr=0; TgtMarker=0; };
-	~MemoryBuffer() { if (SourceBuf) delete(SourceBuf); if (TargetBuf) delete(TargetBuf); };
-
-	inline void OutTgtByte( uc c ) 
-	{ 
-		*(TargetBuf+(TgtPtr++))=c; 
-		if (TgtPtr>TgtLen-1) 
-			ReallocTgtBuf(TgtLen*2); 
-	}
-
-	inline uc   InpSrcByte( void ) 
-	{
-#ifdef FUNCTION_CHECK_ERRORS
-		if (SrcPtr>=SrcLen)
-		{
-			printf("File is corrupted! (RangeCoder)\n");
-			fileCorrupted=true;
-		}
-#endif
-		return *(SourceBuf+(SrcPtr++)); 
-	}
-	
-	inline void AllocSrcBuf( FILE* SourceFile, uint len )
-	{
-		SrcPtr=0; TgtPtr=0; TgtMarker=0;
-
-		if (len==0)
-			SrcLen = flen(SourceFile);
-		else
-			SrcLen = len;
-		SourceBuf = new uc[SrcLen];
-		fread( SourceBuf, SrcLen, 1, SourceFile );
-	}
-	
-	inline void AllocTgtBuf( uint len = OUTPUT_BUFFER_MIN_SIZE )
-	{
-		SrcPtr=0; TgtPtr=0; TgtMarker=0;
-
-		TgtLen = len;
-		TargetBuf = new uc[len];
-	}
-
-	inline void ReallocTgtBuf(uint len)
-	{
-		uc* NewTargetBuf = new uc[len];
-		memcpy(NewTargetBuf,TargetBuf,min(TgtPtr,len));
-		TgtLen = len;
-		delete(TargetBuf);
-		TargetBuf=NewTargetBuf;
-	}
-	
-	inline uint FlushTgtBuf( FILE* TargetFile )
-	{
-		fwrite(TargetBuf, TgtPtr, 1, TargetFile);
-		return TgtPtr;
-	}
-};
-
-
-
-// class RangeCoder - arithmetic coder
-
-#define  DO(n)	   for (int _=0; _<n; _++)
-#define  TOP	   (1<<24)
-
-class RangeCoder
-{
-	uint code, range, FFNum, Cache;
-#ifdef WIN32
-	__int64 low;
-#else
-	long long low;
-#endif
-	MemoryBuffer buffer;
-public:
-	
-	// inline void ShiftLow( void )
-#define ShiftLow()                            \
-{                                             \
-if ( (low^0xFF000000)>0xFFFFFF ) {            \
-buffer.OutTgtByte( Cache + (low>>32) );       \
-int c = 0xFF+(low>>32);                       \
-while( FFNum ) buffer.OutTgtByte(c), FFNum--; \
-Cache = uint(low)>>24;                        \
-} else FFNum++;                               \
-low = uint(low)<<8;                           \
-}
-	
-	int EOLstreamLen()
-	{
-		int ret=buffer.TgtPtr-buffer.TgtMarker;
-		buffer.TgtMarker=buffer.TgtPtr;
-
-		return ret;
-	}
-
-	void StartEncode()    
-	{
-		low=FFNum=Cache=0;  
-		range=(uint)-1; 
-		buffer.AllocTgtBuf();
-	}
-	
-	void StartDecode(FILE* InputFile, uint len)
-	{ 
-		buffer.AllocSrcBuf(InputFile,len);
-		code=0; 
-		range=(uint)-1;
-		DO(5) code=(code<<8) | buffer.InpSrcByte();
-	}
-	
-	uint FinishEncode(FILE* OutputFile)	       
-	{ 
-		DO(5) ShiftLow();
-		return buffer.FlushTgtBuf(OutputFile);
-	}
-	
-	
-	void Encode(uint cumFreq, uint freq, uint totFreq)
-	{
-		low += cumFreq * (range/= totFreq);
-		range*= freq;
-		while( range<TOP ) { ShiftLow(); range<<=8; }
-	}
-	
-	
-	uint GetFreq (uint totFreq) {
-		return code / (range/= totFreq);
-	}
-	
-	
-	void Decode (uint cumFreq, uint freq, uint totFreq)
-	{
-		code -= cumFreq*range;
-		range *= freq;
-		while (range<TOP) code=(code<<8)|buffer.InpSrcByte(), range<<=8;
-	}
-	
-};
-
-
-RangeCoder coder;
-
-inline void UpdateOrder1(int prev,int c, int step)
-{
-	if (c==0)
-		mZero[prev]+=step;
-	else
-		mOne[prev]+=step;
-
-	if (mZero[prev]+mOne[prev] >= 1<<15)
-	{
-		mZero[prev]=(mZero[prev]+1)/2;
-		mOne[prev]=(mOne[prev]+1)/2;
-	}
-
-}
-
-
-inline void EncodeOrder1(int prev, int c)
-{
-	EOLcount++;
-
-	if (c==0)
-		coder.Encode(0,mZero[prev],mZero[prev]+mOne[prev]);
-	else
-		coder.Encode(mZero[prev],mOne[prev],mZero[prev]+mOne[prev]);
-
-}
-
-
-inline int DecodeOrder1(int prev)
-{
-	EOLcount++;
-
-	int c=coder.GetFreq(mZero[prev]+mOne[prev]);
-
-	if (c<mZero[prev])
-		c=0;
-	else
-		c=1;
-
-	if (c==0)
-		coder.Decode(0,mZero[prev],mZero[prev]+mOne[prev]);
-	else
-		coder.Decode(mZero[prev],mOne[prev],mZero[prev]+mOne[prev]);
-
-	return c;
-}
-
-
-inline void InitOrder1(int size)
-{
-	static int i;
-
-#ifdef LOG_ARITHMETIC_ENCODER
-	printf("init=%d\n",size);
-#endif
-
-	for (i=0; i<size; i++)
-	{
-		mZero[i]=1;
-		mOne[i]=1;
-	}
-}
-
-
-inline int ContextEncode(int leftChar,int c,int rightChar,int distance)
-{
-	unsigned int prev,result;
-	
-
-	if (leftChar<'a' || leftChar>'z' || rightChar<'a' || rightChar>'z')
-		if ((leftChar!=',' && leftChar!='.' && leftChar!='\'') || rightChar<'a' || rightChar>'z')
-				return c;
-
-#ifdef LOG_ARITHMETIC_ENCODER
-	printf("%c (%d) %c (%d) dist=%d\n",leftChar,leftChar,rightChar,rightChar,distance);
-#endif
- 
-	if (c==32)
-		result=0;
-	else
-		result=1;
-	
-	if (leftChar==',')
-		leftChar='z'+1;
-	if (leftChar=='.' || leftChar=='\'')
-		leftChar='z'+3;
-
-	leftChar-='a'; // leftChar (0-25+3)
-	
-	if (rightChar>127)
-		rightChar=127;
-	else
-	if (rightChar==10)
-		rightChar=32;
-	else
-	if (rightChar<32)
-		rightChar=128;
-	rightChar-=32;  // c (0-96)
-	
-	if (distance>80)
-		distance=80;
-	
-	prev=5*16*(distance/5+1)+5*(leftChar/2+1)+(rightChar/32);
-
-	ENCODE_ORDER1(prev,result); 
-	UPDATE_ORDER1(prev,result); 
-
-
-	return 32;
-}
-
-
-inline int ContextDecode(int leftChar,int rightChar,int distance)
-{
-	unsigned int prev,result;
-
-
-	if (leftChar<'a' || leftChar>'z' || rightChar<'a' || rightChar>'z')
-		if ((leftChar!=',' && leftChar!='.' && leftChar!='\'') || rightChar<'a' || rightChar>'z')
-				return 32;
-
-#ifdef LOG_ARITHMETIC_ENCODER
-	printf("%c (%d) %c (%d) dist=%d\n",leftChar,leftChar,rightChar,rightChar,distance);
-#endif
-	
-	if (leftChar==',')
-		leftChar='z'+1;
-	if (leftChar=='.' || leftChar=='\'')
-		leftChar='z'+3;
-	leftChar-='a'; // leftChar (0-26)
-
-	if (rightChar>127)
-		rightChar=127;
-	else
-	if (rightChar==10)
-		rightChar=32;
-	else
-	if (rightChar<32)
-		rightChar=128;
-	rightChar-=32;  // c (0-96)
-	
-	if (distance>80)
-		distance=80;
-	
-	prev=5*16*(distance/5+1)+5*(leftChar/2+1)+(rightChar/32);
-	
-	result=DECODE_ORDER1(prev); 
-	UPDATE_ORDER1(prev,result); 
-
-	if (result==0)
-		return 32;
-
-	return 10;
-}
-
-inline void EncodeEOLformat(EEOLType EOLType)
-{
-#ifdef LOG_ARITHMETIC_ENCODER
-	printf("EncodeEOLformat %d\n",EOLType);
-#endif
-	EOLcount++;
-
-	if (EOLType==CRLF)
-		coder.Encode(0,1,2);
-	else
-		coder.Encode(1,1,2);
-}
-
-
-inline EEOLType DecodeEOLformat()
-{
-	int c=coder.GetFreq(2);
-
-#ifdef LOG_ARITHMETIC_ENCODER
-	printf("DecodeEOLformat %d\n",(c<1)?CRLF:LF);
-#endif
-
-
-	if (c<1)
-	{
-		coder.Decode(0,1,2);
-		return CRLF;
-	}
-	else
-		coder.Decode(1,1,2);
-
-	return LF;
-}
-#endif ///USE_EOLC
-
 
 #define DICTNAME_EXT "dic"
 #define DICTNAME "english"
@@ -944,24 +596,10 @@ inline int decodeCodeWord(FILE* file, unsigned char* s,int& c)
 		DECODE_WORD(dictNo, i);
 		return s_size;
 	}
-	///else
-	///if (codeword2sym[c]<dict1plus2)
 		i=dict1size*(codeword2sym[c]-dict1size);
-	///else
-	//if (codeword2sym[c]<dict1plus2plus3)
-	///{
-	///	PRINT_CODEWORDS(("DC1b c=%d\n",codeword2sym[c]-dict1plus2));
-	///	i=dict12size*(codeword2sym[c]-dict1plus2);
-	///}
-	//else
-	//	i=dict123size*(codeword2sym[c]-dict1plus2plus3);
-
-
 
 	DECODE_GETC(c,file);
 	PRINT_CODEWORDS(("DC1 c=%d i=%d\n",c,i));
-
-
 
 	if (codeword2sym[c]<dict1size)
 	{
@@ -970,22 +608,15 @@ inline int decodeCodeWord(FILE* file, unsigned char* s,int& c)
 		DECODE_WORD(dictNo, i);
 		return s_size;
 	}
-	//else
-	//if (codeword2sym[c]<dict1plus2)
 	{
 		i=(i-dict12size)*dict2size;
 		PRINT_CODEWORDS(("DC2b c=%d\n",codeword2sym[c]-dict1size));
 		i+=dict1size*(codeword2sym[c]-dict1size);
 	}
-	//else
-	//	i+=dict12size*(codeword2sym[c]-dict1plus2);
 
 	DECODE_GETC(c,file);
 	PRINT_CODEWORDS(("DC2 c=%d i=%d\n",c,i));
 
-
-
-	//if (codeword2sym[c]<dict1size)
 	{
 		PRINT_CODEWORDS(("DC3b c=%d\n",codeword2sym[c]));
 		i+=codeword2sym[c];
@@ -1033,8 +664,6 @@ unsigned char* loadDictionary(FILE* file,unsigned char* mem,int word_count)
 		dictlen[sizeDict]=i;
 		dict[sizeDict]=mem;
 
-
-
 		j=stringHash(mem,i);
 		mem+=(i/4+1)*4;
 		
@@ -1055,56 +684,26 @@ unsigned char* loadDictionary(FILE* file,unsigned char* mem,int word_count)
 						}
 						else
 						{
-							/////if (dictlen[sizeDict]<=0)
-							/////{
-							/////	if (IF_OPTION(OPTION_USE_NGRAMS) && dictlen[sizeDict]==2)
-							/////	{
-							/////		ngram_hash[dict[sizeDict][0]][dict[sizeDict][1]]=sizeDict;
-							/////		word_hash[c]=sizeDict++;
-							/////	}
-							/////}
-							/////else
 								word_hash[c]=sizeDict++;
 						}
 					}
 				}
 				else
 				{
-						/////if (dictlen[sizeDict]<=0)
-						/////{
-						/////	if (IF_OPTION(OPTION_USE_NGRAMS) && dictlen[sizeDict]==2)
-						/////	{
-						/////		ngram_hash[dict[sizeDict][0]][dict[sizeDict][1]]=sizeDict;
-						/////		word_hash[c]=sizeDict++;
-						/////	}
-						/////}
-						/////else
 							word_hash[c]=sizeDict++;
 				}
 			}
 		}
 		else
 		{
-			/////if (dictlen[sizeDict]<=0)
-			/////{
-			/////	if (IF_OPTION(OPTION_USE_NGRAMS) && dictlen[sizeDict]==2)
-			/////	{
-			/////		ngram_hash[dict[sizeDict][0]][dict[sizeDict][1]]=sizeDict;
-			/////		word_hash[j]=sizeDict++;
-			/////	}
-			/////}
-			/////else
 				word_hash[j]=sizeDict++;
-
 		}
-
 		
 		if (sizeDict>dictionary || sizeDict>=bound)
 		{
 			sizeDict--;
 			break;
 		}
-		
 	}
 
 	return mem;
@@ -1141,7 +740,6 @@ int loadCharset(FILE* file,int& freeChar,int* charset,int* charsetRev,bool *join
 	return res;
 }
 
-
 void initializeCodeWords()
 {
 	int c,charsUsed;
@@ -1163,7 +761,6 @@ void initializeCodeWords()
 		addSymbols[35]=1;
 		addSymbols[38]=1;
 		addSymbols[60]=1;
-	//	addSymbols[61]=1;
 		addSymbols[62]=1;
 		addSymbols[64]=1;
 		addSymbols[94]=1;
@@ -1181,8 +778,6 @@ void initializeCodeWords()
 	if (IF_OPTION(OPTION_ADD_SYMBOLS_14_31))
 		for (c=14; c<=31; c++)
 			addSymbols[c]=1;
-
-
 
 	for (c=0; c<256; c++)
 	{
@@ -1227,7 +822,6 @@ void initializeCodeWords()
 					dict3size=16;
 					dict4size=0;
 
-		//dictionary=(dict1size*dict2size*dict3size*dict4size+dict1size*dict2size*dict3size+dict1size*dict2size+dict1size);
 		bound4=dict1size*dict2size*dict3size+dict1size*dict2size+dict1size;
 		bound3=dict1size*dict2size+dict1size;
 		dict123size=dict1size*dict2size*dict3size;
@@ -1278,10 +872,6 @@ bool initialize(unsigned char* dictName,unsigned char* shortDictName,bool encodi
 
 	if (IF_OPTION(OPTION_USE_DICTIONARY))
 	{
-		/////if (WRT_verbose)
-		/////	printf("- loading dictionary %s\n",dictName); 
-
-		//file=fopen((const char*)dictName,"rb");
     file = english_dictionary;
 		if (file==NULL)
 		{
@@ -1292,9 +882,7 @@ bool initialize(unsigned char* dictName,unsigned char* shortDictName,bool encodi
 		fileLen=flen(file);
 		if (fscanf(file,"%d",&dict123size) < 0) abort();
 
-
 		do { c=getc(file); } while (c>=32); if (c==13) c=getc(file); // skip CR+LF or LF
-
 
 		for (i=0; i<CHARSET_COUNT; i++)
 		{
@@ -1318,18 +906,15 @@ bool initialize(unsigned char* dictName,unsigned char* shortDictName,bool encodi
 			if (set[usedSet]==0 && freeLower[CHARSET_COUNT-1]>1)
 				usedSet=CHARSET_COUNT-1;
 		}
-
 	
 		if (freeUpper[0]!=freeLower[0])
 		{
-			/////printf("Bad the first charset in %s (the 2nd and the 3rd line length are different)\n",dictName);
 			fclose(file);
 			return false;
 		}
 
 		if (freeUpper[usedSet]!=freeLower[usedSet] || freeLower[usedSet]!=freeLower[0])
 		{
-			/////printf("Bad the second charset in %s (the %dth and the %dth line length are different)\n",dictName,usedSet*2-2,usedSet*2-1);
 			fclose(file);
 			return false;
 		}
@@ -1362,7 +947,6 @@ bool initialize(unsigned char* dictName,unsigned char* shortDictName,bool encodi
 
 			if (freeUpper[0]!=freeLower[0])
 			{
-				/////printf("Bad the first charset in %s (the 2nd and the 3rd line length are different)\n",shortDictName);
 				fclose(file2);
 				fclose(file);
 				return false;
@@ -1370,7 +954,6 @@ bool initialize(unsigned char* dictName,unsigned char* shortDictName,bool encodi
 
 			if (freeUpper[usedSet]!=freeLower[usedSet] || freeLower[usedSet]!=freeLower[0])
 			{
-				/////printf("Bad the second charset in %s (the %dth and the %dth line length are different)\n",dictName,usedSet*2-2,usedSet*2-1);
 				fclose(file2);
 				fclose(file);
 				return false;
@@ -1402,11 +985,6 @@ bool initialize(unsigned char* dictName,unsigned char* shortDictName,bool encodi
 			memset(lowerSetRev,0,sizeof(lowerSetRev));
 			memset(upperSetRev,0,sizeof(upperSetRev));
 		}
-
-		//fclose(file);
-
-		/////if (WRT_verbose)
-		/////	printf("- loaded dictionary %d/%d words\n",sizeDict,dictionary);
 	}
 	else
 	{
@@ -1500,12 +1078,8 @@ void WRT_get_options(int& c,int& c2)
 	if (!IF_OPTION(OPTION_USE_DICTIONARY))
 		TURN_OFF(OPTION_USE_NGRAMS);
 
-	/////if (IF_OPTION(OPTION_RECORD_INTERLEAVING))
-	/////	TURN_OFF(OPTION_USE_DICTIONARY)
-
 	if ((IF_OPTION(OPTION_WORD_SURROROUNDING_MODELING)) && (IF_OPTION(OPTION_SPACELESS_WORDS)))
 	{
-		/////printf("warning: OPTION_WORD_SURROROUNDING_MODELING and OPTION_SPACELESS_WORDS collision\n");
 		TURN_OFF(OPTION_WORD_SURROROUNDING_MODELING);
 	}
 
@@ -1527,11 +1101,6 @@ void WRT_get_options(int& c,int& c2)
 
 	c+=preprocType;
 
-
-	/////if (IF_OPTION(OPTION_RECORD_INTERLEAVING))
-	/////	c2=c2+128;
-	/////if (IF_OPTION(OPTION_DNA_QUARTER_BYTE))
-	/////	c2=c2+64;
 	if (IF_OPTION(OPTION_CAPITAL_CONVERSION))
 		c2=c2+32;
 	if (IF_OPTION(OPTION_UTF8))
@@ -1540,8 +1109,6 @@ void WRT_get_options(int& c,int& c2)
 
 int defaultSettings(int argc, char* argv[])
 {
-	/////static bool firstTime=true;
-
 	forceNormalTextFilter=false;
 	forceWordSurroroundModeling=false;
 
@@ -1556,16 +1123,8 @@ int defaultSettings(int argc, char* argv[])
 	TURN_ON(OPTION_NORMAL_TEXT_FILTER);
 	TURN_ON(OPTION_CAPITAL_CONVERSION);
 	TURN_ON(OPTION_UTF8);
-	/////TURN_ON(OPTION_ADD_SYMBOLS_A_Z);
-	/////TURN_ON(OPTION_RECORD_INTERLEAVING);
-	/////TURN_ON(OPTION_DNA_QUARTER_BYTE);
-
                         tryShorterBound=6;
-			/////TURN_OFF(OPTION_RECORD_INTERLEAVING);
-			/////TURN_OFF(OPTION_DNA_QUARTER_BYTE);
-			/////TURN_OFF(OPTION_ADD_SYMBOLS_A_Z);
 			TURN_ON(OPTION_WORD_SURROROUNDING_MODELING);
-
 	int optCount=0;
 	return optCount;
 }
@@ -1604,19 +1163,6 @@ bool readDicts(const char* pattern,char* dictPath,int dictPathLen, FILE* english
 	{
 		char* filename=c_file.name;
 #else
-	/*
-	struct dirent *cFile;
-	DIR* hDir=opendir(dictPath);
-
-	if (hDir == NULL) 
-		return false;
-
-	while ((cFile=readdir(hDir)) != NULL)
-	{
-		if (cFile->d_type != DT_REG)
-			continue;
-		char* filename=cFile->d_name;
-	*/
 		{
 		const char* filename="english.dic";
 #endif
@@ -1624,17 +1170,13 @@ bool readDicts(const char* pattern,char* dictPath,int dictPathLen, FILE* english
 		dictPath[dictPathLen]=0;
 		strcat(dictPath,filename);
 
-		//file=fopen((const char*)dictPath,"rb");
     file = english_dictionary;
     rewind(file);
 		if (file==NULL)
 			return false; //continue;
-		
 
 		i=strlen(filename);
 
-
-		//toLower((unsigned char*)filename,i);
 		langName[langCount]=(unsigned char*)malloc(i+1);
 		memcpy(langName[langCount],(const char*)filename,i+1);
 
@@ -1649,7 +1191,6 @@ bool readDicts(const char* pattern,char* dictPath,int dictPathLen, FILE* english
 			freeLower[i]=1;
 			loadCharset(file,freeLower[i],lowerSet[i],lowerSetRev[i],joinCharsets);
 		}
-
 
 		sizeFullDict=sizeDict;
 		std::string s;
@@ -1722,7 +1263,6 @@ bool readDicts(const char* pattern,char* dictPath,int dictPathLen, FILE* english
 
 		langCount++;
 
-		//fclose(file);
 	}
 #ifdef WIN32
 	while (_findnext( hFile, &c_file ) == 0);
@@ -1730,7 +1270,6 @@ bool readDicts(const char* pattern,char* dictPath,int dictPathLen, FILE* english
 	_findclose( hFile );
 
 #else
-//	closedir(hDir);
 #endif
 
 	return true;
@@ -2104,8 +1643,6 @@ void WRT_encode(FILE* file,FILE* fileout,int fileLen) //,int fileType)
 			continue;
 		}
 
-
-
 		encodeWord(fileout,s,s_size,wordType);
 
 		s_size=0;
@@ -2113,8 +1650,6 @@ void WRT_encode(FILE* file,FILE* fileout,int fileLen) //,int fileType)
 		PRINT_CHARS(("other c=%d\n",c));
 
 		ENCODE_GETC(next_c,file);
-
-
 
 #if USE_EOLC
 		if (IF_OPTION(OPTION_EOL_CODING) && (c==32 || c==10 || (c==13 && next_c==10)))
@@ -2134,9 +1669,6 @@ void WRT_encode(FILE* file,FILE* fileout,int fileLen) //,int fileType)
 					ENCODE_GETC(next_c,file);
 					lastEOL++;
 
-					/////if (preprocType==LZ77)
-					/////	last_c=ContextEncodeLZ(last_c,c,next_c,fftell-lastEOL+(next_c<0?1:0));
-					/////else
 						last_c=ContextEncode(last_c,c,next_c,fftell-lastEOL+(next_c<0?1:0));
 
 
@@ -2171,11 +1703,7 @@ void WRT_encode(FILE* file,FILE* fileout,int fileLen) //,int fileType)
 				{
 					if (IF_OPTION(OPTION_EOL_CODING))
 					{		
-						/////if (preprocType==LZ77)
-		 				/////	last_c=ContextEncodeLZ(last_c,c,next_c,fftell-lastEOL+(next_c<0?1:0));
-						/////else	
 							last_c=ContextEncode(last_c,c,next_c,fftell-lastEOL+(next_c<0?1:0));
-	
 					}
 					else
 						last_c=c;
@@ -2251,8 +1779,6 @@ inline void hook_putc(int c)
 		return;
 	}
 
-
-
 	if (bufferedChar>=0)
 	{	
 #if USE_EOLC
@@ -2265,9 +1791,6 @@ inline void hook_putc(int c)
 
 			}
 
-			/////if (preprocType==LZ77)
-			/////	bufferedChar=ContextDecodeLZ(lastChar,c,fftell-lastEOL);
-			/////else
 				bufferedChar=ContextDecode(lastChar,c,fftell-lastEOL);
 
 			if (bufferedChar==10)
@@ -2320,8 +1843,6 @@ int readEOLstream(FILE* file)
 	for (int i=0; i<4; i++)
 	    EOLstream_len=EOLstream_len*256+fgetc(file);
 
-//	printf("End-of-Line (EOL) stream %d fileLen=%d\n",EOLstream_len,fileLen);
-
 #if USE_EOLC
 	if (IF_OPTION(OPTION_EOL_CODING) && EOLstream_len>0 && EOLstream_len<fileLen)
 	{
@@ -2352,8 +1873,6 @@ void writeEOLstream(FILE* fileout)
 
 	fprintf(fileout, "%c%c%c%c", EOLstream_len>>24, EOLstream_len>>16, EOLstream_len>>8, EOLstream_len);
 }
-
-
 
 inline void WRT_decode(FILE* file)
 {
@@ -2400,9 +1919,6 @@ inline void WRT_decode(FILE* file)
 					upperWord=UFALSE;
 			}
 
-			/////if (preprocType==LZ77)
-			/////	s_size=decodeCodeWord_LZ(file,WRTd_s,WRTd_c);
-			/////else
 				s_size=decodeCodeWord(file,WRTd_s,WRTd_c);
 
 			if (WRTd_upper)
@@ -2548,10 +2064,6 @@ inline void WRT_decode(FILE* file)
 		return;
 }
 
-
-
-
-
 void WRT_start_encoding(FILE* file,FILE* fileout,unsigned int fileLen,bool type_detected,FILE* english_dictionary)
 {
   unsigned int start_pos = ftell(fileout);
@@ -2570,7 +2082,6 @@ void WRT_start_encoding(FILE* file,FILE* fileout,unsigned int fileLen,bool type_
 	strcat((char*)dictPath,WRT_DICT_DIR);
 	dictPathLen=strlen((char*)dictPath);
 
-	
 	if (!type_detected)
 		WRT_getFileType(file,recordLen,english_dictionary);
 
@@ -2583,8 +2094,6 @@ void WRT_start_encoding(FILE* file,FILE* fileout,unsigned int fileLen,bool type_
 		memcpy(t,langName[shortDict],strlen((const char*)langName[shortDict])+1);
 	else
 		shortDictLen=0;
-	
-
 
 	if (dictPathLen>0)
 	{
@@ -2607,8 +2116,6 @@ restart:
 	putc(c,fileout);
 	putc(c2,fileout);
 
-	/////WRT_print_options();
-
 	WRT_deinitialize();
 	if (!initialize((longDictLen<=0)?NULL:s,(shortDictLen<=0)?NULL:t,true,english_dictionary))
 		return;
@@ -2616,16 +2123,6 @@ restart:
 	if (IF_OPTION(OPTION_USE_DICTIONARY))
 	{
 		putc(usedSet,fileout);
-	/////}
-	
-	/////if (IF_OPTION(OPTION_RECORD_INTERLEAVING))
-	/////{
-	/////	putc(recordLen/256,fileout);
-	/////	putc(recordLen%256,fileout);
-	/////}
-	
-	/////if (IF_OPTION(OPTION_USE_DICTIONARY))
-	/////{
 		putc(shortDictLen,fileout);
 		c=strlen(SHORT_DICTNAME);
 		for (i=c; i<shortDictLen+c; i++)
@@ -2636,26 +2133,8 @@ restart:
 		for (i=c; i<longDictLen+c; i++)
 			fputc(langName[longDict][i],fileout);
 	}
-	
-	
-	
 
-	/////if (IF_OPTION(OPTION_DNA_QUARTER_BYTE))
-	/////{
-	/////	quarter_byte_encode(file,fileout);
-	/////	if (restartEnc)
-	/////	{
-	/////		restartEnc=false;
-	/////		fseek(fileout, pos, SEEK_SET );
-	/////		fseek(file, 0, SEEK_SET );
-	/////		goto restart;
-	/////	}
-	/////}
-	/////else
-		/////if (IF_OPTION(OPTION_RECORD_INTERLEAVING))
-		/////	interleave(file,fileout,recordLen,0);
-		/////else
-		{
+  {
 #if USE_EOLC
 		    EOLcount=0;
 		    if (IF_OPTION(OPTION_EOL_CODING)) {
@@ -2712,15 +2191,6 @@ void WRT_start_decoding(FILE* file,FILE* fileout,int header,FILE* english_dictio
 	
 	WRT_set_options(c,c2);
 
-	/////WRT_print_options();
-
-	/////if (IF_OPTION(OPTION_RECORD_INTERLEAVING))
-	/////{
-	/////	recordLen=256*getc(file);
-	/////	recordLen+=getc(file);
-	/////	i+=2;
-	/////}
-	
 	if (IF_OPTION(OPTION_USE_DICTIONARY))
 	{
 		usedSet=getc(file);
@@ -2758,9 +2228,6 @@ void WRT_start_decoding(FILE* file,FILE* fileout,int header,FILE* english_dictio
 	strcat((char*)dictPath,WRT_DICT_DIR);
 	dictPathLen=strlen((char*)dictPath);
 
-
-
-
 	if (dictPathLen>0)
 	{
 		dictPath[dictPathLen]=0;
@@ -2777,14 +2244,6 @@ void WRT_start_decoding(FILE* file,FILE* fileout,int header,FILE* english_dictio
 	if (!initialize((longDictLen<=0)?NULL:s,(shortDictLen<=0)?NULL:t,false,english_dictionary))
 		return;
 
-
-
-	/////if (IF_OPTION(OPTION_DNA_QUARTER_BYTE))
-	/////	quarter_byte_decode(file,fileout,header+2);
-	/////else
-		/////if (IF_OPTION(OPTION_RECORD_INTERLEAVING))
-		/////	interleave(file,fileout,recordLen,header+4);
-		/////else
 		{
 #if USE_EOLC
 			int EOLlen= readEOLstream(file)+4; // +sizeof(EOLlen)
@@ -2849,8 +2308,6 @@ int WRT_decode_char(FILE* file,FILE* fileout,int header,FILE* english_dictionary
 			WRT_start_decoding(file,fileout,header,english_dictionary);
 			WRTd_qstart=WRTd_qend=0;
 			WRTd_type=1;
-			/////if (IF_OPTION(OPTION_DNA_QUARTER_BYTE) || IF_OPTION(OPTION_RECORD_INTERLEAVING))
-			/////	return EOF;
 		case 1:
 			if (WRTd_c!=EOF)
 			{
