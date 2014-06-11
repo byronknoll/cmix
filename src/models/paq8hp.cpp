@@ -455,6 +455,7 @@ extern "C" void train(short *t, short *w, int n, int err);  // in NASM
 
 std::vector<float> model_predictions(460, 0.5);
 unsigned int prediction_index = 0;
+float conversion_factor = 1.0 / 4095;
 
 class Mixer {
   const int N, M, S;   // max inputs, max contexts, max context sets
@@ -487,7 +488,7 @@ public:
   // Input x (call up to N times)
   void add(int x) {
     assert(nx<N);
-    model_predictions[prediction_index] = (1.0 + squash(x)) / 4097;
+    model_predictions[prediction_index] = squash(x) * conversion_factor;
     ++prediction_index;
     tx[nx++]=x;
   }
@@ -512,6 +513,7 @@ public:
   int p() {
     while (nx&7) tx[nx++]=0;  // pad
     if (mp) {  // combine outputs
+      // printf("%d\n", prediction_index);
       prediction_index = 0;      
       mp->update2();
       for (int i=0; i<ncxt; ++i) {
@@ -1390,7 +1392,7 @@ PAQ8HP::PAQ8HP(int memory) {
 }
 
 float PAQ8HP::Predict() {
-  return (1.0 + paq8.p()) / 4097;
+  return paq8.p() * conversion_factor;
 }
 
 void PAQ8HP::Perceive(int bit) {
