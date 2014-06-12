@@ -1,5 +1,7 @@
 #include "mixer.h"
 
+#include <numeric>
+
 Mixer::Mixer(const std::valarray<float>& inputs, const Logistic& logistic,
     const unsigned long long& context, float learning_rate,
     unsigned long long context_size, unsigned long long input_size) :
@@ -8,7 +10,8 @@ Mixer::Mixer(const std::valarray<float>& inputs, const Logistic& logistic,
     weights_(context_size, std::valarray<float>(0.0, input_size)) {}
 
 float Mixer::Mix() {
-  p_ = logistic_.Squash((weights_[context_] * inputs_).sum());
+  p_ = logistic_.Squash(std::inner_product(&inputs_[0],
+      &inputs_[inputs_.size()], &weights_[context_][0], 0.0));
   return p_;
 }
 
