@@ -552,7 +552,7 @@ void train(short *t, short *w, int n, int err) {
 }
 #endif // slow!
 
-std::vector<float> model_predictions(514, 0.5);
+std::vector<float> model_predictions(460, 0.5);
 unsigned int prediction_index = 0;
 float conversion_factor = 1.0 / 4095;
 
@@ -1090,8 +1090,8 @@ static U32 col, frstchar=0, spafdo=0, spaces=0, spacecount=0, words=0, wordcount
 // Model English text (words and columns/end of line)
 
 void wordModel(Mixer& m) {
-  static U32 word0=0, word1=0, word2=0, word3=0, word4=0, word5=0;  // hashes
-  static ContextMap cm(MEM*31, 55);
+  static U32 word0=0, word1=0, word2=0, word3=0, word4=0;  // hashes
+  static ContextMap cm(MEM*31, 46);
   static int nl1=-3, nl=-2;  // previous, current newline position
   static U32 t1[256];
   static U16 t2[0x10000];
@@ -1112,7 +1112,6 @@ void wordModel(Mixer& m) {
     else {
 	if (c==32 || c==10) { ++spaces, ++spacecount; if (c==10) nl1=nl, nl=pos-1; }
 	if (word0) {
-    word5=word4*41;
 	  word4=word3*43;
 	  word3=word2*47;
 	  word2=word1*53;
@@ -1123,25 +1122,16 @@ void wordModel(Mixer& m) {
     }
     
     U32 h=word0*271+c;
-    cm.set(h);
     cm.set(word0);
-    cm.set(word1);
-    cm.set(word2);
     cm.set(h+word1);
-    cm.set(word1*91+c);
-    cm.set(word0*91+word1*89);
+    cm.set(  word0*91+word1*89);
     cm.set(h+word1*79+word2*71);
-    cm.set(word5*91+c);
 
     cm.set(h+word2);
     cm.set(h+word3);
     cm.set(h+word4);
     cm.set(h+word1*73+word3*61);
-    cm.set(h+word1*73+word4*61);
-    cm.set(h+word3*61+word4*73);
-    cm.set(word1*61+word5*73);
     cm.set(h+word2*67+word3*59);
-    cm.set(c+word2*61);
 
 	  if (f) {
 	    word4=word3*31;
@@ -1319,7 +1309,7 @@ static U32 WRT_mtt[16]= { 0, 0, 1, 2, 3, 4, 5, 5,  6, 6, 6, 6, 6, 7, 7, 7 };
 int contextModel2() {
   static ContextMap cm(MEM*31, 7);
   static RunContextMap rcm7(MEM/4,14), rcm9(MEM/4,18), rcm10(MEM/2,20);
-  static Mixer m(900, 128*(16+14+14+12+14+16), 6, 512);
+  static Mixer m(456, 128*(16+14+14+12+14+16), 6, 512);
   static U32 cxt[16];  // order 0-11 contexts
   //static Filetype filetype=DEFAULT;
   static int size=0;  // bytes remaining in block
