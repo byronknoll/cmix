@@ -231,7 +231,7 @@ void Predictor::AddSSE() {
   for (const auto& params : model_params) {
     const Context& context = manager_.AddContext(std::unique_ptr<Context>(
         new ContextHash(manager_.bit_context_, params[0], params[1])));
-    sse_.push_back(std::unique_ptr<SSE>(new SSE(context.context_,
+    sse_.push_back(std::unique_ptr<SSE>(new SSE(logistic_, context.context_,
         manager_.bit_context_, params[2], params[3], context.size_)));
   }
 }
@@ -329,9 +329,10 @@ float Predictor::Predict() {
           layers_[0]->inputs_[auxiliary_[i]];
     }
   }
-  float p = mixers_[2][0]->Mix();
-  p = (p + 2 * sse_[0]->Process(p) + sse_[1]->Process(p) + sse_[2]->Process(p) +
-      sse_[3]->Process(p)) / 6;
+  float mixer_output = mixers_[2][0]->Mix();
+  float p = logistic_.Stretch(mixer_output);
+  p = (mixer_output + 3 * sse_[0]->Process(p) + sse_[1]->Process(p) +
+      sse_[2]->Process(p) + sse_[3]->Process(p)) / 7;
   return p;
 }
 

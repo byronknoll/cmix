@@ -1,13 +1,16 @@
 #ifndef SSE_H
 #define SSE_H
 
+#include "mixer/logistic.h"
+
 #include <vector>
 #include <array>
 
 class SSE {
  public:
-  SSE(const unsigned long long& byte_context, const unsigned int& bit_context,
-      unsigned int num_buckets, float delta, unsigned long long table_size);
+  SSE(const Logistic& logistic, const unsigned long long& byte_context,
+      const unsigned int& bit_context, unsigned int num_buckets, float delta,
+      unsigned long long table_size);
   float Process(float input);
   void Perceive(int bit);
 
