@@ -1,4 +1,5 @@
-// This is adapted from paq8l
+// This is adapted from paq8l.
+// Also includes some code segments from paq8pxd (released by Kaido Orav).
 
 /*
     Copyright (C) 2006 Matt Mahoney, Serge Osnach, Alexander Ratushnyak,
@@ -1135,19 +1136,17 @@ void picModel(Mixer& m) {
 }
 
 //////////////////////////// wordModel /////////////////////////
-
-// Model English text (words and columns/end of line)
-
 U32 b2=0, f4=0;
 int col=0;
 
+// Model English text (words and columns/end of line)
 static U32 frstchar=0,spafdo=0,spaces=0,spacecount=0, words=0,wordcount=0,wordlen=0,wordlen1=0;
 void wordModel(Mixer& m) {
 	static U32 word0=0, word1=0, word2=0, word3=0, word4=0, word5=0;  // hashes
 	static U32 xword0=0,xword1=0,xword2=0,cword0=0,ccword=0;
 	static U32 number0=0, number1=0;  // hashes
 	static U32 text0=0;  // hash stream of letters
-	static ContextMap cm(MEM*16, 45);
+	static ContextMap cm(MEM*31, 45);
 	static int nl1=-3, nl=-2;  // previous, current newline position
 	static U32 mask = 0;
 	// Update word hashes
@@ -1176,8 +1175,9 @@ void wordModel(Mixer& m) {
 				word1=word0*11;
 				wordlen1=wordlen;
 				if (c==':') cword0=word0;
-				if (c==']') xword0=word0;
+				if (c==']'&& (frstchar!=':' || frstchar!='*')) xword0=word0;
 			//	if (c==0x27) xword0=word0;
+			    if (c=='=') cword0=word0;
 				ccword=0;
 				word0=wordlen=0;
 				if((c=='.'||c=='!'||c=='?') && buf(2)!=10) f=1; 
@@ -1196,12 +1196,13 @@ void wordModel(Mixer& m) {
 			number1=number0*11;
 			number0=0,ccword=0;
 		}
-		
+	
 		col=min(255, pos-nl);
 		int above=buf[nl1+col]; // text column context
 		if (col<=2) frstchar=(col==2?min(c,96):0);
 //	cm.set(spafdo|col<<8);
 		cm.set(spafdo|spaces<<8);
+		if (frstchar=='[' && c==32)	{if(buf(3)==']' || buf(4)==']' ) frstchar=96,xword0=0;}
 		cm.set(frstchar<<11|c);
 		cm.set(col<<8|frstchar);
 		cm.set(spaces<<8|(words&255));
@@ -1229,6 +1230,7 @@ void wordModel(Mixer& m) {
 		h=h+buf(1);
 		cm.set(h);
 		cm.set(word0);
+		//cm.set(word1+(c==32));
 		cm.set(h+word1);
 		cm.set(word0+word1*31);
 		cm.set(h+word1+word2*29);
@@ -1245,8 +1247,8 @@ void wordModel(Mixer& m) {
 		cm.set(h+word3);
 		cm.set(h+word4);
 		cm.set(h+word5);
-	//	cm.set(buf(1)|buf(3)<<8|buf(5)<<16);
-	//	cm.set(buf(2)|buf(4)<<8|buf(6)<<16);
+//		cm.set(buf(1)|buf(3)<<8|buf(5)<<16);
+//		cm.set(buf(2)|buf(4)<<8|buf(6)<<16);
 		cm.set(h+word1+word3);
 		cm.set(h+word2+word3);
 		if (f) {
@@ -1276,6 +1278,7 @@ void wordModel(Mixer& m) {
  
     cm.set(mask);
     cm.set((mask<<8)|buf(1));
+    //cm.set((mask&0xff)|col<<8);
     cm.set((mask<<17)|(buf(2)<<8)|buf(3));
     cm.set((mask&0x1ff)|((f4&0x00fff0)<<9));
 	}
