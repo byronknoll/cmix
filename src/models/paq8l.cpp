@@ -565,7 +565,7 @@ void train(short *t, short *w, int n, int err) {
 }
 #endif // slow!
 
-std::vector<float> model_predictions(1052, 0.5);
+std::vector<float> model_predictions(1154, 0.5);
 unsigned int prediction_index = 0;
 float conversion_factor = 1.0 / 4095;
 
@@ -1422,6 +1422,48 @@ void recordModel(Mixer& m) {
   cp.mix(m);
 }
 
+void recordModel1(Mixer& m) {
+  static int cpos1[256];
+  static int wpos1[0x10000]; // buf(1..2) -> last position
+  static ContextMap cm(32768, 2), cn(32768/2, 4+1), co(32768*4, 4),cp(32768*2, 3), cq(32768*2, 3);
+
+  // Find record length
+  if (!bpos) {
+    int w=c4&0xffff, c=w&255, d=w&0xf0ff,e=c4&0xffffff;
+   
+    cm.set(c<<8| (min(255, pos-cpos1[c])/4));
+    cm.set(w<<9| llog(pos-wpos1[w])>>2);
+  
+    cn.set(w);
+    cn.set(d<<8);
+    cn.set(c<<16);
+    cn.set((f4&0xfffff)); 
+    int col=pos&3;
+    cn.set(col|2<<12);
+
+    co.set(c    );
+    co.set(w<<8 );
+    co.set(w5&0x3ffff);
+    co.set(e<<3);
+    
+    cp.set(d    );
+    cp.set(c<<8 );
+    cp.set(w<<16);
+
+    cq.set(w<<3 );
+    cq.set(c<<19);
+    cq.set(e);
+    // update last context positions
+
+    cpos1[c]=pos;
+    wpos1[w]=pos;
+  }
+  cm.mix(m);
+  cn.mix(m);
+  co.mix(m);
+  cq.mix(m);
+  cp.mix(m);
+}
 
 //////////////////////////// sparseModel ///////////////////////
 
@@ -1720,7 +1762,7 @@ typedef enum {DEFAULT, JPEG, EXE, TEXT} Filetype;
 int contextModel2() {
   static ContextMap cm(MEM*31, 9);
   static RunContextMap rcm7(MEM), rcm9(MEM), rcm10(MEM);
-  static Mixer m(1100, 3088, 7, 128);
+  static Mixer m(1200, 3088, 7, 128);
   static U32 cxt[16];  // order 0-11 contexts
   static Filetype filetype=EXE;
 
@@ -1753,7 +1795,8 @@ int contextModel2() {
     sparseModel1(m,ismatch,order);
     distanceModel(m);
     picModel(m);
-    recordModel(m);  
+    recordModel(m);
+    recordModel1(m);
     wordModel(m);
     nestModel(m);
     indirectModel(m);
