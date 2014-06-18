@@ -1,5 +1,4 @@
-// This is adapted from paq8l.
-// Also includes some code segments from paq8pxd (released by Kaido Orav).
+// This code is a hybrid of paq8l and paq8pxd_8 (released by Kaido Orav).
 
 /*
     Copyright (C) 2006 Matt Mahoney, Serge Osnach, Alexander Ratushnyak,
@@ -566,7 +565,7 @@ void train(short *t, short *w, int n, int err) {
 }
 #endif // slow!
 
-std::vector<float> model_predictions(871, 0.5);
+std::vector<float> model_predictions(1052, 0.5);
 unsigned int prediction_index = 0;
 float conversion_factor = 1.0 / 4095;
 
@@ -1136,7 +1135,10 @@ void picModel(Mixer& m) {
 }
 
 //////////////////////////// wordModel /////////////////////////
-U32 b2=0, f4=0;
+U32 b2=0,b3=0,w4=0;
+U32 w5=0,f4=0,tt=0;
+U32 WRT_mpw[16]= { 4, 4, 3, 2, 2, 2, 1, 1,  1, 1, 1, 1, 0, 0, 0, 0 };
+U32 WRT_mtt[16]= { 0, 0, 1, 2, 3, 4, 5, 5,  6, 6, 6, 6, 7, 7, 7, 7 };
 int col=0;
 
 // Model English text (words and columns/end of line)
@@ -1473,6 +1475,67 @@ void sparseModel(Mixer& m, int seenbefore, int howmany) {
   cm.mix(m);
 }
 
+U32 x4=0;
+void sparseModel1(Mixer& m, int seenbefore, int howmany) {
+   static ContextMap cm(MEM*4, 31);
+    static SmallStationaryContextMap scm1(0x10000), scm2(0x20000), scm3(0x2000),
+     scm4(0x8000), scm5(0x2000),scm6(0x2000), scma(0x10000);
+  if (bpos==0) {
+    scm5.set(seenbefore);
+    scm6.set(howmany);
+  U32  h=x4<<6;
+    cm.set(buf(1)+(h&0xffffff00));
+    cm.set(buf(1)+(h&0x00ffff00));
+    cm.set(buf(1)+(h&0x0000ff00));
+      U32 d=c4&0xffff;
+     h<<=6;
+    cm.set(d+(h&0xffff0000));
+    cm.set(d+(h&0x00ff0000));
+     h<<=6, d=c4&0xffffff;
+    cm.set(d+(h&0xff000000));
+
+    for (int i=1; i<5; ++i) { 
+      cm.set(seenbefore|buf(i)<<8);
+      cm.set((buf(i+3)<<8)|buf(i+1));
+    }
+    cm.set(spaces&0x7fff);
+    cm.set(spaces&0xff);
+    cm.set(words&0x1ffff);
+    cm.set(f4&0x000fffff);
+    cm.set(tt&0x00000fff);
+      h=w4<<6;
+    cm.set(buf(1)+(h&0xffffff00));
+    cm.set(buf(1)+(h&0x00ffff00));
+    cm.set(buf(1)+(h&0x0000ff00));
+      d=c4&0xffff;
+     h<<=6;
+    cm.set(d+(h&0xffff0000));
+    cm.set(d+(h&0x00ff0000));
+     h<<=6, d=c4&0xffffff;
+    cm.set(d+(h&0xff000000));
+    cm.set(w4&0xf0f0f0ff);
+    
+    //cm.set(f4);
+    cm.set((w4&63)*128+(5<<17));
+    cm.set((f4&0xffff)<<11|frstchar);
+    cm.set(spafdo*8*((w4&3)==1));
+	
+      scm1.set(words&127);
+      scm2.set((words&12)*16+(w4&12)*4+(buf(1)>>4));
+      scm3.set(w4&15);
+      scm4.set(spafdo*((w4&3)==1));
+      scma.set(frstchar);
+  }
+  cm.mix(m);
+  scm1.mix(m);
+  scm2.mix(m);
+  scm3.mix(m);
+  scm4.mix(m);
+  scm5.mix(m);
+  scm6.mix(m);
+  scma.mix(m);
+}
+
 //////////////////////////// distanceModel ///////////////////////
 
 // Model for modelling distances between symbols
@@ -1657,7 +1720,7 @@ typedef enum {DEFAULT, JPEG, EXE, TEXT} Filetype;
 int contextModel2() {
   static ContextMap cm(MEM*31, 9);
   static RunContextMap rcm7(MEM), rcm9(MEM), rcm10(MEM);
-  static Mixer m(900, 3088, 7, 128);
+  static Mixer m(1100, 3088, 7, 128);
   static U32 cxt[16];  // order 0-11 contexts
   static Filetype filetype=EXE;
 
@@ -1687,6 +1750,7 @@ int contextModel2() {
 
   if (level>=4) {
     sparseModel(m,ismatch,order);
+    sparseModel1(m,ismatch,order);
     distanceModel(m);
     picModel(m);
     recordModel(m);  
@@ -1741,13 +1805,28 @@ Predictor::Predictor(): pr(2048) {}
 void Predictor::update() {
   static APM a(256), a1(0x10000), a2(0x10000), a3(0x10000),
                       a4(0x10000), a5(0x10000), a6(0x10000);
-
+  static U32 x5=0;
   // Update global context: pos, bpos, c0, c4, buf
   c0+=c0+y;
   if (c0>=256) {
-    buf[pos++]=c0;
-    c4=(c4<<8)+c0-256;
-    c0=1;
+    	buf[pos++]=c0;
+	c0-=256;
+	c4=(c4<<8)+c0;
+        int i=WRT_mpw[c0>>4];
+		w4=w4*4+i;
+		if (b2==3) i=2;
+		w5=w5*4+i;
+		b3=b2;
+        b2=c0;   
+	    x4=x4*256+c0,x5=(x5<<8)+c0;
+	    if(c0=='.' || c0=='!' || c0=='?' || c0=='/'|| c0==')') {
+			w5=(w5<<8)|0x3ff,f4=(f4&0xfffffff0)+2,x5=(x5<<8)+c0,x4=x4*256+c0;
+            if(c0!='!') w4|=12, tt=(tt&0xfffffff8)+1,b3='.';
+		}
+		if (c0==32) --c0;
+		tt=tt*8+WRT_mtt[c0>>4];
+		f4=f4*16+(c0>>4);
+	c0=1;
   }
   bpos=(bpos+1)&7;
 
