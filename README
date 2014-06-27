@@ -1,7 +1,12 @@
-cmix version 2
+cmix version 3
 http://www.byronknoll.com/cmix.html
-Released by Byron Knoll on May 29, 2014.
+Released by Byron Knoll on June 27, 2014.
 cmix is free software distributed under the GNU General Public License.
+
+Changes from version 2 to version 3:
+- Merged paq8pxd code into paq8l
+- Optimized speed of cmix and paq8 mixers
+- Minor refactoring and tuning
 
 Changes from version 1 to version 2:
 - Memory tuning
