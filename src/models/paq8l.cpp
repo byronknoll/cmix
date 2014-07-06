@@ -565,7 +565,7 @@ void train(short *t, short *w, int n, int err) {
 }
 #endif // slow!
 
-std::vector<float> model_predictions(1154, 0.5);
+std::vector<float> model_predictions(1155, 0.5);
 unsigned int prediction_index = 0;
 float conversion_factor = 1.0 / 4095;
 
@@ -1759,10 +1759,12 @@ typedef enum {DEFAULT, JPEG, EXE, TEXT} Filetype;
 
 // This combines all the context models with a Mixer.
 
+U32 last_prediction = 2048;
+
 int contextModel2() {
   static ContextMap cm(MEM*31, 9);
   static RunContextMap rcm7(MEM), rcm9(MEM), rcm10(MEM);
-  static Mixer m(1200, 3088, 7, 128);
+  static Mixer m(1200, 10800, 8, 128);
   static U32 cxt[16];  // order 0-11 contexts
   static Filetype filetype=EXE;
 
@@ -1804,26 +1806,25 @@ int contextModel2() {
     if (filetype==EXE) exeModel(m);
   }
 
-  order = order-2;
+  order = order-3;
   if(order<0) order=0;
 
-  U32 c1=buf(1), c2=buf(2), c3=buf(3), c;
+  U32 d=c0<<(8-bpos),c=(d+(bpos==1?b3/2:0))&192;
+  if(!bpos)c=words*16&192;
 
-  m.set(c1+8, 264);
-  m.set(c0, 256);
-  m.set(order+8*(c4>>5&7)+64*(c1==c2)+128*(filetype==EXE), 256);
-  m.set(c2, 256);
-  m.set(c3, 256);
-  m.set(ismatch, 256);
-  
-  if(bpos)
-  {	
-    c=c0<<(8-bpos); if(bpos==1)c+=c3/2;
-    c=(min(bpos,5))*256+c1/32+8*(c2/32)+(c&192);
-  }
-  else c=c3/128+(c4>>31)*2+4*(c2/64)+(c1&240);
-  m.set(c, 1536);
-  int pr=m.p();
+  U32 c1=buf(1);
+
+  m.set(order*256+(w4&240)+(b2>>4),1536);
+  m.set(order*256+(w4&3)*64+(words>>1&63),1536);
+  m.set(bpos*256+c1,2048);
+  m.set(min(bpos,5)*256+(tt&63)+c,1536);
+  m.set(order*256+((d|c1>>bpos)&248)+bpos,1536);
+  m.set(bpos*256+(((words<<bpos&255)>>bpos)|(d&255)),2048);
+  U32 pr = last_prediction / 16;
+  m.set(pr,256);
+  m.set(c0,256);
+
+  pr=m.p();
   return pr;
 }
 
@@ -1889,6 +1890,7 @@ void Predictor::update() {
   pr=(pr+pr1+pr2+pr3+2)>>2;
 
   pr=(pr+pr0+1)>>1;
+  last_prediction = pr;
 }
 
 Predictor paq8;
