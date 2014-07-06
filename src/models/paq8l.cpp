@@ -1708,8 +1708,11 @@ void dmcModel(Mixer& m) {
       t[top].state=t[next].state;
       t[curr].nx[y]=top;
       ++top;
-      if (top==MEM*2) threshold=512;
-      if (top==MEM*3) threshold=768;
+      if (top==(t.size()*4)/8) { //        5/8, 4/8, 3/8
+        threshold=512;
+      } else if (top==(t.size()*6)/8) { // 6/8, 6/8, 7/8
+        threshold=768;
+      }
     }
   }
 
@@ -1737,10 +1740,9 @@ void dmcModel(Mixer& m) {
   }
 
   // update count, state
-  if (y) {
-    if (t[curr].c1<3800) t[curr].c1+=256;
-  }
-  else if (t[curr].c0<3800) t[curr].c0+=256;
+   if (y) {
+    if (t[curr].c1<=3840) t[curr].c1+=256;
+   } else  if (t[curr].c0<=3840)   t[curr].c0+=256;
   t[curr].state=nex(t[curr].state, y);
   curr=t[curr].nx[y];
 
