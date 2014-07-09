@@ -1766,12 +1766,12 @@ U32 last_prediction = 2048;
 int contextModel2() {
   static ContextMap cm(MEM*31, 9);
   static RunContextMap rcm7(MEM), rcm9(MEM), rcm10(MEM);
-  static Mixer m(1200, 10800, 8, 128);
+  static Mixer m(1200, 10800, 8, 32);
   static U32 cxt[16];  // order 0-11 contexts
   static Filetype filetype=EXE;
 
   m.update();
-  m.add(256);
+  m.add(64);
 
   // Test for special file types
   int ismatch=ilog(matchModel(m));  // Length of longest matching context
@@ -1808,7 +1808,7 @@ int contextModel2() {
     if (filetype==EXE) exeModel(m);
   }
 
-  order = order-3;
+  order = order-5;
   if(order<0) order=0;
 
   U32 d=c0<<(8-bpos),c=(d+(bpos==1?b3/2:0))&192;
