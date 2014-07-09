@@ -446,13 +446,46 @@ static int dot_product (const short* const t, const short* const w, int n);
  * n is rounded up to a multiple of 8.
  */
 static void train (const short* const t, short* const w, int n, const int e);
+#if defined(__AVX2__) // fast
+#include<immintrin.h>
+#define OPTIMIZE "AVX2-"
+static int dot_product (const short* const t, const short* const w, int n) {
+  assert(n == ((n + 15) & -16));
+  __m256i sum = _mm256_setzero_si256 ();
+  while ((n -= 16) >= 0) { // Each loop sums 16 products
+    __m256i tmp = _mm256_madd_epi16 (*(__m256i *) &t[n], *(__m256i *) &w[n]); // t[n] * w[n] + t[n+1] * w[n+1]
+    tmp = _mm256_srai_epi32 (tmp, 8); //                                        (t[n] * w[n] + t[n+1] * w[n+1]) >> 8
+    sum = _mm256_add_epi32 (sum, tmp); //                                sum += (t[n] * w[n] + t[n+1] * w[n+1]) >> 8
+  } 
+ // exctract high and low of sum and adds
+  __m128i low = _mm_add_epi32 (_mm256_extracti128_si256(sum,0),_mm256_extracti128_si256(sum,1)); 
+  low = _mm_add_epi32 (low, _mm_srli_si128 (low, 8)); // Add eight sums together ...
+  low = _mm_add_epi32 (low, _mm_srli_si128 (low, 4));
+  return _mm_cvtsi128_si32 (low); //                     ...  and scale back to integer
+}
 
-#if defined(__SSE2__) // faster
+static void train (const short* const t, short* const w, int n, const int e) {
+  assert(n == ((n + 15) & -16));
+  if (e) {
+    const __m256i one = _mm256_set1_epi16 (1);
+    const __m256i err = _mm256_set1_epi16 (short(e));
+    while ((n -= 16) >= 0) { // Each iteration adjusts 16 weights
+      __m256i tmp = _mm256_adds_epi16 (*(__m256i *) &t[n], *(__m256i *) &t[n]); // t[n] * 2
+      tmp = _mm256_mulhi_epi16 (tmp, err); //                                     (t[n] * 2 * err) >> 16
+      tmp = _mm256_adds_epi16 (tmp, one); //                                     ((t[n] * 2 * err) >> 16) + 1
+      tmp = _mm256_srai_epi16 (tmp, 1); //                                      (((t[n] * 2 * err) >> 16) + 1) >> 1
+      tmp = _mm256_adds_epi16 (tmp, *(__m256i *) &w[n]); //                    ((((t[n] * 2 * err) >> 16) + 1) >> 1) + w[n]
+      *(__m256i *) &w[n] = tmp; //                                          save the new eight weights, bounded to +- 32K
+    }
+  }
+}
+
+#elif defined(__SSE2__) // faster
 #include <emmintrin.h>
 #define OPTIMIZE "SSE2-"
 
 static int dot_product (const short* const t, const short* const w, int n) {
-  assert(n == ((n + 7) & -8));
+  assert(n == ((n + 15) & -16));
   __m128i sum = _mm_setzero_si128 ();
   while ((n -= 8) >= 0) { // Each loop sums eight products
     __m128i tmp = _mm_madd_epi16 (*(__m128i *) &t[n], *(__m128i *) &w[n]); // t[n] * w[n] + t[n+1] * w[n+1]
@@ -465,7 +498,7 @@ static int dot_product (const short* const t, const short* const w, int n) {
 }
 
 static void train (const short* const t, short* const w, int n, const int e) {
-  assert(n == ((n + 7) & -8));
+  assert(n == ((n + 15) & -16));
   if (e) {
     const __m128i one = _mm_set1_epi16 (1);
     const __m128i err = _mm_set1_epi16 (short(e));
@@ -484,8 +517,8 @@ static void train (const short* const t, short* const w, int n, const int e) {
 #include <xmmintrin.h>
 #define OPTIMIZE "SSE-"
 
-static sint32 dot_product (const sint16* const t, const sint16* const w, sint32 n) {
-  assert(n == ((n + 7) & -8));
+static int dot_product (const short* const t, const short* const w, int n) {
+  assert(n == ((n + 15) & -16));
   __m64 sum = _mm_setzero_si64 ();
   while ((n -= 8) >= 0) { // Each loop sums eight products
     __m64 tmp = _mm_madd_pi16 (*(__m64 *) &t[n], *(__m64 *) &w[n]); //   t[n] * w[n] + t[n+1] * w[n+1]
@@ -497,16 +530,16 @@ static sint32 dot_product (const sint16* const t, const sint16* const w, sint32 
     sum = _mm_add_pi32 (sum, tmp); //                            sum += (t[n+4] * w[n+4] + t[n+5] * w[n+5]) >> 8
   }
   sum = _mm_add_pi32 (sum, _mm_srli_si64 (sum, 32)); // Add eight sums together ...
-  const sint32 retval = _mm_cvtsi64_si32 (sum); //                     ...  and scale back to integer
+  const int retval = _mm_cvtsi64_si32 (sum); //                     ...  and scale back to integer
   _mm_empty(); // Empty the multimedia state
   return retval;
 }
 
-static void train (const sint16* const t, sint16* const w, sint32 n, const sint32 e) {
-  assert(n == ((n + 7) & -8));
+static void train (const short* const t, short* const w, int n, const int e) {
+  assert(n == ((n + 15) & -16));
   if (e) {
     const __m64 one = _mm_set1_pi16 (1);
-    const __m64 err = _mm_set1_pi16 (sint16(e));
+    const __m64 err = _mm_set1_pi16 (short(e));
     while ((n -= 8) >= 0) { // Each iteration adjusts eight weights
       __m64 tmp = _mm_adds_pi16 (*(__m64 *) &t[n], *(__m64 *) &t[n]); //   t[n] * 2
       tmp = _mm_mulhi_pi16 (tmp, err); //                                 (t[n] * 2 * err) >> 16
@@ -530,7 +563,7 @@ static void train (const sint16* const t, sint16* const w, sint32 n, const sint3
 // up to a multiple of 8.  Result is scaled down by 8 bits.
 int dot_product(short *t, short *w, int n) {
   int sum=0;
-  n=(n+7)&-8;
+  n=(n+15)&-16;
   for (int i=0; i<n; i+=2)
     sum+=(t[i]*w[i]+t[i+1]*w[i+1]) >> 8;
   return sum;
@@ -542,7 +575,7 @@ int dot_product(short *t, short *w, int n) {
 // and rounded.  n is rounded up to a multiple of 8.
 
 void train(short *t, short *w, int n, int err) {
-  n=(n+7)&-8;
+  n=(n+15)&-16;
   for (int i=0; i<n; ++i) {
     int wt=w[i]+(((t[i]*err*2>>16)+1)>>1);
     if (wt<-32768) wt=-32768;
