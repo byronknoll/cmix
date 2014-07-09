@@ -242,6 +242,7 @@ int y=0;  // Last bit, 0 or 1, set by encoder
 int c0=1; // Last 0-7 bits of the partial byte with a leading 1 bit (1-255)
 U32 c4=0; // Last 4 whole bytes, packed.  Last byte is bits 0-7.
 int bpos=0; // bits in c0 (0 to 7)
+int blpos=0;
 Buf buf;  // Rotating input queue set by Predictor
 
 ///////////////////////////// ilog //////////////////////////////
@@ -598,7 +599,7 @@ void train(short *t, short *w, int n, int err) {
 }
 #endif // slow!
 
-std::vector<float> model_predictions(1155, 0.5);
+std::vector<float> model_predictions(1143, 0.5);
 unsigned int prediction_index = 0;
 float conversion_factor = 1.0 / 4095;
 
@@ -1177,128 +1178,138 @@ int col=0;
 // Model English text (words and columns/end of line)
 static U32 frstchar=0,spafdo=0,spaces=0,spacecount=0, words=0,wordcount=0,wordlen=0,wordlen1=0;
 void wordModel(Mixer& m) {
-	static U32 word0=0, word1=0, word2=0, word3=0, word4=0, word5=0;  // hashes
-	static U32 xword0=0,xword1=0,xword2=0,cword0=0,ccword=0;
-	static U32 number0=0, number1=0;  // hashes
-	static U32 text0=0;  // hash stream of letters
-	static ContextMap cm(MEM*31, 45);
-	static int nl1=-3, nl=-2;  // previous, current newline position
-	static U32 mask = 0;
-	// Update word hashes
-	if (bpos==0) {
-		int c=c4&255,f=0;
-		if (spaces&0x80000000) --spacecount;
-		if (words&0x80000000) --wordcount;
-		spaces=spaces*2;
-		words=words*2;
+    static U32 word0=0, word1=0, word2=0, word3=0, word4=0, word5=0;  // hashes
+    static U32 xword0=0,xword1=0,xword2=0,cword0=0,ccword=0;
+    static U32 number0=0, number1=0;  // hashes
+    static U32 text0=0;  // hash stream of letters
+    static ContextMap cm(MEM*16, 45+1+1-4);
+    static int nl1=-3, nl=-2;  // previous, current newline position
+    static U32 mask = 0;
+    static Array<int> wpos(0x10000);  // last position of word
+    static int w=0;
+    // Update word hashes
+    if (bpos==0) {
+        int c=c4&255,f=0;
+        if (spaces&0x80000000) --spacecount;
+        if (words&0x80000000) --wordcount;
+        spaces=spaces*2;
+        words=words*2;
 
-		if (c>='A' && c<='Z') c+='a'-'A';
-		if ((c>='a' && c<='z') || c==1 || c==2 ||(c>=128 &&(b2!=3))) {
-			++words, ++wordcount;
-			word0=word0*263*32+c;
-			text0=text0*997*16+c;
-			wordlen++;
-			wordlen=min(wordlen,45);
-			f=0;
-		}
-		else {
-			if (word0) {
-				word5=word4*23;
-				word4=word3*19;
-				word3=word2*17;
-				word2=word1*13;
-				word1=word0*11;
-				wordlen1=wordlen;
-				if (c==':') cword0=word0;
-				if (c==']'&& (frstchar!=':' || frstchar!='*')) xword0=word0;
-			//	if (c==0x27) xword0=word0;
-			    if (c=='=') cword0=word0;
-				ccword=0;
-				word0=wordlen=0;
-				if((c=='.'||c=='!'||c=='?') && buf(2)!=10) f=1; 
-				
-			}
-			if ((c4&0xFFFF)==0x3D3D) xword1=word1,xword2=word2; // '=='
-				if ((c4&0xFFFF)==0x2727) xword1=word1,xword2=word2; // ''
-			if (c==32 || c==10 ) { ++spaces, ++spacecount; if (c==10 ) nl1=nl, nl=pos-1;}
-			else if (c=='.' || c=='!' || c=='?' || c==',' || c==';' || c==':') spafdo=0,ccword=c*31; 
-			else { ++spafdo; spafdo=min(63,spafdo); }
-		}
-		if (c>='0' && c<='9') {
-			number0=number0*263*32+c;
-		}
-		else if (number0) {
-			number1=number0*11;
-			number0=0,ccword=0;
-		}
-	
-		col=min(255, pos-nl);
-		int above=buf[nl1+col]; // text column context
-		if (col<=2) frstchar=(col==2?min(c,96):0);
-//	cm.set(spafdo|col<<8);
-		cm.set(spafdo|spaces<<8);
-		if (frstchar=='[' && c==32)	{if(buf(3)==']' || buf(4)==']' ) frstchar=96,xword0=0;}
-		cm.set(frstchar<<11|c);
-		cm.set(col<<8|frstchar);
-		cm.set(spaces<<8|(words&255));
-		
-		cm.set(number0+word2);
-		cm.set(number0+word1);
-		cm.set(number1+c);
-		cm.set(number0+number1);
-		cm.set(word0+number1);
-
-		cm.set(frstchar<<7);
-//	cm.set(wordlen<<16|c);
-		cm.set(wordlen1<<8|col);
-		cm.set(c*64+spacecount/2);
-		U32 h=wordcount*64+spacecount;
-		cm.set((c<<13)+h);
-//	cm.set(h); // 
-		cm.set(h+spafdo*8);
-
-		U32 d=c4&0xf0ff;
-		cm.set(d<<9|frstchar);
-
-		h=word0*271;
-		cm.set(h+ccword);
-		h=h+buf(1);
-		cm.set(h);
-		cm.set(word0);
-		//cm.set(word1+(c==32));
-		cm.set(h+word1);
-		cm.set(word0+word1*31);
-		cm.set(h+word1+word2*29);
-		cm.set(text0&0xffffff);
-		cm.set(text0&0xfffff);
-          cm.set(word0+xword0*31);
-		  cm.set(word0+xword1*31);
-		  cm.set(word0+xword2*31);
-		  cm.set(frstchar+xword2*31);
+        if (c>='A' && c<='Z') c+='a'-'A';
+        if ((c>='a' && c<='z') || c==1 || c==2 ||(c>=128 &&(b2!=3))) {
+            ++words, ++wordcount;
+            word0^=hash(word0, c,0);//word0=word0*263*32+c;
+            text0=text0*997*16+c;
+            wordlen++;
+            wordlen=min(wordlen,45);
+            f=0;
+             w=word0&(wpos.size()-1);
+        }
+        else {
+            if (word0) {
+                word5=word4;//*23;
+                word4=word3;//*19;
+                word3=word2;//*17;
+                word2=word1;//*13;
+                word1=word0;//*11;
+                wordlen1=wordlen;
+               
+                wpos[w]=blpos;
+                if (c==':') cword0=word0;
+                if (c==']'&& (frstchar!=':' || frstchar!='*')) xword0=word0;
+            //    if (c==0x27) xword0=word0;
+                if (c=='=') cword0=word0;
+                ccword=0;
+                word0=wordlen=0;
+                if((c=='.'||c=='!'||c=='?') && buf(2)!=10) f=1; 
+                
+            }
+            if ((c4&0xFFFF)==0x3D3D) xword1=word1,xword2=word2; // '=='
+                if ((c4&0xFFFF)==0x2727) xword1=word1,xword2=word2; // ''
+            if (c==32 || c==10 ) { ++spaces, ++spacecount; if (c==10 ) nl1=nl, nl=pos-1;}
+            else if (c=='.' || c=='!' || c=='?' || c==',' || c==';' || c==':') spafdo=0,ccword=c;//*31; 
+            else { ++spafdo; spafdo=min(63,spafdo); }
+        }
+        if (c>='0' && c<='9') {
+            //number0=number0*263*32+c;
+            number0^=hash(number0, c,1);
+        }
+        else if (number0) {
+            number1=number0;//*11;
+            number0=0,ccword=0;
+        }
+   
+        col=min(255, pos-nl);
+        int above=buf[nl1+col]; // text column context
+        if (col<=2) frstchar=(col==2?min(c,96):0);
+        if (frstchar=='[' && c==32)    {if(buf(3)==']' || buf(4)==']' ) frstchar=96,xword0=0;}
+    //cm.set(hash(532,spafdo, col));
+//256+ hash 513+ none
+        cm.set(hash(513,spafdo, spaces,ccword));
+        cm.set(hash(514,frstchar, c));
+        cm.set(hash(515,col, frstchar));
+        cm.set(hash(516,spaces, (words&255)));
         
-        cm.set(word0+cword0*31);
-		cm.set(number0+cword0*31);
-		cm.set(h+word2);
-		cm.set(h+word3);
-		cm.set(h+word4);
-		cm.set(h+word5);
-//		cm.set(buf(1)|buf(3)<<8|buf(5)<<16);
-//		cm.set(buf(2)|buf(4)<<8|buf(6)<<16);
-		cm.set(h+word1+word3);
-		cm.set(h+word2+word3);
-		if (f) {
-			word5=word4*29;
-			word4=word3*31;
-			word3=word2*37;
-			word2=word1*41;
-			word1='.';
-		}
-		cm.set(col<<16|buf(1)<<8|above);
-		cm.set(buf(1)<<8|above);
-		cm.set(col<<8|buf(1));
-		cm.set(col*(c==32));
-		cm.set(col);
-		
+        cm.set(hash(256,number0, word2));
+        cm.set(hash(257,number0, word1));
+        cm.set(hash(258,number1, c,ccword));
+        cm.set(hash(259,number0, number1));
+        cm.set(hash(260,word0, number1));
+
+       
+//    cm.set(wordlen<<16|c);
+        cm.set(hash(518,wordlen1,col));
+        cm.set(hash(519,c,spacecount/2));
+        U32 h=wordcount*64+spacecount;
+        cm.set(hash(520,c,h,ccword));
+         cm.set(hash(517,frstchar,h));
+//    cm.set(h); // 
+        cm.set(hash(521,h,spafdo));
+
+        U32 d=c4&0xf0ff;
+        cm.set(hash(522,d,frstchar,ccword));
+
+        h=word0*271;
+        //cm.set(hash(261,h, ccword));
+        h=h+buf(1);
+        cm.set(hash(262,h, 0));
+        cm.set(hash(263,word0, 0));
+        //cm.set(word1+(c==32));
+        cm.set(hash(264,h, word1));
+        cm.set(hash(265,word0, word1));
+        cm.set(hash(266,h, word1,word2));
+        cm.set(hash(267,text0&0xffffff,0));
+        //cm.set(hash(268,text0&0xfffff, 0));
+          cm.set(hash(269,word0, xword0));
+          cm.set(hash(270,word0, xword1));
+          cm.set(hash(271,word0, xword2));
+          cm.set(hash(272,frstchar, xword2));
+        
+        cm.set(hash(273,word0, cword0));
+        cm.set(hash(274,number0, cword0));
+        cm.set(hash(275,h, word2));
+        cm.set(hash(276,h, word3));
+        cm.set(hash(277,h, word4,word5));
+       // cm.set(hash(278,h, word5));
+//        cm.set(buf(1)|buf(3)<<8|buf(5)<<16);
+//        cm.set(buf(2)|buf(4)<<8|buf(6)<<16);
+        cm.set(hash(279,h, word1,word3));
+        cm.set(hash(280,h, word2,word3));
+        if (f) {
+            word5=word4;//*29;
+            word4=word3;//*31;
+            word3=word2;//*37;
+            word2=word1;//*41;
+            word1='.';
+        }
+        cm.set(hash(523,col,buf(1),above));
+        cm.set(hash(524,buf(1),above));
+        cm.set(hash(525,col,buf(1)));
+        cm.set(hash(526,col*(c==32),0));
+        cm.set(hash(527,col,0));
+        cm.set(hash(281, w, llog(blpos-wpos[w])>>4));
+    
+        
    int fl = 0;
     if ((c4&0xff) != 0) {
       if (isalpha(c4&0xff)) fl = 1;
@@ -1311,13 +1322,13 @@ void wordModel(Mixer& m) {
     }
     mask = (mask<<3)|fl;
  
-    cm.set(mask);
-    cm.set((mask<<8)|buf(1));
+    cm.set(hash(528,mask,0));
+    cm.set(hash(529,mask,buf(1)));
     //cm.set((mask&0xff)|col<<8);
-    cm.set((mask<<17)|(buf(2)<<8)|buf(3));
-    cm.set((mask&0x1ff)|((f4&0x00fff0)<<9));
-	}
-	cm.mix(m);
+    cm.set(hash(530,mask,buf(2),buf(3)));
+    cm.set(hash(531,mask&0x1ff,f4&0x00fff0));
+    }
+    cm.mix(m);
 }
 
 //////////////////////////// nestModel ///////////////////////
@@ -1888,6 +1899,7 @@ void Predictor::update() {
   // Update global context: pos, bpos, c0, c4, buf
   c0+=c0+y;
   if (c0>=256) {
+    ++blpos;
     	buf[pos++]=c0;
 	c0-=256;
 	c4=(c4<<8)+c0;
