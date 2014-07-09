@@ -599,7 +599,7 @@ void train(short *t, short *w, int n, int err) {
 }
 #endif // slow!
 
-std::vector<float> model_predictions(1143, 0.5);
+std::vector<float> model_predictions(1155, 0.5);
 unsigned int prediction_index = 0;
 float conversion_factor = 1.0 / 4095;
 
@@ -1514,49 +1514,34 @@ void recordModel1(Mixer& m) {
 // Model order 1-2 contexts with gaps.
 
 void sparseModel(Mixer& m, int seenbefore, int howmany) {
-  static ContextMap cm(MEM*2, 48);
-  static int mask = 0;
-
+  static ContextMap cm(MEM*2, 40+2);
   if (bpos==0) {
-
-    cm.set( c4&0x00f0f0f0);
-    cm.set((c4&0xf0f0f0f0)+1);
-    cm.set((c4&0x00f8f8f8)+2);
-    cm.set((c4&0xf8f8f8f8)+3);
-    cm.set((c4&0x00e0e0e0)+4);
-    cm.set((c4&0xe0e0e0e0)+5);
-    cm.set((c4&0x00f0f0ff)+6);
-
     cm.set(seenbefore);
     cm.set(howmany);
-    cm.set(c4&0x00ff00ff);
-    cm.set(c4&0xff0000ff);
     cm.set(buf(1)|buf(5)<<8);
     cm.set(buf(1)|buf(6)<<8);
     cm.set(buf(3)|buf(6)<<8);
     cm.set(buf(4)|buf(8)<<8);
-    
-    for (int i=1; i<8; ++i) {
-      cm.set((buf(i+1)<<8)|buf(i+2));
-      cm.set((buf(i+1)<<8)|buf(i+3));
+    cm.set(buf(1)|buf(3)<<8|buf(5)<<16);
+    cm.set(buf(2)|buf(4)<<8|buf(6)<<16);
+    cm.set(c4&0x00f0f0ff);
+    cm.set(c4&0x00ff00ff);
+    cm.set(c4&0xff0000ff);
+    cm.set(c4&0x00f8f8f8);
+    cm.set(c4&0xf8f8f8f8);
+    cm.set(f4&0x00000fff);
+    cm.set(f4);
+    cm.set(c4&0x00e0e0e0);
+    cm.set(c4&0xe0e0e0e0);
+    cm.set(c4&0x810000c1);
+    cm.set(c4&0xC3CCC38C);
+    cm.set(c4&0x0081CC81);
+    cm.set(c4&0x00c10081);
+     for (int i=1; i<8; ++i) {
       cm.set(seenbefore|buf(i)<<8);
+      cm.set((buf(i+2)<<8)|buf(i+1));
+      cm.set((buf(i+3)<<8)|buf(i+1));
     }
-
-    int fl = 0;
-    if( c4&(0xff != 0 )){
-           if( isalpha( c4&0xff ) ) fl = 1;
-      else if( ispunct( c4&0xff ) ) fl = 2;
-      else if( isspace( c4&0xff ) ) fl = 3;
-      else if( c4&(0xff == 0xff) ) fl = 4;
-      else if( c4&(0xff < 16) ) fl = 5;
-      else if( c4&(0xff < 64) ) fl = 6;
-      else fl = 7;
-    }
-    mask = (mask<<3)|fl;
-    cm.set(mask);
-    cm.set(mask<<8|buf(1));
-    cm.set(mask<<17|buf(2)<<8|buf(3));
-    cm.set((mask&0x1ff)|((c4&0xf0f0f0f0)<<9));
   }
   cm.mix(m);
 }
