@@ -57,7 +57,7 @@ void Decompress(unsigned long long output_length, std::ifstream* is,
 }
 
 int main(int argc, char* argv[]) {
-    if (argc != 4 || argv[1][0] != '-' ||
+  if (argc != 4 || argv[1][0] != '-' ||
       (argv[1][1] != 'c' && argv[1][1] != 'd')) {
     printf("To compress:   cmix -c input output\n");
     printf("To decompress: cmix -d input output\n");
@@ -77,7 +77,7 @@ int main(int argc, char* argv[]) {
     if (enable_preprocess) {
       FILE* data_in = fopen(argv[2], "rb");
       FILE* temp_out = fopen(temp_path.c_str(), "wb");
-      if (!data_in || !temp_out) abort();
+      if (!data_in || !temp_out) return -1;
 
       fseek(data_in, 0L, SEEK_END);
       input_bytes = ftell(data_in);
@@ -92,7 +92,7 @@ int main(int argc, char* argv[]) {
 
     std::ifstream temp_in(temp_path, std::ios::in | std::ios::binary);
     std::ofstream data_out(argv[3], std::ios::out | std::ios::binary);
-    if (!temp_in.is_open() || !data_out.is_open()) abort();
+    if (!temp_in.is_open() || !data_out.is_open()) return -1;
 
     temp_in.seekg(0, std::ios::end);
     unsigned long long temp_bytes = temp_in.tellg();
@@ -106,7 +106,7 @@ int main(int argc, char* argv[]) {
   } else {
     std::ifstream data_in(argv[2], std::ios::in | std::ios::binary);
     std::ofstream temp_out(temp_path, std::ios::out | std::ios::binary);
-    if (!data_in.is_open() || !temp_out.is_open()) abort();
+    if (!data_in.is_open() || !temp_out.is_open()) return -1;
 
     data_in.seekg(0, std::ios::end);
     input_bytes = data_in.tellg();
@@ -120,7 +120,7 @@ int main(int argc, char* argv[]) {
     if (enable_preprocess) {
       FILE* temp_in = fopen(temp_path.c_str(), "rb");
       FILE* data_out = fopen(argv[3], "wb");
-      if (!temp_in || !data_out) abort();
+      if (!temp_in || !data_out) return -1;
 
       preprocessor::decode(temp_in, data_out);
       fseek(data_out, 0L, SEEK_END);
