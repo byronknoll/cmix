@@ -21,6 +21,7 @@ class Manager {
   unsigned long long zero_context_;
   unsigned long long history_pos_;
   unsigned long long line_break_;
+  unsigned long long longest_match_;
   std::vector<unsigned char> history_;
   std::vector<unsigned long long> words_;
   std::vector<unsigned long long> recent_bytes_;

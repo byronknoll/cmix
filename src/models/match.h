@@ -10,7 +10,8 @@ class Match : public Model {
  public:
   Match(const std::vector<unsigned char>& history,
     const unsigned long long& byte_context, const unsigned int& bit_context_,
-    int limit, float delta, unsigned long long map_size);
+    int limit, float delta, unsigned long long map_size,
+    unsigned long long* longest_match);
   float Predict();
   void Perceive(int bit);
   void ByteUpdate();
@@ -24,6 +25,7 @@ class Match : public Model {
   unsigned char cur_byte_;
   unsigned char bit_pos_;
   unsigned char match_length_;
+  unsigned long long* longest_match_;
   int limit_;
   float delta_;
   float divisor_;

@@ -132,7 +132,7 @@ void Predictor::AddEnglish() {
     std::unique_ptr<Context> hash(new Sparse(manager_.words_, params));
     const Context& context = manager_.AddContext(std::move(hash));
     Add(new Match(manager_.history_, context.context_, manager_.bit_context_,
-        200, 0.5, 10000000));
+        200, 0.5, 10000000, &(manager_.longest_match_)));
     Add(new ByteRun(context.context_, manager_.bit_context_, 100, 10000000));
     if (params[0] == 1 && params.size() == 1) {
       Add(new Indirect(manager_.run_map_, context.context_,
@@ -162,7 +162,7 @@ void Predictor::AddSparse() {
     std::unique_ptr<Context> hash(new Sparse(manager_.recent_bytes_, params));
     const Context& context = manager_.AddContext(std::move(hash));
     Add(new Match(manager_.history_, context.context_, manager_.bit_context_,
-        200, 0.5, 10000000));
+        200, 0.5, 10000000, &(manager_.longest_match_)));
     Add(new ByteRun(context.context_, manager_.bit_context_, 100, 10000000));
   }
 }
@@ -208,7 +208,8 @@ void Predictor::AddMatch() {
     const Context& context = manager_.AddContext(std::unique_ptr<Context>(
         new ContextHash(manager_.bit_context_,params[0], params[1])));
     Add(new Match(manager_.history_, context.context_, manager_.bit_context_,
-        limit, delta, std::min(max_size, context.size_)));
+        limit, delta, std::min(max_size, context.size_),
+        &(manager_.longest_match_)));
   }
 }
 
@@ -268,6 +269,8 @@ void Predictor::AddMixers() {
       0.00005, 1, input_size));
   Add(0, new Mixer(layers_[0]->inputs_, logistic_, manager_.line_break_,
       0.0007, 100, input_size));
+  Add(0, new Mixer(layers_[0]->inputs_, logistic_, manager_.longest_match_,
+      0.0005, 8, input_size));
 
   const BitContext& bit_context1 = manager_.AddBitContext(std::unique_ptr
       <BitContext>(new BitContext(manager_.long_bit_context_,
@@ -305,6 +308,8 @@ void Predictor::AddMixers() {
       0.005, 256, input_size));
   Add(1, new Mixer(layers_[1]->inputs_, logistic_, manager_.recent_bytes_[2],
       0.005, 256, input_size));
+  Add(1, new Mixer(layers_[1]->inputs_, logistic_, manager_.longest_match_,
+      0.0005, 8, input_size));
 
   input_size = mixers_[1].size() + auxiliary_.size();
   Add(2, new Mixer(layers_[2]->inputs_, logistic_, manager_.zero_context_,

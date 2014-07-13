@@ -2,10 +2,11 @@
 
 Match::Match(const std::vector<unsigned char>& history,
     const unsigned long long& byte_context, const unsigned int& bit_context,
-    int limit, float delta, unsigned long long map_size) : history_(history),
-    byte_context_(byte_context), bit_context_(bit_context), 
-    history_pos_(0), cur_match_(0), cur_byte_(0), bit_pos_(128),
-    match_length_(0), limit_(limit), delta_(delta),
+    int limit, float delta, unsigned long long map_size,
+    unsigned long long* longest_match) : history_(history),
+    byte_context_(byte_context), bit_context_(bit_context), history_pos_(0),
+    cur_match_(0), cur_byte_(0), bit_pos_(128), match_length_(0),
+    longest_match_(longest_match), limit_(limit),delta_(delta),
     divisor_(1.0 / (limit + delta)), map_(map_size, 0) {
   for (int i = 0; i < 256; ++i) {
     predictions_[i] = 0.5 + (i + 0.5) / 512;
@@ -52,4 +53,7 @@ void Match::ByteUpdate() {
   cur_match_ %= history_.size();
   cur_byte_ = history_.at(cur_match_);
   bit_pos_ = 128;
+
+  unsigned long long match_context = match_length_ / 32;
+  *longest_match_ = std::max(*longest_match_, match_context);
 }

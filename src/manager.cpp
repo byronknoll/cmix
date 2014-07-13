@@ -1,8 +1,8 @@
 #include "manager.h"
 
 Manager::Manager() : bit_context_(1), long_bit_context_(1), zero_context_(0),
-    history_pos_(0), line_break_(0), history_(100000000, 0), words_(8, 0),
-    recent_bytes_(8, 0) {}
+    history_pos_(0), line_break_(0), longest_match_(0), history_(100000000, 0),
+    words_(8, 0), recent_bytes_(8, 0) {}
 
 const Context& Manager::AddContext(std::unique_ptr<Context> context) {
   for (const auto& old : contexts_) {
@@ -58,6 +58,7 @@ void Manager::Perceive(int bit) {
   if (bit_context_ >= 256) {
     bit_context_ -= 256;
     long_bit_context_ = 1;
+    longest_match_ = 0;
 
     if (bit_context_ == '\n') {
       line_break_ = 0;
