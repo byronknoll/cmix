@@ -78,7 +78,7 @@ void Predictor::AddPAQ8L() {
 
 void Predictor::AddPPM() {
   Add(new PPM(7, manager_.bit_context_, 100, 100000000));
-  Add(new PPM2(7, manager_.bit_context_, 30000000));
+  Add(new PPM2(7, manager_.bit_context_, 60000000));
 }
 
 void Predictor::AddDMC() {
