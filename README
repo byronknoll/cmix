@@ -7,7 +7,7 @@ Changes from version 3 to version 4:
 - Added an additional mixer context (longest match length)
 - Implemented an additional PPM model
 - Integrated some code from paq8pxd_v11 into paq8l
-- Integrated mixer context from paqar into paq8l
+- Integrated mixer contexts from paqar into paq8l
 - Minor refactoring and tuning
 
 Changes from version 2 to version 3:
