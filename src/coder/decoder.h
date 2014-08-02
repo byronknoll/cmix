@@ -7,7 +7,7 @@
 
 class Decoder {
  public:
-  Decoder(std::ifstream* is);
+  Decoder(std::ifstream* is, Predictor* p);
   int Decode();  // Returns 0 or 1.
 
  private:
@@ -16,7 +16,7 @@ class Decoder {
 
   std::ifstream* is_;
   unsigned int x1_, x2_, x_;
-  Predictor p_;
+  Predictor* p_;
 };
 
 #endif

@@ -5,6 +5,7 @@
 #include "preprocess/preprocessor.h"
 #include "coder/encoder.h"
 #include "coder/decoder.h"
+#include "predictor.h"
 
 void WriteHeader(unsigned long long length, std::ofstream* os) {
   for (int i = 4; i >= 0; --i) {
@@ -22,8 +23,8 @@ void ReadHeader(std::ifstream* is, unsigned long long* length) {
 }
 
 void Compress(unsigned long long input_bytes, std::ifstream* is,
-    std::ofstream* os, unsigned long long* output_bytes) {
-  Encoder e(os);
+    std::ofstream* os, unsigned long long* output_bytes, Predictor* p) {
+  Encoder e(os, p);
   unsigned long long percent = 1 + (input_bytes / 100);
   for (unsigned long long pos = 0; pos < input_bytes; ++pos) {
     char c = is->get();
@@ -31,7 +32,7 @@ void Compress(unsigned long long input_bytes, std::ifstream* is,
       e.Encode((c>>j)&1);
     }
     if (pos % percent == 0) {
-      printf("\r%lld%%", pos / percent);
+      printf("\rprogress: %lld%%", pos / percent);
       fflush(stdout);
     }
   }
@@ -40,8 +41,8 @@ void Compress(unsigned long long input_bytes, std::ifstream* is,
 }
 
 void Decompress(unsigned long long output_length, std::ifstream* is,
-                std::ofstream* os) {
-  Decoder d(is);
+                std::ofstream* os, Predictor* p) {
+  Decoder d(is, p);
   unsigned long long percent = 1 + (output_length / 100);
   for(unsigned long long pos = 0; pos < output_length; ++pos) {
     int byte = 1;
@@ -50,7 +51,7 @@ void Decompress(unsigned long long output_length, std::ifstream* is,
     }
     os->put(byte);
     if (pos % percent == 0) {
-      printf("\r%lld%%", pos / percent);
+      printf("\rprogress: %lld%%", pos / percent);
       fflush(stdout);
     }
   }
@@ -72,6 +73,10 @@ int main(int argc, char* argv[]) {
   if (enable_preprocess) temp_path += ".cmix.temp";
 
   unsigned long long input_bytes, output_bytes;
+  Predictor p;
+  if (enable_preprocess) {
+    preprocessor::pretrain(&p);
+  }
 
   if (argv[1][1]=='c') {
     if (enable_preprocess) {
@@ -100,7 +105,7 @@ int main(int argc, char* argv[]) {
     temp_in.seekg(0, std::ios::beg);
 
     WriteHeader(temp_bytes, &data_out);
-    Compress(temp_bytes, &temp_in, &data_out, &output_bytes);
+    Compress(temp_bytes, &temp_in, &data_out, &output_bytes, &p);
     temp_in.close();
     data_out.close();
   } else {
@@ -113,7 +118,7 @@ int main(int argc, char* argv[]) {
     data_in.seekg(0, std::ios::beg);
 
     ReadHeader(&data_in, &output_bytes);
-    Decompress(output_bytes, &data_in, &temp_out);
+    Decompress(output_bytes, &data_in, &temp_out, &p);
     data_in.close();
     temp_out.close();
 

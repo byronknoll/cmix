@@ -7,7 +7,7 @@
 
 class Encoder {
  public:
-  Encoder(std::ofstream* os);
+  Encoder(std::ofstream* os, Predictor* p);
   void Encode(int bit);
   void Flush();
 
@@ -17,7 +17,7 @@ class Encoder {
 
   std::ofstream* os_;
   unsigned int x1_, x2_;
-  Predictor p_;
+  Predictor* p_;
 };
 
 #endif

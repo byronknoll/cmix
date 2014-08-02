@@ -1,6 +1,5 @@
 // This preprocessor is adapted from paq8l and paq8hp12any.
 
-#include <stdio.h>
 #include <vector>
 #include <cstdlib>
 #include <string.h>
@@ -28,6 +27,7 @@
 
 #include "textfilter.cpp"
 #include "english-dictionary.cpp"
+#include "preprocessor.h"
 
 namespace preprocessor {
 
@@ -39,6 +39,25 @@ typedef enum {DEFAULT, JPEG, EXE, TEXT} Filetype;
 
 inline int min(int a, int b) {return a<b?a:b;}
 inline int max(int a, int b) {return a<b?b:a;}
+
+void pretrain(Predictor* p) {
+  unsigned long long len = sizeof(dictionary::english_dictionary);
+  unsigned long long percent = 1 + (len / 100);
+  for (unsigned long long i = 0; i < len; ++i) {
+    char c = dictionary::english_dictionary[i];
+    if (c == '\n') c = ' ';
+    for (int j = 7; j >= 0; --j) {
+      p->Predict();
+      p->Perceive((c>>j)&1);
+    }
+    if (i % percent == 0) {
+      printf("\rpretraining: %lld%%", i / percent);
+      fflush(stdout);
+    }
+  }
+  printf("\r                 \r");
+  fflush(stdout);
+}
 
 /////////////////////////// Filters /////////////////////////////////
 //
