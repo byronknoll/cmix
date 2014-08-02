@@ -599,7 +599,7 @@ void train(short *t, short *w, int n, int err) {
 }
 #endif // slow!
 
-std::vector<float> model_predictions(1155, 0.5);
+std::vector<float> model_predictions(1161, 0.5);
 unsigned int prediction_index = 0;
 float conversion_factor = 1.0 / 4095;
 
@@ -1184,7 +1184,7 @@ void wordModel(Mixer& m) {
     static U32 xword0=0,xword1=0,xword2=0,cword0=0,ccword=0;
     static U32 number0=0, number1=0;  // hashes
     static U32 text0=0;  // hash stream of letters
-    static ContextMap cm(MEM*16, 45+1+1-4);
+    static ContextMap cm(MEM*31, 44);
     static int nl1=-3, nl=-2;  // previous, current newline position
     static U32 mask = 0;
     static Array<int> wpos(0x10000);  // last position of word
@@ -1215,19 +1215,16 @@ void wordModel(Mixer& m) {
                 word2=word1;//*13;
                 word1=word0;//*11;
                 wordlen1=wordlen;
-               
-                wpos[w]=blpos;
-                if (c==':') cword0=word0;
+                 wpos[w]=blpos;
+                if (c==':'|| c=='=') cword0=word0;
                 if (c==']'&& (frstchar!=':' || frstchar!='*')) xword0=word0;
-            //    if (c==0x27) xword0=word0;
-                if (c=='=') cword0=word0;
                 ccword=0;
                 word0=wordlen=0;
-                if((c=='.'||c=='!'||c=='?') && buf(2)!=10) f=1; 
+                if((c=='.'||c=='!'||c=='?' ||c=='}' ||c==')') && buf(2)!=10) f=1; 
                 
             }
-            if ((c4&0xFFFF)==0x3D3D) xword1=word1,xword2=word2; // '=='
-                if ((c4&0xFFFF)==0x2727) xword1=word1,xword2=word2; // ''
+            if ((c4&0xFFFF)==0x3D3D) xword1=word1,xword2=word2; // ==
+            if ((c4&0xFFFF)==0x2727) xword1=word1,xword2=word2; // ''
             if (c==32 || c==10 ) { ++spaces, ++spacecount; if (c==10 ) nl1=nl, nl=pos-1;}
             else if (c=='.' || c=='!' || c=='?' || c==',' || c==';' || c==':') spafdo=0,ccword=c;//*31; 
             else { ++spafdo; spafdo=min(63,spafdo); }
@@ -1280,8 +1277,8 @@ void wordModel(Mixer& m) {
         cm.set(hash(264,h, word1));
         cm.set(hash(265,word0, word1));
         cm.set(hash(266,h, word1,word2));
-        cm.set(hash(267,text0&0xffffff,0));
-        //cm.set(hash(268,text0&0xfffff, 0));
+        //cm.set(hash(267,text0&0xffffff,0));
+        cm.set(hash(268,text0&0xfffff, 0));
           cm.set(hash(269,word0, xword0));
           cm.set(hash(270,word0, xword1));
           cm.set(hash(271,word0, xword2));
@@ -1291,8 +1288,8 @@ void wordModel(Mixer& m) {
         cm.set(hash(274,number0, cword0));
         cm.set(hash(275,h, word2));
         cm.set(hash(276,h, word3));
-        cm.set(hash(277,h, word4,word5));
-       // cm.set(hash(278,h, word5));
+        cm.set(hash(277,h, word4));
+        cm.set(hash(278,h, word5));
 //        cm.set(buf(1)|buf(3)<<8|buf(5)<<16);
 //        cm.set(buf(2)|buf(4)<<8|buf(6)<<16);
         cm.set(hash(279,h, word1,word3));
@@ -1307,10 +1304,11 @@ void wordModel(Mixer& m) {
         cm.set(hash(523,col,buf(1),above));
         cm.set(hash(524,buf(1),above));
         cm.set(hash(525,col,buf(1)));
-        cm.set(hash(526,col*(c==32),0));
-        cm.set(hash(527,col,0));
+        cm.set(hash(526,col,c==32));
+        //cm.set(hash(527,col,0));
         cm.set(hash(281, w, llog(blpos-wpos[w])>>4));
-    
+        cm.set(hash(282,buf(1),llog(blpos-wpos[w])>>2));
+   
         
    int fl = 0;
     if ((c4&0xff) != 0) {
