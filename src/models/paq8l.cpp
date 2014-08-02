@@ -652,14 +652,16 @@ public:
       prediction_index = 0;
       mp->update();
       for (int i=0; i<ncxt; ++i) {
-        pr[i]=squash(dot_product(&tx[0], &wx[cxt[i]*N], nx)>>5);
+        pr[i]=squash((dot_product(&tx[0], &wx[cxt[i]*N], nx) * 9)>>9);
         mp->add(stretch(pr[i]));
       }
       mp->set(0, 1);
       return mp->p();
     }
     else {  // S=1 context
-      return pr[0]=squash(dot_product(&tx[0], &wx[0], nx)>>8);
+      int z = dot_product(&tx[0], &wx[0], nx);
+      base = squash((z*16)>>13);
+      return pr[0]=squash(z>>9);
     }
   }
   ~Mixer();
