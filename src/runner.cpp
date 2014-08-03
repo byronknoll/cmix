@@ -57,19 +57,37 @@ void Decompress(unsigned long long output_length, std::ifstream* is,
   }
 }
 
+int fail() {
+  printf("With preprocessing:\n");
+  printf("    compress:   cmix -c [dictionary] [input] [output]\n");
+  printf("    decompress: cmix -d [dictionary] [input] [output]\n");
+  printf("Without preprocessing:\n");
+  printf("    compress:   cmix -c [input] [output]\n");
+  printf("    decompress: cmix -d [input] [output]\n");
+  return -1;
+}
+
 int main(int argc, char* argv[]) {
-  if (argc != 4 || argv[1][0] != '-' ||
+  if (argc < 4 || argc > 5 || argv[1][0] != '-' ||
       (argv[1][1] != 'c' && argv[1][1] != 'd')) {
-    printf("To compress:   cmix -c input output\n");
-    printf("To decompress: cmix -d input output\n");
-    return -1;
+    return fail();
   }
 
   clock_t start = clock();
 
-  bool enable_preprocess = true;
+  bool enable_preprocess = false;
+  std::string input_path = argv[2];
+  std::string output_path = argv[3];
+  FILE* dictionary = NULL;
+  if (argc == 5) {
+    enable_preprocess = true;
+    dictionary = fopen(argv[2], "rb");
+    if (!dictionary) return fail();
+    input_path = argv[3];
+    output_path = argv[4];
+  }
 
-  std::string temp_path = argv[3];
+  std::string temp_path = output_path;
   if (enable_preprocess) temp_path += ".cmix.temp";
 
   unsigned long long input_bytes, output_bytes;
@@ -77,27 +95,27 @@ int main(int argc, char* argv[]) {
 
   if (argv[1][1]=='c') {
     if (enable_preprocess) {
-      FILE* data_in = fopen(argv[2], "rb");
-      if (!data_in) return -1;
+      FILE* data_in = fopen(input_path.c_str(), "rb");
+      if (!data_in) return fail();
       FILE* temp_out = fopen(temp_path.c_str(), "wb");
-      if (!temp_out) return -1;
+      if (!temp_out) return fail();
 
       fseek(data_in, 0L, SEEK_END);
       input_bytes = ftell(data_in);
       fseek(data_in, 0L, SEEK_SET);
 
-      preprocessor::encode(data_in, temp_out, input_bytes);
+      preprocessor::encode(data_in, temp_out, input_bytes, dictionary);
       fclose(data_in);
       fclose(temp_out);
-      preprocessor::pretrain(&p);
+      preprocessor::pretrain(&p, dictionary);
     } else {
-      temp_path = argv[2];
+      temp_path = input_path;
     }
 
     std::ifstream temp_in(temp_path, std::ios::in | std::ios::binary);
-    if (!temp_in.is_open()) return -1;
-    std::ofstream data_out(argv[3], std::ios::out | std::ios::binary);
-    if (!data_out.is_open()) return -1;
+    if (!temp_in.is_open()) return fail();
+    std::ofstream data_out(output_path, std::ios::out | std::ios::binary);
+    if (!data_out.is_open()) return fail();
 
     temp_in.seekg(0, std::ios::end);
     unsigned long long temp_bytes = temp_in.tellg();
@@ -109,15 +127,15 @@ int main(int argc, char* argv[]) {
     temp_in.close();
     data_out.close();
   } else {
-    std::ifstream data_in(argv[2], std::ios::in | std::ios::binary);
-    if (!data_in.is_open()) return -1;
+    std::ifstream data_in(input_path, std::ios::in | std::ios::binary);
+    if (!data_in.is_open()) return fail();
     std::ofstream temp_out(temp_path, std::ios::out | std::ios::binary);
-    if (!temp_out.is_open()) return -1;
+    if (!temp_out.is_open()) return fail();
 
     data_in.seekg(0, std::ios::end);
     input_bytes = data_in.tellg();
     data_in.seekg(0, std::ios::beg);
-    if (enable_preprocess) preprocessor::pretrain(&p);
+    if (enable_preprocess) preprocessor::pretrain(&p, dictionary);
 
     ReadHeader(&data_in, &output_bytes);
     Decompress(output_bytes, &data_in, &temp_out, &p);
@@ -126,11 +144,11 @@ int main(int argc, char* argv[]) {
 
     if (enable_preprocess) {
       FILE* temp_in = fopen(temp_path.c_str(), "rb");
-      if (!temp_in) return -1;
-      FILE* data_out = fopen(argv[3], "wb");
-      if (!data_out) return -1;
+      if (!temp_in) return fail();
+      FILE* data_out = fopen(output_path.c_str(), "wb");
+      if (!data_out) return fail();
 
-      preprocessor::decode(temp_in, data_out);
+      preprocessor::decode(temp_in, data_out, dictionary);
       fseek(data_out, 0L, SEEK_END);
       output_bytes = ftell(data_out);
       fclose(temp_in);

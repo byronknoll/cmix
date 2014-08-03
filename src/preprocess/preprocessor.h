@@ -7,11 +7,11 @@
 
 namespace preprocessor {
 
-void pretrain(Predictor* p);
+void pretrain(Predictor* p, FILE* dictionary);
 
-void encode(FILE* in, FILE* out, int n);
+void encode(FILE* in, FILE* out, int n, FILE* dictionary);
 
-void decode(FILE* in, FILE* out);
+void decode(FILE* in, FILE* out, FILE* dictionary);
 
 }  // namespace preprocessor
 

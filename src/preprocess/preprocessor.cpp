@@ -26,7 +26,6 @@
 #define IF_OPTION(option) ((preprocFlag & option)!=0)
 
 #include "textfilter.cpp"
-#include "english-dictionary.cpp"
 #include "preprocessor.h"
 
 namespace preprocessor {
@@ -40,11 +39,13 @@ typedef enum {DEFAULT, JPEG, EXE, TEXT} Filetype;
 inline int min(int a, int b) {return a<b?a:b;}
 inline int max(int a, int b) {return a<b?b:a;}
 
-void pretrain(Predictor* p) {
-  unsigned long long len = sizeof(dictionary::english_dictionary);
+void pretrain(Predictor* p, FILE* dictionary) {
+  fseek(dictionary, 0L, SEEK_END);
+  unsigned long long len = ftell(dictionary);
+  fseek(dictionary, 0L, SEEK_SET);
   unsigned long long percent = 1 + (len / 100);
   for (unsigned long long i = 0; i < len; ++i) {
-    char c = dictionary::english_dictionary[i];
+    char c = getc(dictionary);
     if (c == '\n') c = ' ';
     for (int j = 7; j >= 0; --j) {
       p->Predict();
@@ -306,21 +307,7 @@ int decode_exe(FILE* in) {
   return c[--q];
 }
 
-bool dictionary_created = false;
-FILE* english_dictionary;
-
-void create_dictionary() {
-  english_dictionary = tmpfile();
-  if (!english_dictionary) abort();
-  int len = sizeof(dictionary::english_dictionary);
-  for (int i = 0; i < len; ++i) {
-    putc(dictionary::english_dictionary[i], english_dictionary);
-  }
-  dictionary_created = true;
-}
-
-void encode_text(FILE* in, FILE* out, int len) {
-  if (!dictionary_created) create_dictionary();
+void encode_text(FILE* in, FILE* out, int len, FILE* dictionary) {
   FILE* temp_input = tmpfile();
   if (!temp_input) abort();
 
@@ -334,8 +321,7 @@ void encode_text(FILE* in, FILE* out, int len) {
 
   WRT wrt;
   wrt.defaultSettings(0, NULL);
-  wrt.WRT_start_encoding(temp_input, temp_output, len, false,
-      english_dictionary);
+  wrt.WRT_start_encoding(temp_input, temp_output, len, false, dictionary);
 
   int size = ftell(temp_output);
   if (size > len - 50) {
@@ -362,7 +348,6 @@ WRT* wrt_decoder = NULL;
 bool wrt_enabled = true;
 
 void reset_text_decoder(FILE* in) {
-  if (!dictionary_created) create_dictionary();
   if (wrt_temp) fclose(wrt_temp);
   wrt_temp = tmpfile();
   if (!wrt_temp) abort();
@@ -391,14 +376,14 @@ void reset_text_decoder(FILE* in) {
   wrt_decoder->WRT_prepare_decoding();
 }
 
-int decode_text(FILE* in) {
+int decode_text(FILE* in, FILE* dictionary) {
   if (!wrt_enabled) return getc(in);
-  return wrt_decoder->WRT_decode_char(wrt_temp, NULL, 0, english_dictionary);
+  return wrt_decoder->WRT_decode_char(wrt_temp, NULL, 0, dictionary);
 }
 
 // Split n bytes into blocks by type.  For each block, output
 // <type> <size> and call encode_X to convert to type X.
-void encode(FILE* in, FILE* out, int n) {
+void encode(FILE* in, FILE* out, int n, FILE* dictionary) {
   Filetype type=DEFAULT;
   long begin=ftell(in);
 
@@ -425,7 +410,7 @@ void encode(FILE* in, FILE* out, int n) {
   // printf("Text fraction: %.4f\n", text_fraction);
   if (text_fraction > 0.95) {
     fprintf(out, "%c%c%c%c%c", TEXT, n>>24, n>>16, n>>8, n);    
-    encode_text(in, out, n);
+    encode_text(in, out, n, dictionary);
     return;
   }
 
@@ -440,7 +425,7 @@ void encode(FILE* in, FILE* out, int n) {
       switch(type) {
         case JPEG: encode_jpeg(in, out, len); break;
         case EXE:  encode_exe(in, out, len, begin); break;
-        case TEXT: encode_text(in, out, len); break;
+        case TEXT: encode_text(in, out, len, dictionary); break;
         default:   encode_default(in, out, len); break;
       }
     }
@@ -451,7 +436,7 @@ void encode(FILE* in, FILE* out, int n) {
 }
 
 // Decode <type> <len> <data>...
-int decode2(FILE* in) {
+int decode2(FILE* in, FILE* dictionary) {
   static Filetype type=DEFAULT;
   static int len=0;
   while (len==0) {
@@ -469,14 +454,14 @@ int decode2(FILE* in) {
   switch (type) {
     case JPEG: return decode_jpeg(in);
     case EXE:  return decode_exe(in);
-    case TEXT: return decode_text(in);
+    case TEXT: return decode_text(in, dictionary);
     default:   return decode_default(in);
   }
 }
 
-void decode(FILE* in, FILE* out) {
+void decode(FILE* in, FILE* out, FILE* dictionary) {
   while (true) {
-    int result = decode2(in);
+    int result = decode2(in, dictionary);
     if (result == -1) return;
     putc(result, out);
   }
