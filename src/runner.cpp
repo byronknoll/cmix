@@ -74,15 +74,13 @@ int main(int argc, char* argv[]) {
 
   unsigned long long input_bytes, output_bytes;
   Predictor p;
-  if (enable_preprocess) {
-    preprocessor::pretrain(&p);
-  }
 
   if (argv[1][1]=='c') {
     if (enable_preprocess) {
       FILE* data_in = fopen(argv[2], "rb");
+      if (!data_in) return -1;
       FILE* temp_out = fopen(temp_path.c_str(), "wb");
-      if (!data_in || !temp_out) return -1;
+      if (!temp_out) return -1;
 
       fseek(data_in, 0L, SEEK_END);
       input_bytes = ftell(data_in);
@@ -91,13 +89,15 @@ int main(int argc, char* argv[]) {
       preprocessor::encode(data_in, temp_out, input_bytes);
       fclose(data_in);
       fclose(temp_out);
+      preprocessor::pretrain(&p);
     } else {
       temp_path = argv[2];
     }
 
     std::ifstream temp_in(temp_path, std::ios::in | std::ios::binary);
+    if (!temp_in.is_open()) return -1;
     std::ofstream data_out(argv[3], std::ios::out | std::ios::binary);
-    if (!temp_in.is_open() || !data_out.is_open()) return -1;
+    if (!data_out.is_open()) return -1;
 
     temp_in.seekg(0, std::ios::end);
     unsigned long long temp_bytes = temp_in.tellg();
@@ -110,12 +110,14 @@ int main(int argc, char* argv[]) {
     data_out.close();
   } else {
     std::ifstream data_in(argv[2], std::ios::in | std::ios::binary);
+    if (!data_in.is_open()) return -1;
     std::ofstream temp_out(temp_path, std::ios::out | std::ios::binary);
-    if (!data_in.is_open() || !temp_out.is_open()) return -1;
+    if (!temp_out.is_open()) return -1;
 
     data_in.seekg(0, std::ios::end);
     input_bytes = data_in.tellg();
     data_in.seekg(0, std::ios::beg);
+    if (enable_preprocess) preprocessor::pretrain(&p);
 
     ReadHeader(&data_in, &output_bytes);
     Decompress(output_bytes, &data_in, &temp_out, &p);
@@ -124,8 +126,9 @@ int main(int argc, char* argv[]) {
 
     if (enable_preprocess) {
       FILE* temp_in = fopen(temp_path.c_str(), "rb");
+      if (!temp_in) return -1;
       FILE* data_out = fopen(argv[3], "wb");
-      if (!temp_in || !data_out) return -1;
+      if (!data_out) return -1;
 
       preprocessor::decode(temp_in, data_out);
       fseek(data_out, 0L, SEEK_END);
