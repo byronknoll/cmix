@@ -53,13 +53,11 @@ typedef unsigned char  U8;
 typedef unsigned short U16;
 typedef unsigned int   U32;
 
-// min, max functions
 #ifndef WINDOWS
 inline int min(int a, int b) {return a<b?a:b;}
 inline int max(int a, int b) {return a<b?b:a;}
 #endif
 
-// Error handler: print message if any, and exit
 void quit(const char* message=0) {
   throw message;
 }
@@ -81,23 +79,13 @@ int equals(const char* a, const char* b) {
 
 //////////////////////////// Array ////////////////////////////
 
-// Array<T, ALIGN> a(n); creates n elements of T initialized to 0 bits.
-// Constructors for T are not called.
-// Indexing is bounds checked if assertions are on.
-// a.size() returns n.
-// a.resize(n) changes size to n, padding with 0 bits or truncating.
-// a.push_back(x) appends x and increases size by 1, reserving up to size*2.
-// a.pop_back() decreases size by 1, does not free memory.
-// Copy and assignment are not supported.
-// Memory is aligned on a ALIGN byte boundary (power of 2), default is none.
-
 template <class T, int ALIGN=0> class Array {
 private:
-  int n;     // user size
-  int reserved;  // actual size
-  char *ptr; // allocated memory, zeroed
-  T* data;   // start of n elements of aligned data
-  void create(int i);  // create with size i
+  int n;
+  int reserved;
+  char *ptr;
+  T* data;
+  void create(int i);
 public:
   explicit Array(int i=0) {create(i);}
   ~Array();
@@ -108,11 +96,11 @@ public:
     return data[i];
   }
   int size() const {return n;}
-  void resize(int i);  // change size to i
-  void pop_back() {if (n>0) --n;}  // decrement size
-  void push_back(const T& x);  // increment size, append x
+  void resize(int i);
+  void pop_back() {if (n>0) --n;}
+  void push_back(const T& x);
 private:
-  Array(const Array&);  // no copy or assignment
+  Array(const Array&);
   Array& operator=(const Array&);
 };
 
@@ -162,9 +150,6 @@ template<class T, int ALIGN> void Array<T, ALIGN>::push_back(const T& x) {
 
 /////////////////////////// String /////////////////////////////
 
-// A tiny subset of std::string
-// size() includes NUL terminator.
-
 class String: public Array<char> {
 public:
   const char* c_str() const {return &(*this)[0];}
@@ -186,7 +171,6 @@ public:
 
 //////////////////////////// rnd ///////////////////////////////
 
-// 32-bit pseudo random number generator
 class Random{
   Array<U32> table;
   int i;
@@ -204,12 +188,7 @@ public:
 
 ////////////////////////////// Buf /////////////////////////////
 
-// Buf(n) buf; creates an array of n bytes (must be a power of 2).
-// buf[i] returns a reference to the i'th byte with wrap (no out of bounds).
-// buf(i) returns i'th byte back from pos (i > 0) 
-// buf.size() returns n.
-
-int pos;  // Number of input bytes in buf (not wrapped)
+int pos;
 
 class Buf {
   Array<U8> b;
@@ -238,16 +217,14 @@ int level=DEFAULT_OPTION;  // Compression level 0 to 9
 #define MEM (0x10000<<level)
 int y=0;  // Last bit, 0 or 1, set by encoder
 
-// Global context set by Predictor and available to all models.
-int c0=1; // Last 0-7 bits of the partial byte with a leading 1 bit (1-255)
-U32 c4=0; // Last 4 whole bytes, packed.  Last byte is bits 0-7.
-int bpos=0; // bits in c0 (0 to 7)
+int c0=1;
+U32 c4=0;
+int bpos=0;
 int blpos=0;
-Buf buf;  // Rotating input queue set by Predictor
+Buf buf;
 
 ///////////////////////////// ilog //////////////////////////////
 
-// ilog(x) = round(log2(x) * 16), 0 <= x < 64K
 class Ilog {
   Array<U8> t;
 public:
@@ -255,16 +232,14 @@ public:
   Ilog();
 } ilog;
 
-// Compute lookup table by numerical integration of 1/x
 Ilog::Ilog(): t(65536) {
   U32 x=14155776;
   for (int i=2; i<65536; ++i) {
-    x+=774541002/(i*2-1);  // numerator is 2^29/ln 2
+    x+=774541002/(i*2-1);
     t[i]=x>>24;
   }
 }
 
-// llog(x) accepts 32 bits
 inline int llog(U32 x) {
   if (x>=0x1000000)
     return 256+ilog(x>>16);
@@ -276,95 +251,76 @@ inline int llog(U32 x) {
 
 ///////////////////////// state table ////////////////////////
 
-// State table:
-//   nex(state, 0) = next state if bit y is 0, 0 <= state < 256
-//   nex(state, 1) = next state if bit y is 1
-//   nex(state, 2) = number of zeros in bit history represented by state
-//   nex(state, 3) = number of ones represented
-//
-// States represent a bit history within some context.
-// State 0 is the starting state (no bits seen).
-// States 1-30 represent all possible sequences of 1-4 bits.
-// States 31-252 represent a pair of counts, (n0,n1), the number
-//   of 0 and 1 bits respectively.  If n0+n1 < 16 then there are
-//   two states for each pair, depending on if a 0 or 1 was the last
-//   bit seen.
-// If n0 and n1 are too large, then there is no state to represent this
-// pair, so another state with about the same ratio of n0/n1 is substituted.
-// Also, when a bit is observed and the count of the opposite bit is large,
-// then part of this count is discarded to favor newer data over old.
-
 static const U8 State_table[256][4]={
-  {  1,  2, 0, 0},{  3,  5, 1, 0},{  4,  6, 0, 1},{  7, 10, 2, 0}, // 0-3
-  {  8, 12, 1, 1},{  9, 13, 1, 1},{ 11, 14, 0, 2},{ 15, 19, 3, 0}, // 4-7
-  { 16, 23, 2, 1},{ 17, 24, 2, 1},{ 18, 25, 2, 1},{ 20, 27, 1, 2}, // 8-11
-  { 21, 28, 1, 2},{ 22, 29, 1, 2},{ 26, 30, 0, 3},{ 31, 33, 4, 0}, // 12-15
-  { 32, 35, 3, 1},{ 32, 35, 3, 1},{ 32, 35, 3, 1},{ 32, 35, 3, 1}, // 16-19
-  { 34, 37, 2, 2},{ 34, 37, 2, 2},{ 34, 37, 2, 2},{ 34, 37, 2, 2}, // 20-23
-  { 34, 37, 2, 2},{ 34, 37, 2, 2},{ 36, 39, 1, 3},{ 36, 39, 1, 3}, // 24-27
-  { 36, 39, 1, 3},{ 36, 39, 1, 3},{ 38, 40, 0, 4},{ 41, 43, 5, 0}, // 28-31
-  { 42, 45, 4, 1},{ 42, 45, 4, 1},{ 44, 47, 3, 2},{ 44, 47, 3, 2}, // 32-35
-  { 46, 49, 2, 3},{ 46, 49, 2, 3},{ 48, 51, 1, 4},{ 48, 51, 1, 4}, // 36-39
-  { 50, 52, 0, 5},{ 53, 43, 6, 0},{ 54, 57, 5, 1},{ 54, 57, 5, 1}, // 40-43
-  { 56, 59, 4, 2},{ 56, 59, 4, 2},{ 58, 61, 3, 3},{ 58, 61, 3, 3}, // 44-47
-  { 60, 63, 2, 4},{ 60, 63, 2, 4},{ 62, 65, 1, 5},{ 62, 65, 1, 5}, // 48-51
-  { 50, 66, 0, 6},{ 67, 55, 7, 0},{ 68, 57, 6, 1},{ 68, 57, 6, 1}, // 52-55
-  { 70, 73, 5, 2},{ 70, 73, 5, 2},{ 72, 75, 4, 3},{ 72, 75, 4, 3}, // 56-59
-  { 74, 77, 3, 4},{ 74, 77, 3, 4},{ 76, 79, 2, 5},{ 76, 79, 2, 5}, // 60-63
-  { 62, 81, 1, 6},{ 62, 81, 1, 6},{ 64, 82, 0, 7},{ 83, 69, 8, 0}, // 64-67
-  { 84, 71, 7, 1},{ 84, 71, 7, 1},{ 86, 73, 6, 2},{ 86, 73, 6, 2}, // 68-71
-  { 44, 59, 5, 3},{ 44, 59, 5, 3},{ 58, 61, 4, 4},{ 58, 61, 4, 4}, // 72-75
-  { 60, 49, 3, 5},{ 60, 49, 3, 5},{ 76, 89, 2, 6},{ 76, 89, 2, 6}, // 76-79
-  { 78, 91, 1, 7},{ 78, 91, 1, 7},{ 80, 92, 0, 8},{ 93, 69, 9, 0}, // 80-83
-  { 94, 87, 8, 1},{ 94, 87, 8, 1},{ 96, 45, 7, 2},{ 96, 45, 7, 2}, // 84-87
-  { 48, 99, 2, 7},{ 48, 99, 2, 7},{ 88,101, 1, 8},{ 88,101, 1, 8}, // 88-91
-  { 80,102, 0, 9},{103, 69,10, 0},{104, 87, 9, 1},{104, 87, 9, 1}, // 92-95
-  {106, 57, 8, 2},{106, 57, 8, 2},{ 62,109, 2, 8},{ 62,109, 2, 8}, // 96-99
-  { 88,111, 1, 9},{ 88,111, 1, 9},{ 80,112, 0,10},{113, 85,11, 0}, // 100-103
-  {114, 87,10, 1},{114, 87,10, 1},{116, 57, 9, 2},{116, 57, 9, 2}, // 104-107
-  { 62,119, 2, 9},{ 62,119, 2, 9},{ 88,121, 1,10},{ 88,121, 1,10}, // 108-111
-  { 90,122, 0,11},{123, 85,12, 0},{124, 97,11, 1},{124, 97,11, 1}, // 112-115
-  {126, 57,10, 2},{126, 57,10, 2},{ 62,129, 2,10},{ 62,129, 2,10}, // 116-119
-  { 98,131, 1,11},{ 98,131, 1,11},{ 90,132, 0,12},{133, 85,13, 0}, // 120-123
-  {134, 97,12, 1},{134, 97,12, 1},{136, 57,11, 2},{136, 57,11, 2}, // 124-127
-  { 62,139, 2,11},{ 62,139, 2,11},{ 98,141, 1,12},{ 98,141, 1,12}, // 128-131
-  { 90,142, 0,13},{143, 95,14, 0},{144, 97,13, 1},{144, 97,13, 1}, // 132-135
-  { 68, 57,12, 2},{ 68, 57,12, 2},{ 62, 81, 2,12},{ 62, 81, 2,12}, // 136-139
-  { 98,147, 1,13},{ 98,147, 1,13},{100,148, 0,14},{149, 95,15, 0}, // 140-143
-  {150,107,14, 1},{150,107,14, 1},{108,151, 1,14},{108,151, 1,14}, // 144-147
-  {100,152, 0,15},{153, 95,16, 0},{154,107,15, 1},{108,155, 1,15}, // 148-151
-  {100,156, 0,16},{157, 95,17, 0},{158,107,16, 1},{108,159, 1,16}, // 152-155
-  {100,160, 0,17},{161,105,18, 0},{162,107,17, 1},{108,163, 1,17}, // 156-159
-  {110,164, 0,18},{165,105,19, 0},{166,117,18, 1},{118,167, 1,18}, // 160-163
-  {110,168, 0,19},{169,105,20, 0},{170,117,19, 1},{118,171, 1,19}, // 164-167
-  {110,172, 0,20},{173,105,21, 0},{174,117,20, 1},{118,175, 1,20}, // 168-171
-  {110,176, 0,21},{177,105,22, 0},{178,117,21, 1},{118,179, 1,21}, // 172-175
-  {110,180, 0,22},{181,115,23, 0},{182,117,22, 1},{118,183, 1,22}, // 176-179
-  {120,184, 0,23},{185,115,24, 0},{186,127,23, 1},{128,187, 1,23}, // 180-183
-  {120,188, 0,24},{189,115,25, 0},{190,127,24, 1},{128,191, 1,24}, // 184-187
-  {120,192, 0,25},{193,115,26, 0},{194,127,25, 1},{128,195, 1,25}, // 188-191
-  {120,196, 0,26},{197,115,27, 0},{198,127,26, 1},{128,199, 1,26}, // 192-195
-  {120,200, 0,27},{201,115,28, 0},{202,127,27, 1},{128,203, 1,27}, // 196-199
-  {120,204, 0,28},{205,115,29, 0},{206,127,28, 1},{128,207, 1,28}, // 200-203
-  {120,208, 0,29},{209,125,30, 0},{210,127,29, 1},{128,211, 1,29}, // 204-207
-  {130,212, 0,30},{213,125,31, 0},{214,137,30, 1},{138,215, 1,30}, // 208-211
-  {130,216, 0,31},{217,125,32, 0},{218,137,31, 1},{138,219, 1,31}, // 212-215
-  {130,220, 0,32},{221,125,33, 0},{222,137,32, 1},{138,223, 1,32}, // 216-219
-  {130,224, 0,33},{225,125,34, 0},{226,137,33, 1},{138,227, 1,33}, // 220-223
-  {130,228, 0,34},{229,125,35, 0},{230,137,34, 1},{138,231, 1,34}, // 224-227
-  {130,232, 0,35},{233,125,36, 0},{234,137,35, 1},{138,235, 1,35}, // 228-231
-  {130,236, 0,36},{237,125,37, 0},{238,137,36, 1},{138,239, 1,36}, // 232-235
-  {130,240, 0,37},{241,125,38, 0},{242,137,37, 1},{138,243, 1,37}, // 236-239
-  {130,244, 0,38},{245,135,39, 0},{246,137,38, 1},{138,247, 1,38}, // 240-243
-  {140,248, 0,39},{249,135,40, 0},{250, 69,39, 1},{ 80,251, 1,39}, // 244-247
-  {140,252, 0,40},{249,135,41, 0},{250, 69,40, 1},{ 80,251, 1,40}, // 248-251
+  {  1,  2, 0, 0},{  3,  5, 1, 0},{  4,  6, 0, 1},{  7, 10, 2, 0},
+  {  8, 12, 1, 1},{  9, 13, 1, 1},{ 11, 14, 0, 2},{ 15, 19, 3, 0},
+  { 16, 23, 2, 1},{ 17, 24, 2, 1},{ 18, 25, 2, 1},{ 20, 27, 1, 2},
+  { 21, 28, 1, 2},{ 22, 29, 1, 2},{ 26, 30, 0, 3},{ 31, 33, 4, 0},
+  { 32, 35, 3, 1},{ 32, 35, 3, 1},{ 32, 35, 3, 1},{ 32, 35, 3, 1},
+  { 34, 37, 2, 2},{ 34, 37, 2, 2},{ 34, 37, 2, 2},{ 34, 37, 2, 2},
+  { 34, 37, 2, 2},{ 34, 37, 2, 2},{ 36, 39, 1, 3},{ 36, 39, 1, 3},
+  { 36, 39, 1, 3},{ 36, 39, 1, 3},{ 38, 40, 0, 4},{ 41, 43, 5, 0},
+  { 42, 45, 4, 1},{ 42, 45, 4, 1},{ 44, 47, 3, 2},{ 44, 47, 3, 2},
+  { 46, 49, 2, 3},{ 46, 49, 2, 3},{ 48, 51, 1, 4},{ 48, 51, 1, 4},
+  { 50, 52, 0, 5},{ 53, 43, 6, 0},{ 54, 57, 5, 1},{ 54, 57, 5, 1},
+  { 56, 59, 4, 2},{ 56, 59, 4, 2},{ 58, 61, 3, 3},{ 58, 61, 3, 3},
+  { 60, 63, 2, 4},{ 60, 63, 2, 4},{ 62, 65, 1, 5},{ 62, 65, 1, 5},
+  { 50, 66, 0, 6},{ 67, 55, 7, 0},{ 68, 57, 6, 1},{ 68, 57, 6, 1},
+  { 70, 73, 5, 2},{ 70, 73, 5, 2},{ 72, 75, 4, 3},{ 72, 75, 4, 3},
+  { 74, 77, 3, 4},{ 74, 77, 3, 4},{ 76, 79, 2, 5},{ 76, 79, 2, 5},
+  { 62, 81, 1, 6},{ 62, 81, 1, 6},{ 64, 82, 0, 7},{ 83, 69, 8, 0},
+  { 84, 71, 7, 1},{ 84, 71, 7, 1},{ 86, 73, 6, 2},{ 86, 73, 6, 2},
+  { 44, 59, 5, 3},{ 44, 59, 5, 3},{ 58, 61, 4, 4},{ 58, 61, 4, 4},
+  { 60, 49, 3, 5},{ 60, 49, 3, 5},{ 76, 89, 2, 6},{ 76, 89, 2, 6},
+  { 78, 91, 1, 7},{ 78, 91, 1, 7},{ 80, 92, 0, 8},{ 93, 69, 9, 0},
+  { 94, 87, 8, 1},{ 94, 87, 8, 1},{ 96, 45, 7, 2},{ 96, 45, 7, 2},
+  { 48, 99, 2, 7},{ 48, 99, 2, 7},{ 88,101, 1, 8},{ 88,101, 1, 8},
+  { 80,102, 0, 9},{103, 69,10, 0},{104, 87, 9, 1},{104, 87, 9, 1},
+  {106, 57, 8, 2},{106, 57, 8, 2},{ 62,109, 2, 8},{ 62,109, 2, 8},
+  { 88,111, 1, 9},{ 88,111, 1, 9},{ 80,112, 0,10},{113, 85,11, 0},
+  {114, 87,10, 1},{114, 87,10, 1},{116, 57, 9, 2},{116, 57, 9, 2},
+  { 62,119, 2, 9},{ 62,119, 2, 9},{ 88,121, 1,10},{ 88,121, 1,10},
+  { 90,122, 0,11},{123, 85,12, 0},{124, 97,11, 1},{124, 97,11, 1},
+  {126, 57,10, 2},{126, 57,10, 2},{ 62,129, 2,10},{ 62,129, 2,10},
+  { 98,131, 1,11},{ 98,131, 1,11},{ 90,132, 0,12},{133, 85,13, 0},
+  {134, 97,12, 1},{134, 97,12, 1},{136, 57,11, 2},{136, 57,11, 2},
+  { 62,139, 2,11},{ 62,139, 2,11},{ 98,141, 1,12},{ 98,141, 1,12},
+  { 90,142, 0,13},{143, 95,14, 0},{144, 97,13, 1},{144, 97,13, 1},
+  { 68, 57,12, 2},{ 68, 57,12, 2},{ 62, 81, 2,12},{ 62, 81, 2,12},
+  { 98,147, 1,13},{ 98,147, 1,13},{100,148, 0,14},{149, 95,15, 0},
+  {150,107,14, 1},{150,107,14, 1},{108,151, 1,14},{108,151, 1,14},
+  {100,152, 0,15},{153, 95,16, 0},{154,107,15, 1},{108,155, 1,15},
+  {100,156, 0,16},{157, 95,17, 0},{158,107,16, 1},{108,159, 1,16},
+  {100,160, 0,17},{161,105,18, 0},{162,107,17, 1},{108,163, 1,17},
+  {110,164, 0,18},{165,105,19, 0},{166,117,18, 1},{118,167, 1,18},
+  {110,168, 0,19},{169,105,20, 0},{170,117,19, 1},{118,171, 1,19},
+  {110,172, 0,20},{173,105,21, 0},{174,117,20, 1},{118,175, 1,20},
+  {110,176, 0,21},{177,105,22, 0},{178,117,21, 1},{118,179, 1,21},
+  {110,180, 0,22},{181,115,23, 0},{182,117,22, 1},{118,183, 1,22},
+  {120,184, 0,23},{185,115,24, 0},{186,127,23, 1},{128,187, 1,23},
+  {120,188, 0,24},{189,115,25, 0},{190,127,24, 1},{128,191, 1,24},
+  {120,192, 0,25},{193,115,26, 0},{194,127,25, 1},{128,195, 1,25},
+  {120,196, 0,26},{197,115,27, 0},{198,127,26, 1},{128,199, 1,26},
+  {120,200, 0,27},{201,115,28, 0},{202,127,27, 1},{128,203, 1,27},
+  {120,204, 0,28},{205,115,29, 0},{206,127,28, 1},{128,207, 1,28},
+  {120,208, 0,29},{209,125,30, 0},{210,127,29, 1},{128,211, 1,29},
+  {130,212, 0,30},{213,125,31, 0},{214,137,30, 1},{138,215, 1,30},
+  {130,216, 0,31},{217,125,32, 0},{218,137,31, 1},{138,219, 1,31},
+  {130,220, 0,32},{221,125,33, 0},{222,137,32, 1},{138,223, 1,32},
+  {130,224, 0,33},{225,125,34, 0},{226,137,33, 1},{138,227, 1,33},
+  {130,228, 0,34},{229,125,35, 0},{230,137,34, 1},{138,231, 1,34},
+  {130,232, 0,35},{233,125,36, 0},{234,137,35, 1},{138,235, 1,35},
+  {130,236, 0,36},{237,125,37, 0},{238,137,36, 1},{138,239, 1,36},
+  {130,240, 0,37},{241,125,38, 0},{242,137,37, 1},{138,243, 1,37},
+  {130,244, 0,38},{245,135,39, 0},{246,137,38, 1},{138,247, 1,38},
+  {140,248, 0,39},{249,135,40, 0},{250, 69,39, 1},{ 80,251, 1,39},
+  {140,252, 0,40},{249,135,41, 0},{250, 69,40, 1},{ 80,251, 1,40},
   {140,252, 0,41}};  // 252, 253-255 are reserved
 
 #define nex(state,sel) State_table[state][sel]
 
 ///////////////////////////// Squash //////////////////////////////
 
-// return p = 1/(1 + exp(-d)), d scaled by 8 bits, p scaled by 12 bits
 class Squash {
   Array<U16> t;
 public:
@@ -391,9 +347,6 @@ Squash::Squash(): t(4096) {
 
 //////////////////////////// Stretch ///////////////////////////////
 
-// Inverse of squash. d = ln(p/(1-p)), d scaled by 8 bits, p by 12 bits.
-// d has range -2047 to 2047 representing -8 to 8.  p has range 0 to 4095.
-
 class Stretch {
   Array<short> t;
 public:
@@ -417,27 +370,6 @@ Stretch::Stretch(): t(4096) {
 
 //////////////////////////// Mixer /////////////////////////////
 
-// Mixer m(N, M, S=1, w=0) combines models using M neural networks with
-//   N inputs each, of which up to S may be selected.  If S > 1 then
-//   the outputs of these neural networks are combined using another
-//   neural network (with parameters S, 1, 1).  If S = 1 then the
-//   output is direct.  The weights are initially w (+-32K).
-//   It is used as follows:
-// m.update() trains the network where the expected output is the
-//   last bit (in the global variable y).
-// m.add(stretch(p)) inputs prediction from one of N models.  The
-//   prediction should be positive to predict a 1 bit, negative for 0,
-//   nominally +-256 to +-2K.  The maximum allowed value is +-32K but
-//   using such large values may cause overflow if N is large.
-// m.set(cxt, range) selects cxt as one of 'range' neural networks to
-//   use.  0 <= cxt < range.  Should be called up to S times such
-//   that the total of the ranges is <= M.
-// m.p() returns the output prediction that the next bit is 1 as a
-//   12 bit number (0 to 4095).
-
-// dot_product returns dot product t*w of n elements.  n is rounded
-// up to a multiple of 8.  Result is scaled down by 8 bits.
-
 #if !defined(__GNUC__)
 
 #if (2 == _M_IX86_FP) // 2 if /arch:SSE2 was used.
@@ -448,17 +380,8 @@ Stretch::Stretch(): t(4096) {
 
 #endif /* __GNUC__ */
 
-/**
- * Vector product a*b of n signed words, returning signed integer scaled down by 8 bits.
- * n is rounded up to a multiple of 8.
- */
 static int dot_product (const short* const t, const short* const w, int n);
 
-/**
- * Train n neural network weights w[n] on inputs t[n] and err.
- * w[i] += ((t[i]*2*err)+(1<<16))>>17 bounded to +- 32K.
- * n is rounded up to a multiple of 8.
- */
 static void train (const short* const t, short* const w, int n, const int e);
 #if defined(__AVX2__) // fast
 #include<immintrin.h>
@@ -466,16 +389,15 @@ static void train (const short* const t, short* const w, int n, const int e);
 static int dot_product (const short* const t, const short* const w, int n) {
   assert(n == ((n + 15) & -16));
   __m256i sum = _mm256_setzero_si256 ();
-  while ((n -= 16) >= 0) { // Each loop sums 16 products
-    __m256i tmp = _mm256_madd_epi16 (*(__m256i *) &t[n], *(__m256i *) &w[n]); // t[n] * w[n] + t[n+1] * w[n+1]
-    tmp = _mm256_srai_epi32 (tmp, 8); //                                        (t[n] * w[n] + t[n+1] * w[n+1]) >> 8
-    sum = _mm256_add_epi32 (sum, tmp); //                                sum += (t[n] * w[n] + t[n+1] * w[n+1]) >> 8
+  while ((n -= 16) >= 0) {
+    __m256i tmp = _mm256_madd_epi16 (*(__m256i *) &t[n], *(__m256i *) &w[n]);
+    tmp = _mm256_srai_epi32 (tmp, 8);
+    sum = _mm256_add_epi32 (sum, tmp);
   } 
- // exctract high and low of sum and adds
   __m128i low = _mm_add_epi32 (_mm256_extracti128_si256(sum,0),_mm256_extracti128_si256(sum,1)); 
-  low = _mm_add_epi32 (low, _mm_srli_si128 (low, 8)); // Add eight sums together ...
+  low = _mm_add_epi32 (low, _mm_srli_si128 (low, 8));
   low = _mm_add_epi32 (low, _mm_srli_si128 (low, 4));
-  return _mm_cvtsi128_si32 (low); //                     ...  and scale back to integer
+  return _mm_cvtsi128_si32 (low);
 }
 
 static void train (const short* const t, short* const w, int n, const int e) {
@@ -483,13 +405,13 @@ static void train (const short* const t, short* const w, int n, const int e) {
   if (e) {
     const __m256i one = _mm256_set1_epi16 (1);
     const __m256i err = _mm256_set1_epi16 (short(e));
-    while ((n -= 16) >= 0) { // Each iteration adjusts 16 weights
-      __m256i tmp = _mm256_adds_epi16 (*(__m256i *) &t[n], *(__m256i *) &t[n]); // t[n] * 2
-      tmp = _mm256_mulhi_epi16 (tmp, err); //                                     (t[n] * 2 * err) >> 16
-      tmp = _mm256_adds_epi16 (tmp, one); //                                     ((t[n] * 2 * err) >> 16) + 1
-      tmp = _mm256_srai_epi16 (tmp, 1); //                                      (((t[n] * 2 * err) >> 16) + 1) >> 1
-      tmp = _mm256_adds_epi16 (tmp, *(__m256i *) &w[n]); //                    ((((t[n] * 2 * err) >> 16) + 1) >> 1) + w[n]
-      *(__m256i *) &w[n] = tmp; //                                          save the new eight weights, bounded to +- 32K
+    while ((n -= 16) >= 0) {
+      __m256i tmp = _mm256_adds_epi16 (*(__m256i *) &t[n], *(__m256i *) &t[n]);
+      tmp = _mm256_mulhi_epi16 (tmp, err);
+      tmp = _mm256_adds_epi16 (tmp, one);
+      tmp = _mm256_srai_epi16 (tmp, 1);
+      tmp = _mm256_adds_epi16 (tmp, *(__m256i *) &w[n]);
+      *(__m256i *) &w[n] = tmp;
     }
   }
 }
@@ -501,14 +423,14 @@ static void train (const short* const t, short* const w, int n, const int e) {
 static int dot_product (const short* const t, const short* const w, int n) {
   assert(n == ((n + 15) & -16));
   __m128i sum = _mm_setzero_si128 ();
-  while ((n -= 8) >= 0) { // Each loop sums eight products
-    __m128i tmp = _mm_madd_epi16 (*(__m128i *) &t[n], *(__m128i *) &w[n]); // t[n] * w[n] + t[n+1] * w[n+1]
-    tmp = _mm_srai_epi32 (tmp, 8); //                                        (t[n] * w[n] + t[n+1] * w[n+1]) >> 8
-    sum = _mm_add_epi32 (sum, tmp); //                                sum += (t[n] * w[n] + t[n+1] * w[n+1]) >> 8
+  while ((n -= 8) >= 0) {
+    __m128i tmp = _mm_madd_epi16 (*(__m128i *) &t[n], *(__m128i *) &w[n]);
+    tmp = _mm_srai_epi32 (tmp, 8);
+    sum = _mm_add_epi32 (sum, tmp);
   }
-  sum = _mm_add_epi32 (sum, _mm_srli_si128 (sum, 8)); // Add eight sums together ...
+  sum = _mm_add_epi32 (sum, _mm_srli_si128 (sum, 8));
   sum = _mm_add_epi32 (sum, _mm_srli_si128 (sum, 4));
-  return _mm_cvtsi128_si32 (sum); //                     ...  and scale back to integer
+  return _mm_cvtsi128_si32 (sum);
 }
 
 static void train (const short* const t, short* const w, int n, const int e) {
@@ -516,13 +438,13 @@ static void train (const short* const t, short* const w, int n, const int e) {
   if (e) {
     const __m128i one = _mm_set1_epi16 (1);
     const __m128i err = _mm_set1_epi16 (short(e));
-    while ((n -= 8) >= 0) { // Each iteration adjusts eight weights
-      __m128i tmp = _mm_adds_epi16 (*(__m128i *) &t[n], *(__m128i *) &t[n]); // t[n] * 2
-      tmp = _mm_mulhi_epi16 (tmp, err); //                                     (t[n] * 2 * err) >> 16
-      tmp = _mm_adds_epi16 (tmp, one); //                                     ((t[n] * 2 * err) >> 16) + 1
-      tmp = _mm_srai_epi16 (tmp, 1); //                                      (((t[n] * 2 * err) >> 16) + 1) >> 1
-      tmp = _mm_adds_epi16 (tmp, *(__m128i *) &w[n]); //                    ((((t[n] * 2 * err) >> 16) + 1) >> 1) + w[n]
-      *(__m128i *) &w[n] = tmp; //                                          save the new eight weights, bounded to +- 32K
+    while ((n -= 8) >= 0) {
+      __m128i tmp = _mm_adds_epi16 (*(__m128i *) &t[n], *(__m128i *) &t[n]);
+      tmp = _mm_mulhi_epi16 (tmp, err);
+      tmp = _mm_adds_epi16 (tmp, one);
+      tmp = _mm_srai_epi16 (tmp, 1);
+      tmp = _mm_adds_epi16 (tmp, *(__m128i *) &w[n]);
+      *(__m128i *) &w[n] = tmp;
     }
   }
 }
@@ -534,18 +456,18 @@ static void train (const short* const t, short* const w, int n, const int e) {
 static int dot_product (const short* const t, const short* const w, int n) {
   assert(n == ((n + 15) & -16));
   __m64 sum = _mm_setzero_si64 ();
-  while ((n -= 8) >= 0) { // Each loop sums eight products
-    __m64 tmp = _mm_madd_pi16 (*(__m64 *) &t[n], *(__m64 *) &w[n]); //   t[n] * w[n] + t[n+1] * w[n+1]
-    tmp = _mm_srai_pi32 (tmp, 8); //                                    (t[n] * w[n] + t[n+1] * w[n+1]) >> 8
-    sum = _mm_add_pi32 (sum, tmp); //                            sum += (t[n] * w[n] + t[n+1] * w[n+1]) >> 8
+  while ((n -= 8) >= 0) {
+    __m64 tmp = _mm_madd_pi16 (*(__m64 *) &t[n], *(__m64 *) &w[n]);
+    tmp = _mm_srai_pi32 (tmp, 8);
+    sum = _mm_add_pi32 (sum, tmp);
 
-    tmp = _mm_madd_pi16 (*(__m64 *) &t[n + 4], *(__m64 *) &w[n + 4]); // t[n+4] * w[n+4] + t[n+5] * w[n+5]
-    tmp = _mm_srai_pi32 (tmp, 8); //                                    (t[n+4] * w[n+4] + t[n+5] * w[n+5]) >> 8
-    sum = _mm_add_pi32 (sum, tmp); //                            sum += (t[n+4] * w[n+4] + t[n+5] * w[n+5]) >> 8
+    tmp = _mm_madd_pi16 (*(__m64 *) &t[n + 4], *(__m64 *) &w[n + 4]);
+    tmp = _mm_srai_pi32 (tmp, 8);
+    sum = _mm_add_pi32 (sum, tmp);
   }
-  sum = _mm_add_pi32 (sum, _mm_srli_si64 (sum, 32)); // Add eight sums together ...
-  const int retval = _mm_cvtsi64_si32 (sum); //                     ...  and scale back to integer
-  _mm_empty(); // Empty the multimedia state
+  sum = _mm_add_pi32 (sum, _mm_srli_si64 (sum, 32));
+  const int retval = _mm_cvtsi64_si32 (sum);
+  _mm_empty();
   return retval;
 }
 
@@ -554,27 +476,25 @@ static void train (const short* const t, short* const w, int n, const int e) {
   if (e) {
     const __m64 one = _mm_set1_pi16 (1);
     const __m64 err = _mm_set1_pi16 (short(e));
-    while ((n -= 8) >= 0) { // Each iteration adjusts eight weights
-      __m64 tmp = _mm_adds_pi16 (*(__m64 *) &t[n], *(__m64 *) &t[n]); //   t[n] * 2
-      tmp = _mm_mulhi_pi16 (tmp, err); //                                 (t[n] * 2 * err) >> 16
-      tmp = _mm_adds_pi16 (tmp, one); //                                 ((t[n] * 2 * err) >> 16) + 1
-      tmp = _mm_srai_pi16 (tmp, 1); //                                  (((t[n] * 2 * err) >> 16) + 1) >> 1
-      tmp = _mm_adds_pi16 (tmp, *(__m64 *) &w[n]); //                  ((((t[n] * 2 * err) >> 16) + 1) >> 1) + w[n]
-      *(__m64 *) &w[n] = tmp; //                                       save the new four weights, bounded to +- 32K
+    while ((n -= 8) >= 0) {
+      __m64 tmp = _mm_adds_pi16 (*(__m64 *) &t[n], *(__m64 *) &t[n]);
+      tmp = _mm_mulhi_pi16 (tmp, err);
+      tmp = _mm_adds_pi16 (tmp, one);
+      tmp = _mm_srai_pi16 (tmp, 1);
+      tmp = _mm_adds_pi16 (tmp, *(__m64 *) &w[n]);
+      *(__m64 *) &w[n] = tmp;
 
-      tmp = _mm_adds_pi16 (*(__m64 *) &t[n + 4], *(__m64 *) &t[n + 4]); // t[n+4] * 2
-      tmp = _mm_mulhi_pi16 (tmp, err); //                                 (t[n+4] * 2 * err) >> 16
-      tmp = _mm_adds_pi16 (tmp, one); //                                 ((t[n+4] * 2 * err) >> 16) + 1
-      tmp = _mm_srai_pi16 (tmp, 1); //                                  (((t[n+4] * 2 * err) >> 16) + 1) >> 1
-      tmp = _mm_adds_pi16 (tmp, *(__m64 *) &w[n + 4]); //              ((((t[n+4] * 2 * err) >> 16) + 1) >> 1) + w[n]
-      *(__m64 *) &w[n + 4] = tmp; //                                   save the new four weights, bounded to +- 32K
+      tmp = _mm_adds_pi16 (*(__m64 *) &t[n + 4], *(__m64 *) &t[n + 4]);
+      tmp = _mm_mulhi_pi16 (tmp, err);
+      tmp = _mm_adds_pi16 (tmp, one);
+      tmp = _mm_srai_pi16 (tmp, 1);
+      tmp = _mm_adds_pi16 (tmp, *(__m64 *) &w[n + 4]);
+      *(__m64 *) &w[n + 4] = tmp;
     }
-    _mm_empty(); // Empty the multimedia state
+    _mm_empty();
   }
 }
 #else
-// dot_product returns dot product t*w of n elements.  n is rounded
-// up to a multiple of 8.  Result is scaled down by 8 bits.
 int dot_product(short *t, short *w, int n) {
   int sum=0;
   n=(n+15)&-16;
@@ -582,11 +502,6 @@ int dot_product(short *t, short *w, int n) {
     sum+=(t[i]*w[i]+t[i+1]*w[i+1]) >> 8;
   return sum;
 }
-
-// Train neural network weights w[n] given inputs t[n] and err.
-// w[i] += t[i]*err, i=0..n-1.  t, w, err are signed 16 bits (+- 32K).
-// err is scaled 16 bits (representing +- 1/2).  w[i] is clamped to +- 32K
-// and rounded.  n is rounded up to a multiple of 8.
 
 void train(short *t, short *w, int n, int err) {
   n=(n+15)&-16;
@@ -604,15 +519,15 @@ unsigned int prediction_index = 0;
 float conversion_factor = 1.0 / 4095;
 
 class Mixer {
-  const int N, M, S;   // max inputs, max contexts, max context sets
-  Array<short, 16> tx; // N inputs from add()
-  Array<short, 16> wx; // N*M weights
-  Array<int> cxt;  // S contexts
-  int ncxt;        // number of contexts (0 to S)
-  int base;        // offset of next context
-  int nx;          // Number of inputs in tx, 0 to N
-  Array<int> pr;   // last result (scaled 12 bits)
-  Mixer* mp;       // points to a Mixer to combine results
+  const int N, M, S;
+  Array<short, 16> tx;
+  Array<short, 16> wx;
+  Array<int> cxt;
+  int ncxt;
+  int base;
+  int nx;
+  Array<int> pr;
+  Mixer* mp;
 public:
   Mixer(int n, int m, int s=1, int w=0);
 
@@ -685,15 +600,6 @@ Mixer::Mixer(int n, int m, int s, int w):
 
 //////////////////////////// APM //////////////////////////////
 
-// APM maps a probability and a context into a new probability
-// that bit y will next be 1.  After each guess it updates
-// its state to improve future guesses.  Methods:
-//
-// APM a(N) creates with N contexts, uses 66*N bytes memory.
-// a.p(pr, cx, rate=7) returned adjusted probability in context cx (0 to
-//   N-1).  rate determines the learning rate (smaller = faster, default 7).
-//   Probabilities are scaled 12 bits (0-4095).
-
 class APM {
   int index;     // last p, context
   const int N;   // number of contexts
@@ -721,17 +627,10 @@ APM::APM(int n): index(0), N(n), t(n*33) {
 
 //////////////////////////// StateMap //////////////////////////
 
-// A StateMap maps a nonstationary counter state to a probability.
-// After each mapping, the mapping is adjusted to improve future
-// predictions.  Methods:
-//
-// sm.p(cx) converts state cx (0-255) to a probability (0-4095).
-
-// Counter state -> probability * 4096
 class StateMap {
 protected:
   int cxt;  // context
-  Array<U16> t; // 256 states -> probability * 64K
+  Array<U16> t;
 public:
   StateMap();
   int p(int cx) {
@@ -753,7 +652,6 @@ StateMap::StateMap(): cxt(0), t(256) {
 
 //////////////////////////// hash //////////////////////////////
 
-// Hash 2-5 ints.
 inline U32 hash(U32 a, U32 b, U32 c=0xffffffff, U32 d=0xffffffff,
     U32 e=0xffffffff) {
   U32 h=a*200002979u+b*30005491u+c*50004239u+d*70004807u+e*110002499u;
@@ -762,32 +660,13 @@ inline U32 hash(U32 a, U32 b, U32 c=0xffffffff, U32 d=0xffffffff,
 
 ///////////////////////////// BH ////////////////////////////////
 
-// A BH maps a 32 bit hash to an array of B bytes (checksum and B-2 values)
-//
-// BH bh(N); creates N element table with B bytes each.
-//   N must be a power of 2.  The first byte of each element is
-//   reserved for a checksum to detect collisions.  The remaining
-//   B-1 bytes are values, prioritized by the first value.  This
-//   byte is 0 to mark an unused element.
-//   
-// bh[i] returns a pointer to the i'th element, such that
-//   bh[i][0] is a checksum of i, bh[i][1] is the priority, and
-//   bh[i][2..B-1] are other values (0-255).
-//   The low lg(n) bits as an index into the table.
-//   If a collision is detected, up to M nearby locations in the same
-//   cache line are tested and the first matching checksum or
-//   empty element is returned.
-//   If no match or empty element is found, then the lowest priority
-//   element is replaced.
-
-// 2 byte checksum with LRU replacement (except last 2 by priority)
 template <int B> class BH {
-  enum {M=8};  // search limit
-  Array<U8, 64> t; // elements
-  U32 n; // size-1
+  enum {M=8};
+  Array<U8, 64> t;
+  U32 n;
 public:
   BH(int i): t(i*B), n(i-1) {
-    assert(B>=2 && i>0 && (i&(i-1))==0); // size a power of 2?
+    assert(B>=2 && i>0 && (i&(i-1))==0);
   }
   U8* operator[](U32 i);
 };
@@ -803,14 +682,13 @@ inline  U8* BH<B>::operator[](U32 i) {
     p=&t[(i+j)*B];
     cp=(U16*)p;
     if (p[2]==0) *cp=chk;
-    if (*cp==chk) break;  // found
+    if (*cp==chk) break;
   }
-  if (j==0) return p+1;  // front
-  static U8 tmp[B];  // element to move to front
+  if (j==0) return p+1;
+  static U8 tmp[B];
   if (j==M) {
     --j;
     memset(tmp, 0, B);
-    //*(U16*)tmp=chk;
     tmp[0] = chk;
     tmp[1] = chk>>8;
     if (M>2 && t[(i+j)*B+2]>t[(i+j-1)*B+2]) --j;
@@ -822,35 +700,7 @@ inline  U8* BH<B>::operator[](U32 i) {
 }
 
 /////////////////////////// ContextMap /////////////////////////
-//
-// A ContextMap maps contexts to a bit histories and makes predictions
-// to a Mixer.  Methods common to all classes:
-//
-// ContextMap cm(M, C); creates using about M bytes of memory (a power
-//   of 2) for C contexts.
-// cm.set(cx);  sets the next context to cx, called up to C times
-//   cx is an arbitrary 32 bit value that identifies the context.
-//   It should be called before predicting the first bit of each byte.
-// cm.mix(m) updates Mixer m with the next prediction.  Returns 1
-//   if context cx is found, else 0.  Then it extends all the contexts with
-//   global bit y.  It should be called for every bit:
-//
-//     if (bpos==0) 
-//       for (int i=0; i<C; ++i) cm.set(cxt[i]);
-//     cm.mix(m);
-//
-// The different types are as follows:
-//
-// - RunContextMap.  The bit history is a count of 0-255 consecutive
-//     zeros or ones.  Uses 4 bytes per whole byte context.  C=1.
-//     The context should be a hash.
-// - SmallStationaryContextMap.  0 <= cx < M/512.
-//     The state is a 16-bit probability that is adjusted after each
-//     prediction.  C=1.
-// - ContextMap.  For large contexts, C >= 1.  Context need not be hashed.
 
-// Predict to mixer m from bit history state s, using sm to map s to
-// a probability.
 inline int mix2(Mixer& m, int s, StateMap& sm) {
   int p1=sm.p(s);
   int n0=-!nex(s,2);
@@ -866,8 +716,6 @@ inline int mix2(Mixer& m, int s, StateMap& sm) {
   return s>0;
 }
 
-// A RunContextMap maps a context into the next byte and a repeat
-// count up to M.  Size should be a power of 2.  Memory usage is 3M/4.
 class RunContextMap {
   BH<4> t;
   U8* cp;
@@ -890,8 +738,6 @@ public:
   }
 };
 
-// Context is looked up directly.  m=size is power of 2 in bytes.
-// Context should be < m/512.  High bits are discarded.
 class SmallStationaryContextMap {
   Array<U16> t;
   int cxt;
@@ -913,80 +759,31 @@ public:
   }
 };
 
-// Context map for large contexts.  Most modeling uses this type of context
-// map.  It includes a built in RunContextMap to predict the last byte seen
-// in the same context, and also bit-level contexts that map to a bit
-// history state.
-//
-// Bit histories are stored in a hash table.  The table is organized into
-// 64-byte buckets alinged on cache page boundaries.  Each bucket contains
-// a hash chain of 7 elements, plus a 2 element queue (packed into 1 byte) 
-// of the last 2 elements accessed for LRU replacement.  Each element has
-// a 2 byte checksum for detecting collisions, and an array of 7 bit history
-// states indexed by the last 0 to 2 bits of context.  The buckets are indexed
-// by a context ending after 0, 2, or 5 bits of the current byte.  Thus, each
-// byte modeled results in 3 main memory accesses per context, with all other
-// accesses to cache.
-//
-// On bits 0, 2 and 5, the context is updated and a new bucket is selected.
-// The most recently accessed element is tried first, by comparing the
-// 16 bit checksum, then the 7 elements are searched linearly.  If no match
-// is found, then the element with the lowest priority among the 5 elements 
-// not in the LRU queue is replaced.  After a replacement, the queue is
-// emptied (so that consecutive misses favor a LFU replacement policy).
-// In all cases, the found/replaced element is put in the front of the queue.
-//
-// The priority is the state number of the first element (the one with 0
-// additional bits of context).  The states are sorted by increasing n0+n1
-// (number of bits seen), implementing a LFU replacement policy.
-//
-// When the context ends on a byte boundary (bit 0), only 3 of the 7 bit
-// history states are used.  The remaining 4 bytes implement a run model
-// as follows: <count:7,d:1> <b1> <unused> <unused> where <b1> is the last byte
-// seen, possibly repeated.  <count:7,d:1> is a 7 bit count and a 1 bit
-// flag (represented by count * 2 + d).  If d=0 then <count> = 1..127 is the 
-// number of repeats of <b1> and no other bytes have been seen.  If d is 1 then 
-// other byte values have been seen in this context prior to the last <count> 
-// copies of <b1>.
-//
-// As an optimization, the last two hash elements of each byte (representing
-// contexts with 2-7 bits) are not updated until a context is seen for
-// a second time.  This is indicated by <count,d> = <1,0> (2).  After update,
-// <count,d> is updated to <2,0> or <1,1> (4 or 3).
-
 class ContextMap {
-  const int C;  // max number of contexts
-  class E {  // hash element, 64 bytes
-    U16 chk[7];  // byte context checksums
-    U8 last;     // last 2 accesses (0-6) in low, high nibble
+  const int C;
+  class E {
+    U16 chk[7];
+    U8 last;
   public:
-    U8 bh[7][7]; // byte context, 3-bit context -> bit history state
-      // bh[][0] = 1st bit, bh[][1,2] = 2nd bit, bh[][3..6] = 3rd bit
-      // bh[][0] is also a replacement priority, 0 = empty
-    U8* get(U16 chk);  // Find element (0-6) matching checksum.
-      // If not found, insert or replace lowest priority (not last).
+    U8 bh[7][7];
+    U8* get(U16 chk);
   };
-  Array<E, 64> t;  // bit histories for bits 0-1, 2-4, 5-7
-    // For 0-1, also contains a run count in bh[][4] and value in bh[][5]
-    // and pending update count in bh[7]
-  Array<U8*> cp;   // C pointers to current bit history
-  Array<U8*> cp0;  // First element of 7 element array containing cp[i]
-  Array<U32> cxt;  // C whole byte contexts (hashes)
-  Array<U8*> runp; // C [0..3] = count, value, unused, unused
-  StateMap *sm;    // C maps of state -> p
-  int cn;          // Next context to set by set()
-  void update(U32 cx, int c);  // train model that context cx predicts c
+  Array<E, 64> t;
+  Array<U8*> cp;
+  Array<U8*> cp0;
+  Array<U32> cxt;
+  Array<U8*> runp;
+  StateMap *sm;
+  int cn;
+  void update(U32 cx, int c);
   int mix1(Mixer& m, int cc, int bp, int c1, int y1);
-    // mix() with global context passed as arguments to improve speed.
 public:
-  ContextMap(int m, int c=1);  // m = memory in bytes, a power of 2, C = c
+  ContextMap(int m, int c=1);
   ~ContextMap();
-  void set(U32 cx, int next=-1);   // set next whole byte context to cx
-    // if next is 0 then set order does not matter
+  void set(U32 cx, int next=-1);
   int mix(Mixer& m) {return mix1(m, c0, bpos, buf(1), y);}
 };
 
-// Find or create hash element matching checksum ch
 inline U8* ContextMap::E::get(U16 ch) {
   if (chk[last&15]==ch) return &bh[last&15][0];
   int b=0xffff, bi=0;
@@ -998,7 +795,6 @@ inline U8* ContextMap::E::get(U16 ch) {
   return last=0xf0|bi, chk[bi]=ch, (U8*)memset(&bh[bi][0], 0, 7);
 }
 
-// Construct using m bytes of memory for c contexts
 ContextMap::ContextMap(int m, int c): C(c), t(m>>6), cp(c), cp0(c),
     cxt(c), runp(c), cn(0) {
   assert(m>=64 && (m&m-1)==0);  // power of 2?
@@ -1014,20 +810,16 @@ ContextMap::~ContextMap() {
   delete[] sm;
 }
 
-// Set the i'th context to cx
 inline void ContextMap::set(U32 cx, int next) {
   int i=cn++;
   i&=next;
   assert(i>=0 && i<C);
-  cx=cx*987654323+i;  // permute (don't hash) cx to spread the distribution
+  cx=cx*987654323+i;
   cx=cx<<16|cx>>16;
   cxt[i]=cx*123456791+i;
 }
 
-// Update the model with bit y1, and predict next bit to mixer m.
-// Context: cc=c0, bp=bpos, c1=buf(1), y1=y.
 int ContextMap::mix1(Mixer& m, int cc, int bp, int c1, int y1) {
-
   // Update model with y
   int result=0;
   for (int i=0; i<cn; ++i) {
@@ -1035,7 +827,7 @@ int ContextMap::mix1(Mixer& m, int cc, int bp, int c1, int y1) {
       assert(cp[i]>=&t[0].bh[0][0] && cp[i]<=&t[t.size()-1].bh[6][6]);
       assert((long(cp[i])&63)>=15);
       int ns=nex(*cp[i], y1);
-      if (ns>=204 && rnd() << ((452-ns)>>3)) ns-=4;  // probabilistic increment
+      if (ns>=204 && rnd() << ((452-ns)>>3)) ns-=4;
       *cp[i]=ns;
     }
 
@@ -1064,11 +856,11 @@ int ContextMap::mix1(Mixer& m, int cc, int bp, int c1, int y1) {
           cp0[i][6]=0;
         }
         // Update run count of previous context
-        if (runp[i][0]==0)  // new context
+        if (runp[i][0]==0)
           runp[i][0]=2, runp[i][1]=c1;
-        else if (runp[i][1]!=c1)  // different byte in context
+        else if (runp[i][1]!=c1)
           runp[i][0]=1, runp[i][1]=c1;
-        else if (runp[i][0]<254)  // same byte in context
+        else if (runp[i][0]<254)
           runp[i][0]+=2;
         else if (runp[i][0]==255)
           runp[i][0]=128;
@@ -1077,9 +869,9 @@ int ContextMap::mix1(Mixer& m, int cc, int bp, int c1, int y1) {
     }
 
     // predict from last byte in context
-    int rc=runp[i][0];  // count*2, +1 if 2 different bytes seen
+    int rc=runp[i][0];
     if ((runp[i][1]+256)>>(8-bp)==cc) {
-      int b=((runp[i][1]>>(7-bp))&1)*2-1;  // predicted bit + for 1, - for 0
+      int b=((runp[i][1]>>(7-bp))&1)*2-1;
       int c=ilog(rc+1)<<(2+(~rc&1));
       m.add(b*c);
     }
@@ -1093,21 +885,14 @@ int ContextMap::mix1(Mixer& m, int cc, int bp, int c1, int y1) {
   return result;
 }
 
-//////////////////////////// Models //////////////////////////////
-
-// All of the models below take a Mixer as a parameter and write
-// predictions to it.
-
 //////////////////////////// matchModel ///////////////////////////
 
-// matchModel() finds the longest matching context and returns its length
-
 int matchModel(Mixer& m) {
-  const int MAXLEN=65534;  // longest allowed match + 1
-  static Array<int> t(MEM);  // hash table of pointers to contexts
-  static int h=0;  // hash of last 7 bytes
-  static int ptr=0;  // points to next byte of match if any
-  static int len=0;  // length of match, or 0 if no match
+  const int MAXLEN=65534;
+  static Array<int> t(MEM);
+  static int h=0;
+  static int ptr=0;
+  static int len=0;
   static int result=0;
   
   static SmallStationaryContextMap scm1(0x20000);
@@ -1141,15 +926,11 @@ int matchModel(Mixer& m) {
 
 //////////////////////////// picModel //////////////////////////
 
-// Model a 1728 by 2376 2-color CCITT bitmap image, left to right scan,
-// MSB first (216 bytes per row, 513216 bytes total).  Insert predictions
-// into m.
-
 void picModel(Mixer& m) {
-  static U32 r0, r1, r2, r3;  // last 4 rows, bit 8 is over current pixel
-  static Array<U8> t(0x10200);  // model: cxt -> state
-  const int N=3;  // number of contexts
-  static int cxt[N];  // contexts
+  static U32 r0, r1, r2, r3;
+  static Array<U8> t(0x10200);
+  const int N=3;
+  static int cxt[N];
   static StateMap sm[N];
 
   // update the model
@@ -1177,17 +958,16 @@ U32 WRT_mpw[16]= { 4, 4, 3, 2, 2, 2, 1, 1,  1, 1, 1, 1, 0, 0, 0, 0 };
 U32 WRT_mtt[16]= { 0, 0, 1, 2, 3, 4, 5, 5,  6, 6, 6, 6, 7, 7, 7, 7 };
 int col=0;
 
-// Model English text (words and columns/end of line)
 static U32 frstchar=0,spafdo=0,spaces=0,spacecount=0, words=0,wordcount=0,wordlen=0,wordlen1=0;
 void wordModel(Mixer& m) {
-    static U32 word0=0, word1=0, word2=0, word3=0, word4=0, word5=0;  // hashes
+    static U32 word0=0, word1=0, word2=0, word3=0, word4=0, word5=0;
     static U32 xword0=0,xword1=0,xword2=0,cword0=0,ccword=0;
-    static U32 number0=0, number1=0;  // hashes
-    static U32 text0=0;  // hash stream of letters
+    static U32 number0=0, number1=0;
+    static U32 text0=0;
     static ContextMap cm(MEM*31, 44);
-    static int nl1=-3, nl=-2;  // previous, current newline position
+    static int nl1=-3, nl=-2;
     static U32 mask = 0;
-    static Array<int> wpos(0x10000);  // last position of word
+    static Array<int> wpos(0x10000);
     static int w=0;
     // Update word hashes
     if (bpos==0) {
@@ -1200,7 +980,7 @@ void wordModel(Mixer& m) {
         if (c>='A' && c<='Z') c+='a'-'A';
         if ((c>='a' && c<='z') || c==1 || c==2 ||(c>=128 &&(b2!=3))) {
             ++words, ++wordcount;
-            word0^=hash(word0, c,0);//word0=word0*263*32+c;
+            word0^=hash(word0, c,0);
             text0=text0*997*16+c;
             wordlen++;
             wordlen=min(wordlen,45);
@@ -1209,11 +989,11 @@ void wordModel(Mixer& m) {
         }
         else {
             if (word0) {
-                word5=word4;//*23;
-                word4=word3;//*19;
-                word3=word2;//*17;
-                word2=word1;//*13;
-                word1=word0;//*11;
+                word5=word4;
+                word4=word3;
+                word3=word2;
+                word2=word1;
+                word1=word0;
                 wordlen1=wordlen;
                  wpos[w]=blpos;
                 if (c==':'|| c=='=') cword0=word0;
@@ -1230,7 +1010,6 @@ void wordModel(Mixer& m) {
             else { ++spafdo; spafdo=min(63,spafdo); }
         }
         if (c>='0' && c<='9') {
-            //number0=number0*263*32+c;
             number0^=hash(number0, c,1);
         }
         else if (number0) {
@@ -1242,8 +1021,6 @@ void wordModel(Mixer& m) {
         int above=buf[nl1+col]; // text column context
         if (col<=2) frstchar=(col==2?min(c,96):0);
         if (frstchar=='[' && c==32)    {if(buf(3)==']' || buf(4)==']' ) frstchar=96,xword0=0;}
-    //cm.set(hash(532,spafdo, col));
-//256+ hash 513+ none
         cm.set(hash(513,spafdo, spaces,ccword));
         cm.set(hash(514,frstchar, c));
         cm.set(hash(515,col, frstchar));
@@ -1256,28 +1033,23 @@ void wordModel(Mixer& m) {
         cm.set(hash(260,word0, number1));
 
        
-//    cm.set(wordlen<<16|c);
         cm.set(hash(518,wordlen1,col));
         cm.set(hash(519,c,spacecount/2));
         U32 h=wordcount*64+spacecount;
         cm.set(hash(520,c,h,ccword));
          cm.set(hash(517,frstchar,h));
-//    cm.set(h); // 
         cm.set(hash(521,h,spafdo));
 
         U32 d=c4&0xf0ff;
         cm.set(hash(522,d,frstchar,ccword));
 
         h=word0*271;
-        //cm.set(hash(261,h, ccword));
         h=h+buf(1);
         cm.set(hash(262,h, 0));
         cm.set(hash(263,word0, 0));
-        //cm.set(word1+(c==32));
         cm.set(hash(264,h, word1));
         cm.set(hash(265,word0, word1));
         cm.set(hash(266,h, word1,word2));
-        //cm.set(hash(267,text0&0xffffff,0));
         cm.set(hash(268,text0&0xfffff, 0));
           cm.set(hash(269,word0, xword0));
           cm.set(hash(270,word0, xword1));
@@ -1290,8 +1062,6 @@ void wordModel(Mixer& m) {
         cm.set(hash(276,h, word3));
         cm.set(hash(277,h, word4));
         cm.set(hash(278,h, word5));
-//        cm.set(buf(1)|buf(3)<<8|buf(5)<<16);
-//        cm.set(buf(2)|buf(4)<<8|buf(6)<<16);
         cm.set(hash(279,h, word1,word3));
         cm.set(hash(280,h, word2,word3));
         if (f) {
@@ -1305,7 +1075,6 @@ void wordModel(Mixer& m) {
         cm.set(hash(524,buf(1),above));
         cm.set(hash(525,col,buf(1)));
         cm.set(hash(526,col,c==32));
-        //cm.set(hash(527,col,0));
         cm.set(hash(281, w, llog(blpos-wpos[w])>>4));
         cm.set(hash(282,buf(1),llog(blpos-wpos[w])>>2));
    
@@ -1324,7 +1093,6 @@ void wordModel(Mixer& m) {
  
     cm.set(hash(528,mask,0));
     cm.set(hash(529,mask,buf(1)));
-    //cm.set((mask&0xff)|col<<8);
     cm.set(hash(530,mask,buf(2),buf(3)));
     cm.set(hash(531,mask&0x1ff,f4&0x00fff0));
     }
@@ -1404,14 +1172,11 @@ void nestModel(Mixer& m)
 
 //////////////////////////// recordModel ///////////////////////
 
-// Model 2-D data with fixed record length.  Also order 1-2 models
-// that include the distance to the last match.
-
 void recordModel(Mixer& m) {
   static int cpos1[256] , cpos2[256], cpos3[256], cpos4[256];
-  static int wpos1[0x10000]; // buf(1..2) -> last position
-  static int rlen=2, rlen1=3, rlen2=4;  // run length and 2 candidates
-  static int rcount1=0, rcount2=0;  // candidate counts
+  static int wpos1[0x10000];
+  static int rlen=2, rlen1=3, rlen2=4;
+  static int rcount1=0, rcount2=0;
   static ContextMap cm(32768, 3), cn(32768/2, 3), co(32768*2, 3), cp(MEM, 3);
 
   // Find record length
@@ -1446,9 +1211,6 @@ void recordModel(Mixer& m) {
     int col=pos%rlen;
     co.set(buf(1)<<8|buf(rlen));
 
-    //cp.set(w*16);
-    //cp.set(d*32);
-    //cp.set(c*64);
     cp.set(rlen|buf(rlen)<<10|col<<18);
     cp.set(rlen|buf(1)<<10|col<<18);
     cp.set(col|rlen<<12);
@@ -1468,7 +1230,7 @@ void recordModel(Mixer& m) {
 
 void recordModel1(Mixer& m) {
   static int cpos1[256];
-  static int wpos1[0x10000]; // buf(1..2) -> last position
+  static int wpos1[0x10000];
   static ContextMap cm(32768, 2), cn(32768/2, 4+1), co(32768*4, 4),cp(32768*2, 3), cq(32768*2, 3);
 
   // Find record length
@@ -1510,8 +1272,6 @@ void recordModel1(Mixer& m) {
 }
 
 //////////////////////////// sparseModel ///////////////////////
-
-// Model order 1-2 contexts with gaps.
 
 void sparseModel(Mixer& m, int seenbefore, int howmany) {
   static ContextMap cm(MEM*2, 40+2);
@@ -1609,8 +1369,6 @@ void sparseModel1(Mixer& m, int seenbefore, int howmany) {
 
 //////////////////////////// distanceModel ///////////////////////
 
-// Model for modelling distances between symbols
-
 void distanceModel(Mixer& m) {
   static ContextMap cr(MEM, 3);
   if( bpos == 0 ){
@@ -1628,11 +1386,6 @@ void distanceModel(Mixer& m) {
 
 //////////////////////////// exeModel /////////////////////////
 
-// Model x86 code.  The contexts are sparse containing only those
-// bits relevant to parsing (2 prefixes, opcode, and mod and r/m fields
-// of modR/M byte).
-
-// Get context at buf(i) relevant to parsing 32-bit x86 code
 U32 execxt(int i, int x=0) {
   int prefix=(buf(i+2)==0x0f)+2*(buf(i+2)==0x66)+3*(buf(i+2)==0x67)
     +4*(buf(i+3)==0x0f)+8*(buf(i+3)==0x66)+12*(buf(i+3)==0x67);
@@ -1652,9 +1405,6 @@ void exeModel(Mixer& m) {
 }
 
 //////////////////////////// indirectModel /////////////////////
-
-// The context is a byte string history that occurs within a
-// 1 or 2 byte context.
 
 void indirectModel(Mixer& m) {
   static ContextMap cm(MEM, 12);
@@ -1696,29 +1446,15 @@ void indirectModel(Mixer& m) {
 
 //////////////////////////// dmcModel //////////////////////////
 
-// Model using DMC.  The bitwise context is represented by a state graph,
-// initilaized to a bytewise order 1 model as in 
-// http://plg.uwaterloo.ca/~ftp/dmc/dmc.c but with the following difference:
-// - It uses integer arithmetic.
-// - The threshold for cloning a state increases as memory is used up.
-// - Each state maintains both a 0,1 count and a bit history (as in a
-//   context model).  The 0,1 count is best for stationary data, and the
-//   bit history for nonstationary data.  The bit history is mapped to
-//   a probability adaptively using a StateMap.  The two computed probabilities
-//   are combined.
-// - When memory is used up the state graph is reinitialized to a bytewise
-//   order 1 context as in the original DMC.  However, the bit histories
-//   are not cleared.
-
-struct DMCNode {  // 12 bytes
-  unsigned int nx[2];  // next pointers
-  U8 state;  // bit history
-  unsigned int c0:12, c1:12;  // counts * 256
+struct DMCNode {
+  unsigned int nx[2];
+  U8 state;
+  unsigned int c0:12, c1:12;
 };
 
 void dmcModel(Mixer& m) {
-  static int top=0, curr=0;  // allocated, current node
-  static Array<DMCNode> t(MEM*2);  // state graph
+  static int top=0, curr=0;
+  static Array<DMCNode> t(MEM*2);
   static StateMap sm;
   static int threshold=256;
 
@@ -1737,15 +1473,14 @@ void dmcModel(Mixer& m) {
       t[top].state=t[next].state;
       t[curr].nx[y]=top;
       ++top;
-      if (top==(t.size()*4)/8) { //        5/8, 4/8, 3/8
+      if (top==(t.size()*4)/8) {
         threshold=512;
-      } else if (top==(t.size()*6)/8) { // 6/8, 6/8, 7/8
+      } else if (top==(t.size()*6)/8) {
         threshold=768;
       }
     }
   }
 
-  // Initialize to a bytewise order 1 model at startup or when flushing memory
   if (top==t.size() && bpos==1) top=0;
   if (top==0) {
     assert(t.size()>=65536);
@@ -1768,7 +1503,6 @@ void dmcModel(Mixer& m) {
     threshold=256;
   }
 
-  // update count, state
    if (y) {
     if (t[curr].c1<=3840) t[curr].c1+=256;
    } else  if (t[curr].c0<=3840)   t[curr].c0+=256;
@@ -1788,8 +1522,6 @@ void dmcModel(Mixer& m) {
 
 typedef enum {DEFAULT, JPEG, EXE, TEXT} Filetype;
 
-// This combines all the context models with a Mixer.
-
 U32 last_prediction = 2048;
 
 int contextModel2() {
@@ -1802,7 +1534,6 @@ int contextModel2() {
   m.update();
   m.add(64);
 
-  // Test for special file types
   int ismatch=ilog(matchModel(m));  // Length of longest matching context
 
   // Normal model
@@ -1861,11 +1592,6 @@ int contextModel2() {
 
 
 //////////////////////////// Predictor /////////////////////////
-
-// A Predictor estimates the probability that the next bit of
-// uncompressed data is 1.  Methods:
-// p() returns P(1) as a 12 bit number (0-4095).
-// update(y) trains the predictor with the actual bit (0 or 1).
 
 class Predictor {
   int pr;  // next prediction
