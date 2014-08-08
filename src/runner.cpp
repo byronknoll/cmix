@@ -90,7 +90,7 @@ int main(int argc, char* argv[]) {
   std::string temp_path = output_path;
   if (enable_preprocess) temp_path += ".cmix.temp";
 
-  unsigned long long input_bytes, output_bytes;
+  unsigned long long input_bytes = 0, output_bytes = 0;
   Predictor p;
 
   if (argv[1][1]=='c') {
