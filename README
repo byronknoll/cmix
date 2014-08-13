@@ -1,7 +1,13 @@
-cmix version 4
+cmix version 5
 http://www.byronknoll.com/cmix.html
-Released by Byron Knoll on July 23, 2014.
+Released by Byron Knoll on August 13, 2014.
 cmix is free software distributed under the GNU General Public License.
+
+Changes from version 4 to version 5:
+- Added dictionary pretraining
+- Removed dictionary from cmix binary
+- Integrated some code from paq8pxd_v12 into paq8l
+- Minor refactoring
 
 Changes from version 3 to version 4:
 - Added an additional mixer context (longest match length)
