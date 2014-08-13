@@ -72,6 +72,8 @@ int main(int argc, char* argv[]) {
       (argv[1][1] != 'c' && argv[1][1] != 'd')) {
     return fail();
   }
+  bool compressing = false;
+  if (argv[1][1] == 'c') compressing = true;
 
   clock_t start = clock();
 
@@ -93,7 +95,7 @@ int main(int argc, char* argv[]) {
   unsigned long long input_bytes = 0, output_bytes = 0;
   Predictor p;
 
-  if (argv[1][1]=='c') {
+  if (compressing) {
     if (enable_preprocess) {
       FILE* data_in = fopen(input_path.c_str(), "rb");
       if (!data_in) return fail();
@@ -160,5 +162,13 @@ int main(int argc, char* argv[]) {
   printf("\r%lld bytes -> %lld bytes in %1.2f s.\n",
       input_bytes, output_bytes,
       ((double)clock() - start) / CLOCKS_PER_SEC);
+
+  if (compressing) {
+    double cross_entropy = output_bytes;
+    cross_entropy /= input_bytes;
+    cross_entropy *= 8;
+    printf("cross entropy: %.3f\n", cross_entropy);
+  }
+
   return 0;
 }
