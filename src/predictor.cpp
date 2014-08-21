@@ -68,7 +68,7 @@ void Predictor::AddPAQ8HP() {
 
 void Predictor::AddPAQ8L() {
   auxiliary_.push_back(models_.size());
-  PAQ8L* paq = new PAQ8L(10);
+  PAQ8L* paq = new PAQ8L(11);
   Add(paq);
   const std::vector<float>& predictions = paq->ModelPredictions();
   for (unsigned int i = 0; i < predictions.size(); ++i) {
