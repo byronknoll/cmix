@@ -84,21 +84,21 @@ typedef enum {DEFAULT, JPEG, EXE, BINTEXT, TEXT } Filetype;
 
 template <class T, int ALIGN=0> class Array {
 private:
-  int n;
-  int reserved;
+  U32 n;
+  U32 reserved;
   char *ptr;
   T* data;
-  void create(int i);
+  void create(U32 i);
 public:
-  explicit Array(int i=0) {create(i);}
+  explicit Array(U32 i=0) {create(i);}
   ~Array();
-  T& operator[](int i) {
+  T& operator[](U32 i) {
     return data[i];
   }
-  const T& operator[](int i) const {
+  const T& operator[](U32 i) const {
     return data[i];
   }
-  int size() const {return n;}
+  U32 size() const {return n;}
   void resize(int i);
   void pop_back() {if (n>0) --n;}
   void push_back(const T& x);
@@ -122,17 +122,17 @@ template<class T, int ALIGN> void Array<T, ALIGN>::resize(int i) {
   }
 }
 
-template<class T, int ALIGN> void Array<T, ALIGN>::create(int i) {
+template<class T, int ALIGN> void Array<T, ALIGN>::create(U32 i) {
   n=reserved=i;
   if (i<=0) {
     data=0;
     ptr=0;
     return;
   }
-  const int sz=ALIGN+n*sizeof(T);
+  const U32 sz=ALIGN+n*sizeof(T);
   ptr = (char*)calloc(sz, 1);
   if (!ptr) quit("Out of memory");
-  data = (ALIGN ? (T*)(ptr+ALIGN-(((long)ptr)&(ALIGN-1))) : (T*)ptr);
+  data = (ALIGN ? (T*)(ptr+ALIGN-(((long long)ptr)&(ALIGN-1))) : (T*)ptr);
   assert((char*)data>=ptr && (char*)data<=ptr+ALIGN);
 }
 
@@ -194,20 +194,20 @@ int pos;
 class Buf {
   Array<U8> b;
 public:
-  Buf(int i=0): b(i) {}
-  void setsize(int i) {
+  Buf(U32 i=0): b(i) {}
+  void setsize(U32 i) {
     if (!i) return;
     assert(i>0 && (i&(i-1))==0);
     b.resize(i);
   }
-  U8& operator[](int i) {
+  U8& operator[](U32 i) {
     return b[i&(b.size()-1)];
   }
-  int operator()(int i) const {
+  int operator()(U32 i) const {
     assert(i>0);
     return b[(pos-i)&(b.size()-1)];
   }
-  int size() const {
+  U32 size() const {
     return b.size();
   }
 };
@@ -755,7 +755,7 @@ class SmallStationaryContextMap {
 public:
   SmallStationaryContextMap(int m, int c): t(m/2), cxt(0), mulc(c) {
     assert((m/2&m/2-1)==0); // power of 2?
-    for (int i=0; i<t.size(); ++i)
+    for (U32 i=0; i<t.size(); ++i)
       t[i]=32768;
     cp=&t[0];
   }
@@ -791,7 +791,7 @@ class ContextMap {
   void update(U32 cx, int c);
   int mix1(Mixer& m, int cc, int c1, int y1);
 public:
-  ContextMap(int m, int c=1);  // m = memory in bytes, a power of 2, C = c
+  ContextMap(U32 m, int c=1);  // m = memory in bytes, a power of 2, C = c
   ~ContextMap();
   void set(U32 cx);   // set next whole byte context
   int mix(Mixer& m) {return mix1(m, c0, b1, y);}
@@ -811,7 +811,7 @@ inline U8* ContextMap::E::get(U16 ch, int j) {
 }
 
 // Construct using m bytes of memory for c contexts
-ContextMap::ContextMap(int m, int c): C(c), Sz((m>>6)-1), t(m>>6), cp(c), cp0(c),
+ContextMap::ContextMap(U32 m, int c): C(c), Sz((m>>6)-1), t(m>>6), cp(c), cp0(c),
     cxt(c), runp(c), cn(0) {
   assert(m>=64 && (m&m-1)==0);  // power of 2?
   assert(sizeof(E)==64);
@@ -842,7 +842,7 @@ int ContextMap::mix1(Mixer& m, int cc, int c1, int y1) {
 	U8 *cpi=cp[i];
     if (cpi) {
       assert(cpi>=&t[0].bh[0][0] && cpi<=&t[Sz].bh[6][6]);
-      assert((long(cpi)&63)>=15);
+      assert(((long long)(cpi)&63)>=15);
       int ns=nex(*cpi, y1);
       if (ns>=204 && (rnd() << ((452-ns)>>3))) ns-=4; // probabilistic increment
       *cpi=ns;

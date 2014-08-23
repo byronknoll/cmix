@@ -58,7 +58,7 @@ void Predictor::Add(int layer, Mixer* mixer) {
 
 void Predictor::AddPAQ8HP() {
   auxiliary_.push_back(models_.size());
-  PAQ8HP* paq = new PAQ8HP(10);
+  PAQ8HP* paq = new PAQ8HP(11);
   Add(paq);
   const std::vector<float>& predictions = paq->ModelPredictions();
   for (unsigned int i = 0; i < predictions.size(); ++i) {
