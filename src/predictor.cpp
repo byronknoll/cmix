@@ -6,7 +6,6 @@
 #include "models/match.h"
 #include "models/dmc.h"
 #include "models/ppm.h"
-#include "models/ppm2.h"
 #include "models/paq8l.h"
 #include "models/paq8hp.h"
 #include "contexts/context-hash.h"
@@ -77,12 +76,11 @@ void Predictor::AddPAQ8L() {
 }
 
 void Predictor::AddPPM() {
-  Add(new PPM(7, manager_.bit_context_, 100, 100000000));
-  Add(new PPM2(7, manager_.bit_context_, 60000000));
+  Add(new PPM(7, manager_.bit_context_, 100, 80000000));
 }
 
 void Predictor::AddDMC() {
-  Add(new DMC(0.02, 100000000));
+  Add(new DMC(0.02, 70000000));
 }
 
 void Predictor::AddByteRun() {
