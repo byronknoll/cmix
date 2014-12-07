@@ -99,7 +99,7 @@ public:
     return data[i];
   }
   U32 size() const {return n;}
-  void resize(int i);
+  void resize(U32 i);
   void pop_back() {if (n>0) --n;}
   void push_back(const T& x);
 private:
@@ -107,7 +107,7 @@ private:
   Array& operator=(const Array&);
 };
 
-template<class T, int ALIGN> void Array<T, ALIGN>::resize(int i) {
+template<class T, int ALIGN> void Array<T, ALIGN>::resize(U32 i) {
   if (i<=reserved) {
     n=i;
     return;
