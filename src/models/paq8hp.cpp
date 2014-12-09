@@ -682,7 +682,7 @@ template <int B>
 inline  U8* BH<B>::operator[](U32 i) {
   int chk=(i>>16^i)&0xffff;
   i=i*M&n;
-  U8 *p=&t[i*B-B];
+  U8 *p=&t[i*B] - B;
   int j;
   for (j=0; j<M; ++j) {
     p+=B;
