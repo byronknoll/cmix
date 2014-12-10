@@ -499,7 +499,7 @@ void train(short *t, short *w, int n, int err) {
 }
 #endif // slow!
 
-std::vector<float> model_predictions(1161, 0.5);
+std::vector<float> model_predictions(1167, 0.5);
 unsigned int prediction_index = 0;
 float conversion_factor = 1.0 / 4095;
 
@@ -1078,8 +1078,9 @@ void wordModel(Mixer& m) {
  
     cm.set(hash(528,mask,0));
     cm.set(hash(529,mask,buf(1)));
-    cm.set(hash(530,mask,buf(2),buf(3)));
-    cm.set(hash(531,mask&0x1ff,f4&0x00fff0));
+    cm.set(hash(530,mask&0xff,col));
+    cm.set(hash(531,mask,buf(2),buf(3)));
+    cm.set(hash(532,mask&0x1ff,f4&0x00fff0));
     }
     cm.mix(m);
 }
