@@ -27,7 +27,6 @@
 #include <math.h>
 #include <ctype.h>
 #define NDEBUG  // remove for debugging (turns on Array bound checks)
-#include <assert.h>
 
 #ifdef UNIX
 #include <sys/types.h>
@@ -117,7 +116,6 @@ template<class T, int ALIGN> void Array<T, ALIGN>::create(U32 i) {
   ptr = (char*)calloc(sz, 1);
   if (!ptr) quit("Out of memory");
   data = (ALIGN ? (T*)(ptr+ALIGN-(((long long)ptr)&(ALIGN-1))) : (T*)ptr);
-  assert((char*)data>=ptr && (char*)data<=ptr+ALIGN);
 }
 
 template<class T, int ALIGN> Array<T, ALIGN>::~Array() {
@@ -143,7 +141,6 @@ public:
     strcpy(&(*this)[0], s);
   }
   void operator+=(const char* s) {
-    assert(s);
     pop_back();
     while (*s) push_back(*s++);
     push_back(0);
@@ -181,14 +178,12 @@ public:
   Buf(U32 i=0): b(i) {}
   void setsize(U32 i) {
     if (!i) return;
-    assert(i>0 && (i&(i-1))==0);
     b.resize(i);
   }
   U8& operator[](U32 i) {
     return b[i&(b.size()-1)];
   }
   int operator()(U32 i) const {
-    assert(i>0);
     return b[(pos-i)&(b.size()-1)];
   }
   U32 size() const {
@@ -337,7 +332,6 @@ class Stretch {
 public:
   Stretch();
   int operator()(int p) const {
-    assert(p>=0 && p<4096);
     return t[p];
   }
 } stretch;
@@ -372,7 +366,6 @@ static void train (const short* const t, short* const w, int n, const int e);
 #include<immintrin.h>
 #define OPTIMIZE "AVX2-"
 static int dot_product (const short* const t, const short* const w, int n) {
-  assert(n == ((n + 15) & -16));
   __m256i sum = _mm256_setzero_si256 ();
   while ((n -= 16) >= 0) {
     __m256i tmp = _mm256_madd_epi16 (*(__m256i *) &t[n], *(__m256i *) &w[n]);
@@ -386,7 +379,6 @@ static int dot_product (const short* const t, const short* const w, int n) {
 }
 
 static void train (const short* const t, short* const w, int n, const int e) {
-  assert(n == ((n + 15) & -16));
   if (e) {
     const __m256i one = _mm256_set1_epi16 (1);
     const __m256i err = _mm256_set1_epi16 (short(e));
@@ -406,7 +398,6 @@ static void train (const short* const t, short* const w, int n, const int e) {
 #define OPTIMIZE "SSE2-"
 
 static int dot_product (const short* const t, const short* const w, int n) {
-  assert(n == ((n + 15) & -16));
   __m128i sum = _mm_setzero_si128 ();
   while ((n -= 8) >= 0) {
     __m128i tmp = _mm_madd_epi16 (*(__m128i *) &t[n], *(__m128i *) &w[n]);
@@ -419,7 +410,6 @@ static int dot_product (const short* const t, const short* const w, int n) {
 }
 
 static void train (const short* const t, short* const w, int n, const int e) {
-  assert(n == ((n + 15) & -16));
   if (e) {
     const __m128i one = _mm_set1_epi16 (1);
     const __m128i err = _mm_set1_epi16 (short(e));
@@ -439,7 +429,6 @@ static void train (const short* const t, short* const w, int n, const int e) {
 #define OPTIMIZE "SSE-"
 
 static int dot_product (const short* const t, const short* const w, int n) {
-  assert(n == ((n + 15) & -16));
   __m64 sum = _mm_setzero_si64 ();
   while ((n -= 8) >= 0) {
     __m64 tmp = _mm_madd_pi16 (*(__m64 *) &t[n], *(__m64 *) &w[n]);
@@ -457,7 +446,6 @@ static int dot_product (const short* const t, const short* const w, int n) {
 }
 
 static void train (const short* const t, short* const w, int n, const int e) {
-  assert(n == ((n + 15) & -16));
   if (e) {
     const __m64 one = _mm_set1_pi16 (1);
     const __m64 err = _mm_set1_pi16 (short(e));
@@ -520,7 +508,6 @@ public:
   void update() {
     for (int i=0; i<ncxt; ++i) {
       int err=((y<<12)-pr[i])*7;
-      assert(err>=-32768 && err<32768);
       train(&tx[0], &wx[cxt[i]*N], nx, err);
     }
     nx=base=ncxt=0;
@@ -528,7 +515,6 @@ public:
 
   // Input x (call up to N times)
   void add(int x) {
-    assert(nx<N);
     model_predictions[prediction_index] = squash(x) * conversion_factor;
     ++prediction_index;
     tx[nx++]=x;
@@ -536,10 +522,6 @@ public:
 
   // Set a context (call S times, sum of ranges <= M)
   void set(int cx, int range) {
-    assert(range>=0);
-    assert(ncxt<S);
-    assert(cx>=0);
-    assert(base+cx<M);
     cxt[ncxt++]=base+cx;
     base+=range;
   }
@@ -575,7 +557,6 @@ Mixer::~Mixer() {
 Mixer::Mixer(int n, int m, int s, int w):
     N((n+7)&-8), M(m), S(s), tx(N), wx(N*M),
     cxt(S), ncxt(0), base(0), nx(0), pr(S), mp(0) {
-  assert(n>0 && N>0 && (N&7)==0 && M>0);
   for (int i=0; i<S; ++i)
     pr[i]=2048;
   for (int i=0; i<N*M; ++i)
@@ -592,7 +573,6 @@ class APM {
 public:
   APM(int n);
   int p(int pr=2048, int cxt=0, int rate=7) {
-    assert(pr>=0 && pr<4096 && cxt>=0 && cxt<N && rate>0 && rate<32);
     pr=stretch(pr);
     int g=(y<<16)+(y<<rate)-y-y;
     t[index] += (g-t[index]) >> rate;
@@ -619,7 +599,6 @@ protected:
 public:
   StateMap();
   int p(int cx) {
-    assert(cx>=0 && cx<t.size());
     t[cxt]+=((y<<16)-t[cxt]+128) >> 8;
     return t[cxt=cx] >> 4;
   }
@@ -651,7 +630,6 @@ template <int B> class BH {
   U32 n;
 public:
   BH(int i): t(i*B), n(i-1) {
-    assert(B>=2 && i>0 && (i&(i-1))==0);
   }
   U8* operator[](U32 i);
 };
@@ -729,7 +707,6 @@ class SmallStationaryContextMap {
   U16 *cp;
 public:
   SmallStationaryContextMap(int m): t(m/2), cxt(0) {
-    assert((m/2&m/2-1)==0); // power of 2?
     for (U32 i=0; i<t.size(); ++i)
       t[i]=32768;
     cp=&t[0];
@@ -782,8 +759,6 @@ inline U8* ContextMap::E::get(U16 ch) {
 
 ContextMap::ContextMap(U32 m, int c): C(c), t(m>>6), cp(c), cp0(c),
     cxt(c), runp(c), cn(0) {
-  assert(m>=64 && (m&m-1)==0);  // power of 2?
-  assert(sizeof(E)==64);
   sm=new StateMap[C];
   for (int i=0; i<C; ++i) {
     cp0[i]=cp[i]=&t[0].bh[0][0];
@@ -798,7 +773,6 @@ ContextMap::~ContextMap() {
 inline void ContextMap::set(U32 cx, int next) {
   int i=cn++;
   i&=next;
-  assert(i>=0 && i<C);
   cx=cx*987654323+i;
   cx=cx<<16|cx>>16;
   cxt[i]=cx*123456791+i;
@@ -809,8 +783,6 @@ int ContextMap::mix1(Mixer& m, int cc, int bp, int c1, int y1) {
   int result=0;
   for (int i=0; i<cn; ++i) {
     if (cp[i]) {
-      assert(cp[i]>=&t[0].bh[0][0] && cp[i]<=&t[t.size()-1].bh[6][6]);
-      assert(((long long)(cp[i])&63)>=15);
       int ns=nex(*cp[i], y1);
       if (ns>=204 && rnd() << ((452-ns)>>3)) ns-=4;
       *cp[i]=ns;
@@ -1182,7 +1154,6 @@ void recordModel(Mixer& m) {
     if (rcount2>15 && rlen!=rlen2) rlen=rlen2, rcount1=rcount2=0;
 
     // Set 2 dimensional contexts
-    assert(rlen>0);
 #endif
     cm.set(c<<8| (min(255, pos-cpos1[c])/4) );
     cm.set(w<<9| llog(pos-wpos1[w])>>2);
@@ -1451,7 +1422,6 @@ void dmcModel(Mixer& m) {
     int nn=t[next].c0+t[next].c1;
     if (n>=threshold*2 && nn-n>=threshold*3) {
       int r=n*4096/nn;
-      assert(r>=0 && r<=4096);
       t[next].c0 -= t[top].c0 = t[next].c0*r>>12;
       t[next].c1 -= t[top].c1 = t[next].c1*r>>12;
       t[top].nx[0]=t[next].nx[0];
@@ -1469,7 +1439,6 @@ void dmcModel(Mixer& m) {
 
   if (top==(int)t.size() && bpos==1) top=0;
   if (top==0) {
-    assert(t.size()>=65536);
     for (int i=0; i<256; ++i) {
       for (int j=0; j<256; ++j) {
         if (i<127) {
@@ -1583,7 +1552,7 @@ class Predictor {
   int pr;  // next prediction
 public:
   Predictor();
-  int p() const {assert(pr>=0 && pr<4096); return pr;}
+  int p() const {return pr;}
   void update();
 };
 
