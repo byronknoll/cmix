@@ -530,7 +530,6 @@ public:
   int p() {
     while (nx&7) tx[nx++]=0;  // pad
     if (mp) {  // combine outputs
-      // printf("%d\n", prediction_index);
       prediction_index = 0;
       mp->update();
       for (int i=0; i<ncxt; ++i) {
@@ -1341,6 +1340,101 @@ void distanceModel(Mixer& m) {
   cr.mix(m);
 }
 
+//////////////////////////// bmpModel /////////////////////////////////
+
+inline U32 i4(int i) {
+  return buf(i)+256*buf(i-1)+65536*buf(i-2)+16777216*buf(i-3);
+}
+
+inline int i2(int i) {
+  return buf(i)+256*buf(i-1);
+}
+
+inline int sqrbuf(int i) {
+  return buf(i)*buf(i);
+}
+
+int bmpModel(Mixer& m) {
+  static int w=0;
+  static int eoi=0;
+  static U32 tiff=0;
+  const int SC=0x20000;
+  static SmallStationaryContextMap scm1(SC), scm2(SC),
+    scm3(SC), scm4(SC), scm5(SC), scm6(SC*2);
+  static ContextMap cm(MEM*4, 8);
+
+  if (!bpos && buf(54)=='B' && buf(53)=='M'
+      && i4(44)==54 && i4(40)==40 && i4(24)==0) {
+    w=((i4(36)+3)&(-4))*3; 
+    const int height=i4(32);
+    eoi=pos;
+    if (w<0x30000 && height<0x10000) {
+      eoi=pos+w*height; 
+    }
+    else
+      eoi=pos;
+  }
+
+  if (!bpos) {
+    if (c4==0x49492a00) tiff=pos; 
+    if (pos-tiff==4 && c4!=0x08000000) tiff=0;
+    if (tiff && pos-tiff==200) { 
+      int dirsize=i2(pos-tiff-4); 
+      w=0;
+      int bpp=0, compression=0, width=0, height=0;
+      for (int i=tiff+6; i<pos-12 && --dirsize>0; i+=12) {
+        int tag=i2(pos-i); 
+        int tagfmt=i2(pos-i-2); 
+        int taglen=i4(pos-i-4); 
+        int tagval=i4(pos-i-8); 
+        if ((tagfmt==3||tagfmt==4) && taglen==1) {
+          if (tag==256) width=tagval;
+          if (tag==257) height=tagval;
+          if (tag==259) compression=tagval;
+          if (tag==277) bpp=tagval; 
+        }
+      }
+      if (width>0 && height>0 && width*height>50 && compression==1
+          && (bpp==1||bpp==3))
+        eoi=tiff+width*height*bpp, w=width*bpp;
+      if (eoi>pos) {}
+      else
+        tiff=w=0;
+    }
+  }
+  if (pos>eoi) return w=0;
+  if (!bpos) {
+    int color=pos%3;
+    int mean=buf(3)+buf(w-3)+buf(w)+buf(w+3);
+    const int var=(sqrbuf(3)+sqrbuf(w-3)+sqrbuf(w)+sqrbuf(w+3)-(mean*mean/4))>>2;
+    mean>>=2;
+    const int logvar=ilog(var);
+    int i=0;
+    cm.set(hash(++i, buf(3)>>2, buf(w)>>2, color));
+    cm.set(hash(++i, buf(3)>>2, buf(1)>>2, color));
+    cm.set(hash(++i, buf(3)>>2, buf(2)>>2, color));
+    cm.set(hash(++i, buf(w)>>2, buf(1)>>2, color));
+    cm.set(hash(++i, buf(w)>>2, buf(2)>>2, color));
+    cm.set(hash(++i, (buf(3)+buf(w))>>1, color));
+    cm.set(hash(++i, (buf(3)+buf(w))>>3, buf(1)>>5, buf(2)>>5, color));
+    cm.set(hash(++i, mean, logvar>>5, color));
+    scm1.set((buf(3)+buf(w))>>1);
+    scm2.set((buf(3)+buf(w)-buf(w+3))>>1);
+    scm3.set((buf(3)*2-buf(6))>>1);
+    scm4.set((buf(w)*2-buf(w*2))>>1);
+    scm5.set((buf(3)+buf(w)-buf(w-3))>>1);
+    scm6.set((mean>>1)|((logvar<<1)&0x180));
+  }
+  scm1.mix(m);
+  scm2.mix(m);
+  scm3.mix(m);
+  scm4.mix(m);
+  scm5.mix(m);
+  scm6.mix(m);
+  cm.mix(m);
+  return w;
+}
+
 //////////////////////////// jpegModel /////////////////////////
 
 #define jassert(x) if (!(x)) { \
@@ -1782,11 +1876,21 @@ int contextModel2() {
   // Test for special file types
   int isjpeg=jpegModel(m);  // 1 if JPEG is detected, else 0
   int ismatch=ilog(matchModel(m));  // Length of longest matching context
+  int isbmp=bmpModel(m);  // Image width (bytes) if BMP or TIFF detected, or 0
 
   if (isjpeg) {
     m.set(1, 8);
     m.set(c0, 256);
     m.set(buf(1), 256);
+    return m.p();
+  }
+  else if (isbmp>0) {
+    static int col=0;
+    if (++col>=24) col=0;
+    m.set(2, 8);
+    m.set(col, 24);
+    m.set((buf(isbmp)+buf(3))>>4, 32);
+    m.set(c0, 256);
     return m.p();
   }
 
