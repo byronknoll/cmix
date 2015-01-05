@@ -1341,6 +1341,296 @@ void distanceModel(Mixer& m) {
   cr.mix(m);
 }
 
+//////////////////////////// jpegModel /////////////////////////
+
+#define jassert(x) if (!(x)) { \
+  jpeg=0; \
+  return next_jpeg;}
+
+struct HUF {U32 min, max; int val;};
+
+int jpegModel(Mixer& m) {
+
+  enum {SOF0=0xc0, SOF1, SOF2, SOF3, DHT, RST0=0xd0, SOI=0xd8, EOI, SOS, DQT,
+    DNL, DRI, APP0=0xe0, COM=0xfe, FF};
+  static int jpeg=0;
+  static int next_jpeg=0;
+  static int app;
+  static int sof=0, sos=0, data=0;
+  static Array<int> ht(8);
+  static int htsize=0;
+
+  static U32 huffcode=0;
+  static int huffbits=0;
+  static int huffsize=0;
+  static int rs=-1;
+  static int mcupos=0;
+
+  static Array<HUF> huf(128);
+  static int mcusize=0;
+  static int linesize=0;
+  static int hufsel[2][10];
+  static Array<U8> hbuf(2048);
+
+  static Array<int> color(10);
+  static Array<int> pred(4);
+  static int dc=0;
+  static int width=0;
+  static int row=0, column=0;
+  static Buf cbuf(0x20000);
+  static int cpos=0;
+  static U32 huff1=0;
+  static int rs1, rs2, rs3;
+  static int ssum=0, ssum1=0, ssum2=0, ssum3=0;
+
+  if (!bpos) next_jpeg=jpeg>1;
+  if (bpos && !jpeg) return next_jpeg;
+  if (!bpos && app>0) --app;
+  if (app>0) return next_jpeg;
+  if (!bpos) {
+
+    if (!jpeg && buf(4)==FF && buf(3)==SOI && buf(2)==FF && buf(1)>>4==0xe) {
+      jpeg=1;
+      app=sos=sof=htsize=data=mcusize=linesize=0;
+      huffcode=huffbits=huffsize=mcupos=cpos=0, rs=-1;
+      memset(&huf[0], 0, huf.size()*sizeof(HUF));
+      memset(&pred[0], 0, pred.size()*sizeof(int));
+    }
+
+    if (jpeg && data && buf(2)==FF && buf(1) && (buf(1)&0xf8)!=RST0) {
+      jassert(buf(1)==EOI);
+      jpeg=0;
+    }
+    if (!jpeg) return next_jpeg;
+
+    if (!data && !app && buf(4)==FF && (buf(3)>>4==0xe || buf(3)==COM))
+      app=buf(2)*256+buf(1)+2;
+
+    if (buf(5)==FF && buf(4)==SOS) {
+      int len=buf(3)*256+buf(2);
+      if (len==6+2*buf(1) && buf(1) && buf(1)<=4)
+        sos=pos-5, data=sos+len+2, jpeg=2;
+    }
+    if (buf(4)==FF && buf(3)==DHT && htsize<8) ht[htsize++]=pos-4;
+    if (buf(4)==FF && buf(3)==SOF0) sof=pos-4;
+
+    if (buf(2)==FF && (buf(1)&0xf8)==RST0) {
+      huffcode=huffbits=huffsize=mcupos=0, rs=-1;
+      memset(&pred[0], 0, pred.size()*sizeof(int));
+    }
+  }
+
+  {
+    if (pos==data && bpos==1) {
+      jassert(htsize>0);
+      for (int i=0; i<htsize; ++i) {
+        int p=ht[i]+4;
+        int end=p+buf[p-2]*256+buf[p-1]-2;
+        int count=0;
+        while (p<end && end<pos && end<p+2100 && ++count<10) {
+          int tc=buf[p]>>4, th=buf[p]&15;
+          if (tc>=2 || th>=4) break;
+          jassert(tc>=0 && tc<2 && th>=0 && th<4);
+          HUF* h=&huf[tc*64+th*16];
+          int val=p+17;
+          int hval=tc*1024+th*256;
+          for (int j=0; j<256; ++j)
+            hbuf[hval+j]=buf[val+j];
+          int code=0;
+          for (int j=0; j<16; ++j) {
+            h[j].min=code;
+            h[j].max=code+=buf[p+j+1];
+            h[j].val=hval;
+            val+=buf[p+j+1];
+            hval+=buf[p+j+1];
+            code*=2;
+          }
+          p=val;
+          jassert(hval>=0 && hval<2048);
+        }
+        jassert(p==end);
+      }
+      huffcode=huffbits=huffsize=0, rs=-1;
+
+      if (!sof && sos) return next_jpeg;
+      int ns=buf[sos+4];
+      int nf=buf[sof+9];
+      jassert(ns<=4 && nf<=4);
+      mcusize=0;
+      int hmax=0;
+      for (int i=0; i<ns; ++i) {
+        for (int j=0; j<nf; ++j) {
+          if (buf[sos+2*i+5]==buf[sof+3*j+10]) {
+            int hv=buf[sof+3*j+11];
+            if (hv>>4>hmax) hmax=hv>>4;
+            hv=(hv&15)*(hv>>4);
+            jassert(hv>=1 && hv+mcusize<=10);
+            while (hv) {
+              jassert(mcusize<10);
+              hufsel[0][mcusize]=buf[sos+2*i+6]>>4&15;
+              hufsel[1][mcusize]=buf[sos+2*i+6]&15;
+              jassert (hufsel[0][mcusize]<4 && hufsel[1][mcusize]<4);
+              color[mcusize]=i;
+              --hv;
+              ++mcusize;
+            }
+          }
+        }
+      }
+      jassert(hmax>=1 && hmax<=10);
+      width=buf[sof+7]*256+buf[sof+8];
+      width=(width-1)/(hmax*8)+1;
+      jassert(width>0);
+      mcusize*=64;
+      row=column=0;
+    }
+  }
+
+  {
+    if (mcusize && buf(1+(!bpos))!=FF) {
+      jassert(huffbits<=32);
+      huffcode+=huffcode+y;
+      ++huffbits;
+      if (rs<0) {
+        jassert(huffbits>=1 && huffbits<=16);
+        const int ac=(mcupos&63)>0;
+        jassert(mcupos>=0 && (mcupos>>6)<10);
+        jassert(ac==0 || ac==1);
+        const int sel=hufsel[ac][mcupos>>6];
+        jassert(sel>=0 && sel<4);
+        const int i=huffbits-1;
+        jassert(i>=0 && i<16);
+        const HUF *h=&huf[ac*64+sel*16];
+        jassert(h[i].min<=h[i].max && h[i].val<2048 && huffbits>0);
+        if (huffcode<h[i].max) {
+          jassert(huffcode>=h[i].min);
+          int k=h[i].val+huffcode-h[i].min;
+          jassert(k>=0 && k<2048);
+          rs=hbuf[k];
+          huffsize=huffbits;
+        }
+      }
+      if (rs>=0) {
+        if (huffsize+(rs&15)==huffbits) {
+          huff1=hash(huffcode, huffbits);
+          rs3=rs2;
+          rs2=rs1;
+          rs1=rs;
+          int x=0;
+          if (mcupos&63) {
+            if (rs==0) {
+              mcupos=(mcupos+63)&(-64);
+              jassert(mcupos>=0 && mcupos<=mcusize && mcupos<=640);
+              while (cpos&63) cbuf[cpos++]=0;
+            }
+            else {
+              jassert((rs&15)<=10);
+              const int r=rs>>4;
+              const int s=rs&15;
+              jassert((mcupos>>6)==((mcupos+r)>>6));
+              mcupos+=r+1;
+              x=huffcode&((1<<s)-1);
+              if (s && !(x>>(s-1))) x-=(1<<s)-1;
+              for (int i=r; i>=1; --i) cbuf[cpos++]=i<<4|s;
+              cbuf[cpos++]=(s<<4)|(((huffcode<<2)>>s)&3)|12;
+              ssum+=s;
+            }
+          }
+          else {
+            jassert(rs<12);
+            ++mcupos;
+            x=huffcode&((1<<rs)-1);
+            if (rs && !(x>>(rs-1))) x-=(1<<rs)-1;
+            jassert(mcupos>=0 && mcupos>>6<10);
+            const int comp=color[mcupos>>6];
+            jassert(comp>=0 && comp<4);
+            dc=pred[comp]+=x;
+            jassert((cpos&63)==0);
+            cbuf[cpos++]=(dc+1023)>>3;
+            ssum3=ssum2;
+            ssum2=ssum1;
+            ssum1=ssum;
+            ssum=rs;
+          }
+          jassert(mcupos>=0 && mcupos<=mcusize);
+          if (mcupos>=mcusize) {
+            mcupos=0;
+            if (++column==width) column=0, ++row;
+          }
+          huffcode=huffsize=huffbits=0, rs=-1;
+        }
+      }
+    }
+  }
+  if (!jpeg || !data) return next_jpeg;
+  const int N=19;
+  static BH<9> t(MEM);
+  static Array<U32> cxt(N);
+  static Array<U8*> cp(N);
+  static StateMap sm[N];
+  static Mixer m1(32, 800, 4);
+  static APM a1(1024), a2(0x10000);
+  const static U8 zzu[64]={
+    0,1,0,0,1,2,3,2,1,0,0,1,2,3,4,5,4,3,2,1,0,0,1,2,3,4,5,6,7,6,5,4,
+    3,2,1,0,1,2,3,4,5,6,7,7,6,5,4,3,2,3,4,5,6,7,7,6,5,4,5,6,7,7,6,7};
+  const static U8 zzv[64]={
+    0,0,1,2,1,0,0,1,2,3,4,3,2,1,0,0,1,2,3,4,5,6,5,4,3,2,1,0,0,1,2,3,
+    4,5,6,7,7,6,5,4,3,2,1,2,3,4,5,6,7,7,6,5,4,3,4,5,6,7,7,6,5,6,7,7};
+  if (cp[N-1]) {
+    for (int i=0; i<N; ++i)
+      *cp[i]=nex(*cp[i],y);
+  }
+  m1.update();
+
+  const int comp=color[mcupos>>6];
+  const int coef=(mcupos&63)|comp<<6;
+  const int hc=huffcode|1<<huffbits;
+  static int hbcount=2;
+  if (++hbcount>2 || huffbits==0) hbcount=0;
+  jassert(coef>=0 && coef<256);
+  const int zu=zzu[mcupos&63], zv=zzv[mcupos&63];
+  if (hbcount==0) {
+    const int mpos=mcupos>>4|!(mcupos&-64)<<7;
+    int n=0;
+    cxt[0]=hash(++n, hc, mcupos>>2, min(3, mcupos&63));
+    cxt[1]=hash(++n, hc, mpos>>4, cbuf[cpos-mcusize]);
+    cxt[2]=hash(++n, hc, mpos>>4, cbuf[cpos-width*mcusize]);
+    cxt[3]=hash(++n, hc, ilog(ssum3), coef);
+    cxt[4]=hash(++n, hc, coef, column>>3);
+    cxt[5]=hash(++n, hc, coef, column>>1);
+    cxt[6]=hash(++n, hc, rs1, mpos);
+    cxt[7]=hash(++n, hc, rs1, rs2);
+    cxt[8]=hash(++n, hc, rs1, rs2, rs3);
+    cxt[9]=hash(++n, hc, ssum>>4, mcupos);
+    cxt[10]=hash(++n, hc, mpos, cbuf[cpos-1]);
+    cxt[11]=hash(++n, hc, dc);
+    cxt[12]=hash(++n, hc, rs1, coef);
+    cxt[13]=hash(++n, hc, rs1, rs2, coef);
+    cxt[14]=hash(++n, hc, mcupos>>3, ssum3>>3);
+    cxt[15]=hash(++n, hc, huff1);
+    cxt[16]=hash(++n, hc, coef, huff1);
+    cxt[17]=hash(++n, hc, zu, comp);
+    cxt[18]=hash(++n, hc, zv, comp);
+  }
+
+  m1.add(128);
+  for (int i=0; i<N; ++i) {
+    if (hbcount==0) cp[i]=t[cxt[i]]+1;
+    else if (hbcount==1) cp[i]+=1+(huffcode&1)*3;
+    else cp[i]+=1+(huffcode&1);
+    int sp=stretch(sm[i].p(*cp[i]));
+    m1.add(sp);
+  }
+  m1.set(0, 1);
+  m1.set(coef, 64);
+  m1.set(mcupos, 640);
+  int pr=m1.p();
+  pr=a1.p(pr, hc&1023);
+  pr=a2.p(pr, (hc&255)|(coef<<8));
+  m.add(stretch(pr));
+  return 1;
+}
+
 //////////////////////////// exeModel /////////////////////////
 
 U32 execxt(int i, int x=0) {
@@ -1489,7 +1779,16 @@ int contextModel2() {
   m.update();
   m.add(64);
 
+  // Test for special file types
+  int isjpeg=jpegModel(m);  // 1 if JPEG is detected, else 0
   int ismatch=ilog(matchModel(m));  // Length of longest matching context
+
+  if (isjpeg) {
+    m.set(1, 8);
+    m.set(c0, 256);
+    m.set(buf(1), 256);
+    return m.p();
+  }
 
   // Normal model
   if (bpos==0) {
