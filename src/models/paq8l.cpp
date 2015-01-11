@@ -1999,9 +1999,6 @@ int contextModel2() {
   int isbmp=bmpModel(m);  // Image width (bytes) if BMP or TIFF detected, or 0
 
   if (isjpeg) {
-    m.set(1, 8);
-    m.set(c0, 256);
-    m.set(buf(1), 256);
     return m.p();
   }
   else if (isbmp>0) {
