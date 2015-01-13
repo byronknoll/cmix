@@ -83,6 +83,7 @@ Filetype detect(FILE* in, int n, Filetype type) {
   // For TEXT detection
   int ascii_start = -1;
   int ascii_run = 0;
+  int space_count = 0;
 
   for (int i=0; i<n; ++i) {
     int c=getc(in);
@@ -128,10 +129,16 @@ Filetype detect(FILE* in, int n, Filetype type) {
         if (ascii_start == -1) {
           ascii_start = i;
           ascii_run = 0;
+          space_count = 0;
         }
+        if (c == ' ') ++space_count;
         ++ascii_run;
         if (ascii_run > 500) {
-          return fseek(in, start + ascii_start, SEEK_SET), TEXT;
+          if (space_count < 5) {
+            ascii_start = -1;
+          } else {
+            return fseek(in, start + ascii_start, SEEK_SET), TEXT;
+          }
         }
       } else {
         ascii_start = -1;
