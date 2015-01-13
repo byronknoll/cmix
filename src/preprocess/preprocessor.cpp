@@ -179,15 +179,16 @@ void encode_exe(FILE* in, FILE* out, int len, int begin) {
     int size=min(len-offset, BLOCK);
     int bytesRead=fread(&blk[0], 1, size, in);
     if (bytesRead!=size) abort();
-    for (int i=bytesRead-1; i>=4; --i) {
-      if ((blk[i-4]==0xe8||blk[i-4]==0xe9) && (blk[i]==0||blk[i]==0xff)) {
+    for (int i=bytesRead-1; i>=5; --i) {
+      if ((blk[i-4]==0xe8 || blk[i-4]==0xe9 || (blk[i-5]==0x0f && (blk[i-4]&0xf0)==0x80))
+         && (blk[i]==0||blk[i]==0xff)) {
         int a=(blk[i-3]|blk[i-2]<<8|blk[i-1]<<16|blk[i]<<24)+offset+begin+i+1;
         a<<=7;
         a>>=7;
         blk[i]=a>>24;
-        blk[i-1]=a>>16;
-        blk[i-2]=a>>8;
-        blk[i-3]=a;
+        blk[i-1]=a^176;
+        blk[i-2]=(a>>8)^176;
+        blk[i-3]=(a>>16)^176;
       }
     }
     fwrite(&blk[0], 1, bytesRead, out);
@@ -199,7 +200,7 @@ int decode_exe(FILE* in) {
   static int offset=0, q=0;
   static int size=0;
   static int begin=0;
-  static U8 c[5];
+  static U8 c[6];
 
   while (offset==size && q==0) {
     offset=0;
@@ -213,16 +214,16 @@ int decode_exe(FILE* in) {
     begin|=getc(in);
   }
 
-  while (offset<size && q<5) {
-    memmove(c+1, c, 4);
+  while (offset<size && q<6) {
+    memmove(c+1, c, 5);
     c[0]=getc(in);
     ++q;
     ++offset;
   }
 
-  if (q==5 && (c[4]==0xe8||c[4]==0xe9) && (c[0]==0||c[0]==0xff)
-      && (((offset-1)^(offset-5))&-BLOCK)==0) {
-    int a=(c[3]|c[2]<<8|c[1]<<16|c[0]<<24)-offset-begin;
+  if (q==6 && (c[0]==0x00 || c[0]==0xFF) && (c[4]==0xE8 || c[4]==0xE9 || (c[5]==0x0F && (c[4]&0xF0)==0x80))
+   && (((offset-1)^(offset-6))&-BLOCK)==0 && offset<=size) {
+    int a=((c[1]^176)|(c[2]^176)<<8|(c[3]^176)<<16|c[0]<<24)-offset-begin;
     a<<=7;
     a>>=7;
     c[3]=a;
