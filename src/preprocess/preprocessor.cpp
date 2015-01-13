@@ -103,12 +103,12 @@ Filetype detect(FILE* in, int n, Filetype type) {
         && (buf0&0xff)!=0 && (buf0&0xf8)!=0xd0)
       return DEFAULT;
 
-    if ((buf1&0xfe)==0xe8 && ((buf0+1)&0xfe)==0) {
-      int r=buf0>>24;  // relative address low 8 bits
-      int a=((buf0>>24)+i)&0xff;  // absolute address low 8 bits
+    if (((buf1&0xfe)==0xe8 || (buf1&0xfff0)==0x0f80) && ((buf0+1)&0xfe)==0) {
+      int r=buf0>>24;
+      int a=((buf0>>24)+i)&0xff;
       int rdist=i-relpos[r];
       int adist=i-abspos[a];
-      if (adist<rdist && adist<0x1000 && abspos[a]>5) {
+      if (adist<rdist && adist<0x800 && abspos[a]>5) {
         e8e9last=i;
         ++e8e9count;
         if (e8e9pos==0 || e8e9pos>abspos[a]) e8e9pos=abspos[a];
@@ -119,7 +119,7 @@ Filetype detect(FILE* in, int n, Filetype type) {
       abspos[a]=i;
       relpos[r]=i;
     }
-    if (type==EXE && i-e8e9last>0x1000)
+    if (type==EXE && i-e8e9last>0x4000)
       return fseek(in, start+e8e9last, SEEK_SET), DEFAULT;
 
     // Detect TEXT
