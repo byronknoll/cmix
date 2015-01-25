@@ -97,9 +97,9 @@ Filetype detect(FILE* in, int n, Filetype type) {
   uint64_t bmp=0;
   int imgbpp=0,bmpx=0,bmpy=0,bmpof=0;
   static int deth=0,detd=0;  // detected header/data size in bytes
-  if (deth >1) return fseeko(in, start+deth, SEEK_SET),deth=0,BMP;
-  else if (deth ==-1) return fseeko(in, start, SEEK_SET),deth=0,BMP;
-  else if (detd) return fseeko(in, start+detd, SEEK_SET),detd=0,DEFAULT;
+  if (deth >1) return fseek(in, start+deth, SEEK_SET),deth=0,BMP;
+  else if (deth ==-1) return fseek(in, start, SEEK_SET),deth=0,BMP;
+  else if (detd) return fseek(in, start+detd, SEEK_SET),detd=0,DEFAULT;
 
   for (int i=0; i<n; ++i) {
     int c=getc(in);
@@ -185,7 +185,7 @@ Filetype detect(FILE* in, int n, Filetype type) {
         if (imgbpp!=0 && buf0==0 && bmpx>1) {
           if (imgbpp==24) {
             int width = ((bmpx*3)+3)&-4;
-            return deth=int(bmpof),detd=int(width*bmpy),bmp_info=int(width),fseeko(in, start+(bmp-1), SEEK_SET),DEFAULT;
+            return deth=int(bmpof),detd=int(width*bmpy),bmp_info=int(width),fseek(in, start+(bmp-1), SEEK_SET),DEFAULT;
           }
         }
         bmp=0;
@@ -220,12 +220,12 @@ void encode_bmp(FILE* in, FILE* out, int len, int width) {
   int r,g,b;
   for (int i=0; i<len/width; i++) {
     for (int j=0; j<width/3; j++) {
-      b=fgetc(in), g=fgetc(in), r=fgetc(in);
-      fputc(g, out);
-      fputc(g-r, out);
-      fputc(g-b, out);
+      b=getc(in), g=getc(in), r=getc(in);
+      putc(g, out);
+      putc(g-r, out);
+      putc(g-b, out);
     }
-    for (int j=0; j<width%3; j++) fputc(fgetc(in), out);
+    for (int j=0; j<width%3; j++) putc(getc(in), out);
   }
 }
 
