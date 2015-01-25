@@ -1360,8 +1360,9 @@ int bmpModel(Mixer& m) {
   static U32 tiff=0;
   const int SC=0x20000;
   static SmallStationaryContextMap scm1(SC), scm2(SC),
-    scm3(SC), scm4(SC), scm5(SC), scm6(SC*2);
-  static ContextMap cm(MEM*4, 8);
+    scm3(SC), scm4(SC), scm5(SC), scm6(SC), scm7(SC), scm8(SC), scm9(SC*2),
+    scm10(512);
+  static ContextMap cm(MEM*4, 15);
 
   if (!bpos && buf(54)=='B' && buf(53)=='M'
       && i4(44)==54 && i4(40)==40 && i4(24)==0) {
@@ -1409,7 +1410,32 @@ int bmpModel(Mixer& m) {
     const int var=(sqrbuf(3)+sqrbuf(w-3)+sqrbuf(w)+sqrbuf(w+3)-(mean*mean/4))>>2;
     mean>>=2;
     const int logvar=ilog(var);
-    int i=0;
+    int i=color<<4;
+    cm.set(hash(++i, buf(3)));
+    cm.set(hash(++i, buf(3), buf(1)));
+    cm.set(hash(++i, buf(3), buf(1), buf(2)));
+    cm.set(hash(++i, buf(w)));
+    cm.set(hash(++i, buf(w), buf(1)));
+    cm.set(hash(++i, buf(w), buf(1), buf(2)));
+    cm.set(hash(++i, (buf(3)+buf(w))>>3, buf(1)>>4, buf(2)>>4));
+    cm.set(hash(++i, buf(1), buf(2)));
+    cm.set(hash(++i, buf(3), buf(1)-buf(4)));
+    cm.set(hash(++i, buf(3)+buf(1)-buf(4)));
+    cm.set(hash(++i, buf(w), buf(1)-buf(w+1)));
+    cm.set(hash(++i, buf(w)+buf(1)-buf(w+1)));
+    cm.set(hash(++i, buf(w*3-3), buf(w*3-6)));
+    cm.set(hash(++i, buf(w*3+3), buf(w*3+6)));
+    cm.set(hash(++i, mean, logvar>>4));
+    scm1.set(buf(3)+buf(w)-buf(w+3));
+    scm2.set(buf(3)+buf(w-3)-buf(w));
+    scm3.set(buf(3)*2-buf(6));
+    scm4.set(buf(w)*2-buf(w*2));
+    scm5.set(buf(w+3)*2-buf(w*2+6));
+    scm6.set(buf(w-3)*2-buf(w*2-6));
+    scm7.set(buf(w-3)+buf(1)-buf(w-2));
+    scm8.set(buf(w)+buf(w-3)-buf(w*2-3));
+    scm9.set(mean>>1|(logvar<<1&0x180));
+    /*
     cm.set(hash(++i, buf(3)>>2, buf(w)>>2, color));
     cm.set(hash(++i, buf(3)>>2, buf(1)>>2, color));
     cm.set(hash(++i, buf(3)>>2, buf(2)>>2, color));
@@ -1424,6 +1450,7 @@ int bmpModel(Mixer& m) {
     scm4.set((buf(w)*2-buf(w*2))>>1);
     scm5.set((buf(3)+buf(w)-buf(w-3))>>1);
     scm6.set((mean>>1)|((logvar<<1)&0x180));
+    */
   }
   scm1.mix(m);
   scm2.mix(m);
@@ -1431,7 +1458,20 @@ int bmpModel(Mixer& m) {
   scm4.mix(m);
   scm5.mix(m);
   scm6.mix(m);
+  scm7.mix(m);
+  scm8.mix(m);
+  scm9.mix(m);
+  scm10.mix(m);
   cm.mix(m);
+  /*
+  scm1.mix(m);
+  scm2.mix(m);
+  scm3.mix(m);
+  scm4.mix(m);
+  scm5.mix(m);
+  scm6.mix(m);
+  cm.mix(m);
+  */
   return w;
 }
 
