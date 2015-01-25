@@ -1435,22 +1435,6 @@ int bmpModel(Mixer& m) {
     scm7.set(buf(w-3)+buf(1)-buf(w-2));
     scm8.set(buf(w)+buf(w-3)-buf(w*2-3));
     scm9.set(mean>>1|(logvar<<1&0x180));
-    /*
-    cm.set(hash(++i, buf(3)>>2, buf(w)>>2, color));
-    cm.set(hash(++i, buf(3)>>2, buf(1)>>2, color));
-    cm.set(hash(++i, buf(3)>>2, buf(2)>>2, color));
-    cm.set(hash(++i, buf(w)>>2, buf(1)>>2, color));
-    cm.set(hash(++i, buf(w)>>2, buf(2)>>2, color));
-    cm.set(hash(++i, (buf(3)+buf(w))>>1, color));
-    cm.set(hash(++i, (buf(3)+buf(w))>>3, buf(1)>>5, buf(2)>>5, color));
-    cm.set(hash(++i, mean, logvar>>5, color));
-    scm1.set((buf(3)+buf(w))>>1);
-    scm2.set((buf(3)+buf(w)-buf(w+3))>>1);
-    scm3.set((buf(3)*2-buf(6))>>1);
-    scm4.set((buf(w)*2-buf(w*2))>>1);
-    scm5.set((buf(3)+buf(w)-buf(w-3))>>1);
-    scm6.set((mean>>1)|((logvar<<1)&0x180));
-    */
   }
   scm1.mix(m);
   scm2.mix(m);
@@ -1463,15 +1447,6 @@ int bmpModel(Mixer& m) {
   scm9.mix(m);
   scm10.mix(m);
   cm.mix(m);
-  /*
-  scm1.mix(m);
-  scm2.mix(m);
-  scm3.mix(m);
-  scm4.mix(m);
-  scm5.mix(m);
-  scm6.mix(m);
-  cm.mix(m);
-  */
   return w;
 }
 
