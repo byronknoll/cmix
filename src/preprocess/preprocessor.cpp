@@ -34,7 +34,7 @@ typedef unsigned char  U8;
 typedef unsigned short U16;
 typedef unsigned int   U32;
 
-typedef enum {DEFAULT, JPEG, EXE, TEXT} Filetype;
+typedef enum {DEFAULT, JPEG, EXE, TEXT, BMP} Filetype;
 
 inline int min(int a, int b) {return a<b?a:b;}
 inline int max(int a, int b) {return a<b?b:a;}
@@ -66,6 +66,14 @@ bool IsAscii(int byte) {
   return false;
 }
 
+#define bswap(x) \
++   ((((x) & 0xff000000) >> 24) | \
++    (((x) & 0x00ff0000) >>  8) | \
++    (((x) & 0x0000ff00) <<  8) | \
++    (((x) & 0x000000ff) << 24))
+
+int bmp_info;
+
 Filetype detect(FILE* in, int n, Filetype type) {
   U32 buf1=0, buf0=0;  // last 8 bytes
   long start=ftell(in);
@@ -84,6 +92,14 @@ Filetype detect(FILE* in, int n, Filetype type) {
   int ascii_start = -1;
   int ascii_run = 0;
   int space_count = 0;
+
+  // For BMP detection
+  uint64_t bmp=0;
+  int imgbpp=0,bmpx=0,bmpy=0,bmpof=0;
+  static int deth=0,detd=0;  // detected header/data size in bytes
+  if (deth >1) return fseeko(in, start+deth, SEEK_SET),deth=0,BMP;
+  else if (deth ==-1) return fseeko(in, start, SEEK_SET),deth=0,BMP;
+  else if (detd) return fseeko(in, start+detd, SEEK_SET),detd=0,DEFAULT;
 
   for (int i=0; i<n; ++i) {
     int c=getc(in);
@@ -155,6 +171,26 @@ Filetype detect(FILE* in, int n, Filetype type) {
         }
       }
     }
+
+    // Detect .bmp image
+    if ((buf0&0xffff)==16973) imgbpp=bmpx=bmpy=bmpof=0,bmp=i;  //possible 'BM'
+    if (bmp) {
+      const int p=int(i-bmp);
+      if (p==12) bmpof=bswap(buf0);
+      else if (p==16 && buf0!=0x28000000) bmp=0; //windows bmp?
+      else if (p==20) bmpx=bswap(buf0),bmp=((bmpx==0||bmpx>0x40000)?0:bmp); //width
+      else if (p==24) bmpy=abs((int)bswap(buf0)),bmp=((bmpy==0||bmpy>0x20000)?0:bmp); //height
+      else if (p==27) imgbpp=c,bmp=((imgbpp!=1 && imgbpp!=4 && imgbpp!=8 && imgbpp!=24)?0:bmp);
+      else if (p==31) {
+        if (imgbpp!=0 && buf0==0 && bmpx>1) {
+          if (imgbpp==24) {
+            int width = ((bmpx*3)+3)&-4;
+            return deth=int(bmpof),detd=int(width*bmpy),bmp_info=int(width),fseeko(in, start+(bmp-1), SEEK_SET),DEFAULT;
+          }
+        }
+        bmp=0;
+      }
+    }
   }
   return type;
 }
@@ -175,6 +211,59 @@ void encode_jpeg(FILE* in, FILE* out, int len) {
 
 int decode_jpeg(FILE* in) {
   return getc(in);
+}
+
+// 24-bit image data transform:
+// simple color transform (b, g, r) -> (g, g-r, g-b)
+void encode_bmp(FILE* in, FILE* out, int len, int width) {
+  fprintf(out, "%c%c%c%c", width>>24, width>>16, width>>8, width);
+  int r,g,b;
+  for (int i=0; i<len/width; i++) {
+    for (int j=0; j<width/3; j++) {
+      b=fgetc(in), g=fgetc(in), r=fgetc(in);
+      fputc(g, out);
+      fputc(g-r, out);
+      fputc(g-b, out);
+    }
+    for (int j=0; j<width%3; j++) fputc(fgetc(in), out);
+  }
+}
+
+int decode_bmp(FILE *in) {
+  static int width = 0;
+  if (width == 0) {
+    width=getc(in)<<24;
+    width|=getc(in)<<16;
+    width|=getc(in)<<8;
+    width|=getc(in);
+  }
+
+  static int r,g,b;
+  static int state1 = 0, state2 = 0;
+
+  if (state1 < width/3) {
+    if (state2 == 0) {
+      b=getc(in), g=getc(in), r=getc(in);
+      ++state2;
+      return (b-r)&255;
+    } else if (state2 == 1) {
+      ++state2;
+      return b;
+    } else if (state2 == 2) {
+      ++state1;
+      if (width%3 == 0) state1 = 0;
+      state2 = 0;
+      return (b-g)&255;
+    }
+  } else {
+    ++state2;
+    if (state2 == width%3) {
+      state1 = 0;
+      state2 = 0;
+    }
+    return getc(in);
+  }
+  return -1;
 }
 
 void encode_exe(FILE* in, FILE* out, int len, int begin) {
@@ -358,6 +447,7 @@ void encode(FILE* in, FILE* out, int n, FILE* dictionary) {
       // printf("type: %d\tlength: %d\n", type, len);
       switch(type) {
         case JPEG: encode_jpeg(in, out, len); break;
+        case BMP:  encode_bmp(in, out, len, bmp_info); break;
         case EXE:  encode_exe(in, out, len, begin); break;
         case TEXT: encode_text(in, out, len, dictionary); break;
         default:   encode_default(in, out, len); break;
@@ -381,11 +471,13 @@ int decode2(FILE* in, FILE* dictionary) {
     len|=getc(in)<<8;
     len|=getc(in);
     if (len<0) len=1;
+    // printf("type: %d\tlength: %d\n", type, len);
     if (type == TEXT) reset_text_decoder(in);
   }
   --len;
   switch (type) {
     case JPEG: return decode_jpeg(in);
+    case BMP:  return decode_bmp(in);
     case EXE:  return decode_exe(in);
     case TEXT: return decode_text(in, dictionary);
     default:   return decode_default(in);
