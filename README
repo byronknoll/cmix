@@ -1,7 +1,15 @@
-cmix version 6
+cmix version 7
 http://www.byronknoll.com/cmix.html
-Released by Byron Knoll on September 2, 2014.
+Released by Byron Knoll on February 4, 2015.
 cmix is free software distributed under the GNU General Public License.
+
+To run cmix in Windows, try compiling in Cygwin using G++.
+
+Changes from version 6 to version 7:
+- Fixed bug that caused cmix to crash in Windows
+- Tweaked word model
+- Added some image models (JPEG/BMP/TIFF)
+- Improved preprocessor (JPEG/BMP/text/EXE)
 
 Changes from version 5 to version 6:
 - Memory tuning
