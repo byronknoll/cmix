@@ -1,7 +1,7 @@
 #ifndef PPM_H
 #define PPM_H
 
-#include "model.h"
+#include "byte-model.h"
 
 #include <vector>
 #include <array>
@@ -21,12 +21,10 @@ struct Table {
   unsigned char escape;
 };
 
-class PPM : public Model {
+class PPM : public ByteModel {
  public:
   PPM(unsigned int order, const unsigned int& bit_context, float delta,
       unsigned int max_size);
-  float Predict();
-  void Perceive(int bit);
   void ByteUpdate();
 
  private:
@@ -39,14 +37,7 @@ class PPM : public Model {
   float divisor_;
   std::vector<Table> tables_;
   std::vector<float> escape_map_;
-  unsigned int cur_;
-  unsigned int cur_depth_;
-  unsigned int max_order_;
-  unsigned int max_size_;
-  std::array<float, 256> probs_;
-  int top_;
-  int mid_;
-  int bot_;
+  unsigned int cur_, cur_depth_, max_order_, max_size_;
 };
 
 #endif

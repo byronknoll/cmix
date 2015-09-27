@@ -3,9 +3,8 @@
 PPM::PPM(unsigned int order, const unsigned int& bit_context, float delta,
     unsigned int max_size) : byte_(bit_context), divisor_(1.0 / delta),
     escape_map_(256 * 256, 0), cur_(0), cur_depth_(0), max_order_(order),
-    max_size_(max_size), top_(255), mid_(0), bot_(0) {
+    max_size_(max_size) {
   Reset();
-  probs_.fill(1.0 / 256);
   for (int escape = 1; escape < 128; ++escape) {
     for (int sum = 0; sum < 256; ++sum) {
       for (unsigned int order = 0; order <= max_order_; ++order) {
@@ -14,24 +13,6 @@ PPM::PPM(unsigned int order, const unsigned int& bit_context, float delta,
         escape_map_[context] = prob;
       }
     }
-  }
-}
-
-float PPM::Predict() {
-  float num = 0, denom = 0;
-  mid_ = bot_ + ((top_ - bot_) / 2);
-  for (int i = bot_; i <= top_; ++i) {
-    denom += probs_[i];
-    if (i > mid_) num += probs_[i];
-  }
-  return num / denom;
-}
-
-void PPM::Perceive(int bit) {
-  if (bit) {
-    bot_ = mid_ + 1;
-  } else {
-    top_ = mid_;
   }
 }
 
@@ -157,6 +138,5 @@ void PPM::ByteUpdate() {
     node = &tables_[node->lower_table];
     --order;
   }
-  top_ = 255;
-  bot_ = 0;
+  ByteModel::ByteUpdate();
 }

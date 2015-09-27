@@ -13,6 +13,7 @@
 #include "contexts/indirect-hash.h"
 #include "contexts/bit-context.h"
 #include "models/facade.h"
+#include "models/ppm2.h"
 
 #include <vector>
 
@@ -51,6 +52,10 @@ void Predictor::Add(Model* model) {
   models_.push_back(std::unique_ptr<Model>(model));
 }
 
+void Predictor::AddByteModel(ByteModel* model) {
+  byte_models_.push_back(std::unique_ptr<ByteModel>(model));
+}
+
 void Predictor::Add(int layer, Mixer* mixer) {
   mixers_[layer].push_back(std::unique_ptr<Mixer>(mixer));
 }
@@ -76,7 +81,8 @@ void Predictor::AddPAQ8L() {
 }
 
 void Predictor::AddPPM() {
-  Add(new PPM(7, manager_.bit_context_, 100, 80000000));
+  AddByteModel(new PPM(7, manager_.bit_context_, 100, 80000000));
+  AddByteModel(new PPM2(7, manager_.bit_context_, 60000000));
 }
 
 void Predictor::AddDMC() {
@@ -238,13 +244,18 @@ void Predictor::AddSSE() {
 }
 
 void Predictor::AddMixers() {
+  byte_mixer_input_.reset(new MixerInput(logistic_, 1.0e-4));
+  byte_mixer_input_->SetNumModels(256 * byte_models_.size());
+  byte_mixer_.reset(new ByteMixer(manager_.bit_context_,
+      byte_mixer_input_->inputs_, logistic_, 0.0001));
+
   for (int i = 0; i < 3; ++i) {
     layers_.push_back(std::unique_ptr<MixerInput>(new MixerInput(logistic_,
         1.0e-4)));
     mixers_.push_back(std::vector<std::unique_ptr<Mixer>>());
   }
 
-  unsigned long long input_size = models_.size();
+  unsigned long long input_size = models_.size() + byte_models_.size() + 1;
   std::vector<std::vector<double>> model_params = {{0, 8, 0.005},
       {0, 8, 0.0005}, {1, 8, 0.005}, {1, 8, 0.0005}, {2, 4, 0.005},
       {3, 2, 0.002}};
@@ -313,7 +324,7 @@ void Predictor::AddMixers() {
   Add(2, new Mixer(layers_[2]->inputs_, logistic_, manager_.zero_context_,
       0.0003, 1, input_size));
 
-  layers_[0]->SetNumModels(models_.size());
+  layers_[0]->SetNumModels(models_.size() + byte_models_.size() + 1);
   for (unsigned int i = 1; i < layers_.size(); ++i) {
     layers_[i]->SetNumModels(mixers_[i-1].size() + auxiliary_.size());
   }
@@ -325,6 +336,12 @@ float Predictor::Predict() {
     float p = models_[i]->Predict();
     layers_[0]->SetInput(i, p);
   }
+  for (unsigned int i = 0; i < byte_models_.size(); ++i) {
+    float p = byte_models_[i]->Predict();
+    layers_[0]->SetInput(models_.size() + i, p);
+  }
+  float byte_mixer_p = byte_mixer_->Predict();
+  layers_[0]->SetInput(models_.size() + byte_models_.size(), byte_mixer_p);
   for (unsigned int layer = 1; layer <= 2; ++layer) {
     for (unsigned int i = 0; i < mixers_[layer - 1].size(); ++i) {
       layers_[layer]->SetInput(i, mixers_[layer - 1][i]->Mix());
@@ -345,6 +362,10 @@ void Predictor::Perceive(int bit) {
   for (const auto& model : models_) {
     model->Perceive(bit);
   }
+  for (const auto& model : byte_models_) {
+    model->Perceive(bit);
+  }
+  byte_mixer_->Perceive(bit);
   for (unsigned int i = 0; i < mixers_.size(); ++i) {
     for (const auto& mixer : mixers_[i]) {
       mixer->Perceive(bit);
@@ -362,6 +383,17 @@ void Predictor::Perceive(int bit) {
     for (const auto& model : models_) {
       model->ByteUpdate();
     }
+    for (const auto& model : byte_models_) {
+      model->ByteUpdate();
+    }
+    byte_mixer_->ByteUpdate();
+    for (unsigned int i = 0; i < byte_models_.size(); ++i) {
+      std::array<float, 256> p = byte_models_[i]->BytePredict();
+      for (unsigned int j = 0; j < 256; ++j) {
+        byte_mixer_input_->SetInput(i*256 + j, p[j]);
+      }
+    }
+    byte_mixer_->Mix();
     manager_.bit_context_ = 1;
   }
 }

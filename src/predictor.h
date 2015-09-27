@@ -4,8 +4,10 @@
 #include "mixer/logistic.h"
 #include "mixer/mixer-input.h"
 #include "mixer/mixer.h"
+#include "mixer/byte-mixer.h"
 #include "sse.h"
 #include "models/model.h"
+#include "models/byte-model.h"
 #include "manager.h"
 
 #include <vector>
@@ -20,6 +22,7 @@ class Predictor {
  private:
   unsigned long long GetNumNeurons();
   void Add(Model* model);
+  void AddByteModel(ByteModel* model);
   void Add(int layer, Mixer* mixer);
   void AddPAQ8L();
   void AddPAQ8HP();
@@ -37,12 +40,15 @@ class Predictor {
   void AddMixers();
 
   std::vector<std::unique_ptr<Model>> models_;
+  std::vector<std::unique_ptr<ByteModel>> byte_models_;
   std::vector<std::unique_ptr<SSE>> sse_;
   std::vector<std::unique_ptr<MixerInput>> layers_;
   std::vector<std::vector<std::unique_ptr<Mixer>>> mixers_;
   std::vector<unsigned int> auxiliary_;
   Manager manager_;
   Logistic logistic_;
+  std::unique_ptr<MixerInput> byte_mixer_input_;
+  std::unique_ptr<ByteMixer> byte_mixer_;
 };
 
 #endif
