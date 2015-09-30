@@ -47,7 +47,6 @@ class Predictor {
   std::vector<unsigned int> auxiliary_;
   Manager manager_;
   Logistic logistic_;
-  std::unique_ptr<MixerInput> byte_mixer_input_;
   std::unique_ptr<ByteMixer> byte_mixer_;
 };
 

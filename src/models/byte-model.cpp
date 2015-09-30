@@ -1,8 +1,6 @@
 #include "byte-model.h"
 
-ByteModel::ByteModel() : top_(255), mid_(0), bot_(0) {
-  probs_.fill(1.0 / 256);
-}
+ByteModel::ByteModel() : top_(255), mid_(0), bot_(0), probs_(1.0 / 256, 256) {}
 
 float ByteModel::Predict() {
   float num = 0, denom = 0;
@@ -14,7 +12,7 @@ float ByteModel::Predict() {
   return num / denom;
 }
 
-std::array<float, 256> ByteModel::BytePredict() {
+const std::valarray<float>& ByteModel::BytePredict() {
   return probs_;
 }
 

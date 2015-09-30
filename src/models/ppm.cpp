@@ -118,7 +118,7 @@ void PPM::ByteUpdate() {
   ++cur_depth_;
 
   Table* node = &tables_[cur_];
-  probs_.fill(0);
+  probs_ = 0;
   float escape = 1;
   int order = cur_depth_;
   while (true) {

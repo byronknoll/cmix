@@ -3,20 +3,20 @@
 
 #include "model.h"
 
-#include <array>
+#include <valarray>
 
 class ByteModel : Model {
  public:
   virtual ~ByteModel() {}
   ByteModel();
-  std::array<float, 256> BytePredict();
+  const std::valarray<float>& BytePredict();
   float Predict();
   void Perceive(int bit);
   virtual void ByteUpdate();
 
  protected:
-  std::array<float, 256> probs_;
   int top_, mid_, bot_;
+  std::valarray<float> probs_;
 };
 
 #endif
