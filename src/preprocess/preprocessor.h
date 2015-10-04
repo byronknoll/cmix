@@ -13,6 +13,6 @@ void encode(FILE* in, FILE* out, int n, FILE* dictionary);
 
 void decode(FILE* in, FILE* out, FILE* dictionary);
 
-}  // namespace preprocessor
+}
 
 #endif

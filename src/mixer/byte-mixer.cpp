@@ -7,7 +7,6 @@ ByteMixer::ByteMixer(int input_neurons, int hidden_neurons,
     const unsigned int& bit_context, float learning_rate) :
     byte_(bit_context), learning_rate_(-learning_rate), outputs_(0.0, 256) {
   int output_neurons = 256;
-  // Weights:
   weights_.resize(2);
   srand(0xDEADBEEF);
   for (size_t layer = 0; layer < weights_.size(); ++layer) {
@@ -34,7 +33,6 @@ ByteMixer::ByteMixer(int input_neurons, int hidden_neurons,
     }
   }
 
-  // States:
   states_.resize(weights_.size() + 1);
   for (size_t layer = 0; layer < states_.size(); ++layer) {
     if (layer == 0) {
@@ -47,7 +45,6 @@ ByteMixer::ByteMixer(int input_neurons, int hidden_neurons,
     states_[layer][states_[layer].size() - 1] = 1;
   }
 
-  // Errors:
   errors_.resize(weights_.size());
   for (size_t layer = 0; layer < errors_.size(); ++layer) {
     if (layer == errors_.size() - 1) {
@@ -65,7 +62,6 @@ void ByteMixer::SetInput(int index, float val) {
 void ByteMixer::Train() {
   outputs_ = 0;
   outputs_[byte_] = 1;
-  // Error backpropagation:
   errors_[errors_.size() - 1] = states_[states_.size() - 1] - outputs_;
   for (int layer = errors_.size() - 2; layer >= 0; --layer) {
     int next = layer + 1;
@@ -76,7 +72,6 @@ void ByteMixer::Train() {
     errors_[layer] *= states_[next] * (1.0f - states_[next]);
   }
 
-  // Weight adjustment:
   for (size_t layer = 0; layer < weights_.size(); ++layer) {
     for (size_t neuron = 0; neuron < weights_[layer].size(); ++neuron) {
       weights_[layer][neuron] += (learning_rate_ * errors_[layer][neuron]) *

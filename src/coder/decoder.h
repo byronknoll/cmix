@@ -8,7 +8,7 @@
 class Decoder {
  public:
   Decoder(std::ifstream* is, Predictor* p);
-  int Decode();  // Returns 0 or 1.
+  int Decode();
 
  private:
   int ReadByte();

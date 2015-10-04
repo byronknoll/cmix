@@ -75,7 +75,7 @@ bool IsAscii(int byte) {
 int bmp_info;
 
 Filetype detect(FILE* in, int n, Filetype type) {
-  U32 buf1=0, buf0=0;  // last 8 bytes
+  U32 buf1=0, buf0=0;
   long start=ftell(in);
 
   // For EXE detection
@@ -96,7 +96,7 @@ Filetype detect(FILE* in, int n, Filetype type) {
   // For BMP detection
   uint64_t bmp=0;
   int imgbpp=0,bmpx=0,bmpy=0,bmpof=0;
-  static int deth=0,detd=0;  // detected header/data size in bytes
+  static int deth=0,detd=0;
   if (deth >1) return fseek(in, start+deth, SEEK_SET),deth=0,BMP;
   else if (deth ==-1) return fseek(in, start, SEEK_SET),deth=0,BMP;
   else if (detd) return fseek(in, start+detd, SEEK_SET),detd=0,DEFAULT;
@@ -173,13 +173,13 @@ Filetype detect(FILE* in, int n, Filetype type) {
     }
 
     // Detect .bmp image
-    if ((buf0&0xffff)==16973) imgbpp=bmpx=bmpy=bmpof=0,bmp=i;  //possible 'BM'
+    if ((buf0&0xffff)==16973) imgbpp=bmpx=bmpy=bmpof=0,bmp=i;
     if (bmp) {
       const int p=int(i-bmp);
       if (p==12) bmpof=bswap(buf0);
-      else if (p==16 && buf0!=0x28000000) bmp=0; //windows bmp?
-      else if (p==20) bmpx=bswap(buf0),bmp=((bmpx==0||bmpx>0x40000)?0:bmp); //width
-      else if (p==24) bmpy=abs((int)bswap(buf0)),bmp=((bmpy==0||bmpy>0x20000)?0:bmp); //height
+      else if (p==16 && buf0!=0x28000000) bmp=0;
+      else if (p==20) bmpx=bswap(buf0),bmp=((bmpx==0||bmpx>0x40000)?0:bmp);
+      else if (p==24) bmpy=abs((int)bswap(buf0)),bmp=((bmpy==0||bmpy>0x20000)?0:bmp);
       else if (p==27) imgbpp=c,bmp=((imgbpp!=1 && imgbpp!=4 && imgbpp!=8 && imgbpp!=24)?0:bmp);
       else if (p==31) {
         if (imgbpp!=0 && buf0==0 && bmpx>1) {
@@ -195,7 +195,6 @@ Filetype detect(FILE* in, int n, Filetype type) {
   return type;
 }
 
-// Default encoding as self
 void encode_default(FILE* in, FILE* out, int len) {
   while (len--) putc(getc(in), out);
 }
@@ -204,7 +203,6 @@ int decode_default(FILE* in) {
   return getc(in);
 }
 
-// JPEG encode as self.  The purpose is to shield jpegs from exe transform.
 void encode_jpeg(FILE* in, FILE* out, int len) {
   while (len--) putc(getc(in), out);
 }
@@ -213,8 +211,6 @@ int decode_jpeg(FILE* in) {
   return getc(in);
 }
 
-// 24-bit image data transform:
-// simple color transform (b, g, r) -> (g, g-r, g-b)
 void encode_bmp(FILE* in, FILE* out, int len, int width) {
   fprintf(out, "%c%c%c%c", width>>24, width>>16, width>>8, width);
   int r,g,b;
@@ -410,7 +406,6 @@ void encode(FILE* in, FILE* out, int n, FILE* dictionary) {
   Filetype type=DEFAULT;
   long begin=ftell(in);
 
-  // Make a first pass to estimate the amount of text.
   long start = begin;
   int remainder = n;
   int text_bytes = 0;
@@ -427,10 +422,8 @@ void encode(FILE* in, FILE* out, int n, FILE* dictionary) {
   type = DEFAULT;
   begin = start;
 
-  // If mostly text, assume everything is text.
   double text_fraction = text_bytes;
   text_fraction /= n;
-  // printf("Text fraction: %.4f\n", text_fraction);
   if (text_fraction > 0.95) {
     fprintf(out, "%c%c%c%c%c", TEXT, n>>24, n>>16, n>>8, n);    
     encode_text(in, out, n, dictionary);
@@ -444,7 +437,6 @@ void encode(FILE* in, FILE* out, int n, FILE* dictionary) {
     int len=int(end-begin);
     if (len>0) {
       fprintf(out, "%c%c%c%c%c", type, len>>24, len>>16, len>>8, len);
-      // printf("type: %d\tlength: %d\n", type, len);
       switch(type) {
         case JPEG: encode_jpeg(in, out, len); break;
         case BMP:  encode_bmp(in, out, len, bmp_info); break;
@@ -471,7 +463,6 @@ int decode2(FILE* in, FILE* dictionary) {
     len|=getc(in)<<8;
     len|=getc(in);
     if (len<0) len=1;
-    // printf("type: %d\tlength: %d\n", type, len);
     if (type == TEXT) reset_text_decoder(in);
   }
   --len;
@@ -492,4 +483,4 @@ void decode(FILE* in, FILE* out, FILE* dictionary) {
   }
 }
 
-}  // namespace preprocessor
+}

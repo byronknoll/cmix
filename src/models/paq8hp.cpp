@@ -27,7 +27,7 @@
 #include <math.h>
 #include <ctype.h>
 #include <algorithm>
-#define NDEBUG  // remove for debugging (turns on Array bound checks)
+#define NDEBUG
 
 #ifndef DEFAULT_OPTION
 #define DEFAULT_OPTION 8
@@ -39,47 +39,42 @@
 
 namespace {
 
-// 8, 16, 32 bit unsigned types (adjust as appropriate)
-typedef unsigned char  U8;
+typedef unsigned char U8;
 typedef unsigned short U16;
-typedef unsigned int   U32;
+typedef unsigned int U32;
 
-// min, max functions
 #ifndef min
 inline int min(int a, int b) {return a<b?a:b;}
 inline int max(int a, int b) {return a<b?b:a;}
 #endif
 
-// Error handler: print message if any, and exit
 void quit(const char* message=0) {
   throw message;
 }
 
-typedef enum {DEFAULT, JPEG, EXE, BINTEXT, TEXT } Filetype; 
+typedef enum {DEFAULT, JPEG, EXE, BINTEXT, TEXT } Filetype;
 
 #define preprocFlag 1220
 
-#define OPTION_UTF8							1
-#define OPTION_USE_NGRAMS					2
-#define OPTION_CAPITAL_CONVERSION			4
-#define OPTION_WORD_SURROROUNDING_MODELING	8
-#define OPTION_SPACE_AFTER_EOL				16
-#define OPTION_EOL_CODING					32
-#define OPTION_NORMAL_TEXT_FILTER			64
-#define OPTION_USE_DICTIONARY				128
-#define OPTION_RECORD_INTERLEAVING			256
-#define OPTION_DNA_QUARTER_BYTE				512
-#define OPTION_TRY_SHORTER_WORD				1024
-#define OPTION_TO_LOWER_AFTER_PUNCTUATION	2048
-#define OPTION_SPACELESS_WORDS				4096
-#define OPTION_ADD_SYMBOLS_0_5				8192
-#define OPTION_ADD_SYMBOLS_14_31			16384
-#define OPTION_ADD_SYMBOLS_A_Z				32768
-#define OPTION_ADD_SYMBOLS_MISC				65536
-#define OPTION_SPACE_AFTER_CC_FLAG			131072
+#define OPTION_UTF8 1
+#define OPTION_USE_NGRAMS 2
+#define OPTION_CAPITAL_CONVERSION 4
+#define OPTION_WORD_SURROROUNDING_MODELING 8
+#define OPTION_SPACE_AFTER_EOL 16
+#define OPTION_EOL_CODING 32
+#define OPTION_NORMAL_TEXT_FILTER 64
+#define OPTION_USE_DICTIONARY 128
+#define OPTION_RECORD_INTERLEAVING 256
+#define OPTION_DNA_QUARTER_BYTE 512
+#define OPTION_TRY_SHORTER_WORD 1024
+#define OPTION_TO_LOWER_AFTER_PUNCTUATION 2048
+#define OPTION_SPACELESS_WORDS 4096
+#define OPTION_ADD_SYMBOLS_0_5 8192
+#define OPTION_ADD_SYMBOLS_14_31 16384
+#define OPTION_ADD_SYMBOLS_A_Z 32768
+#define OPTION_ADD_SYMBOLS_MISC 65536
+#define OPTION_SPACE_AFTER_CC_FLAG 131072
 #define IF_OPTION(option) ((preprocFlag & option)!=0)
-
-//////////////////////////// Array ////////////////////////////
 
 template <class T, int ALIGN=0> class Array {
 private:
@@ -147,8 +142,6 @@ template<class T, int ALIGN> void Array<T, ALIGN>::push_back(const T& x) {
   data[n++]=x;
 }
 
-/////////////////////////// String /////////////////////////////
-
 class String: public Array<char> {
 public:
   const char* c_str() const {return &(*this)[0];}
@@ -166,9 +159,6 @@ public:
   }
 };
 
-
-//////////////////////////// rnd ///////////////////////////////
-
 class Random{
   U32 table[64];
   int i;
@@ -183,8 +173,6 @@ public:
     return ++i, table[i&63]=table[(i-24)&63]^table[(i-55)&63];
   }
 } rnd;
-
-////////////////////////////// Buf /////////////////////////////
 
 int pos;
 
@@ -207,21 +195,15 @@ public:
   }
 };
 
-/////////////////////// Global context /////////////////////////
-
-int level=DEFAULT_OPTION;  // Compression level 0 to 9
+int level=DEFAULT_OPTION;
 #define MEM (0x10000<<level)
-int y=0;  // Last bit, 0 or 1, set by encoder
+int y=0;
 
-// Global context set by Predictor and available to all models.
 int c0=1;
 U32 b1=0, b2=0, b3=0, b4=0, b5=0, b6=0, b7=0, b8=0, tt=0, c4=0, x4=0, x5=0, w4=0, w5=0, f4=0;
 int order, bpos=0, cxtfl=3, sm_shft=7, sm_add=65535+127, sm_add_y=0;
 Buf buf;
 
-///////////////////////////// ilog //////////////////////////////
-
-// ilog(x) = round(log2(x) * 16), 0 <= x < 64K
 class Ilog {
   U8 t[65536];
 public:
@@ -229,7 +211,6 @@ public:
   Ilog();
 } ilog;
 
-// Compute lookup table by numerical integration of 1/x
 Ilog::Ilog() {
   U32 x=14155776;
   for (int i=2; i<65536; ++i) {
@@ -238,7 +219,6 @@ Ilog::Ilog() {
   }
 }
 
-// llog(x) accepts 32 bits
 inline int llog(U32 x) {
   if (x>=0x1000000)
     return 256+ilog(x>>16);
@@ -248,11 +228,9 @@ inline int llog(U32 x) {
     return ilog(x);
 }
 
-///////////////////////// state table ////////////////////////
-
 static const U8 State_table[256][4]={
-  {  1,  2, 0, 0},{  3,  5, 1, 0},{  4,  6, 0, 1},{  7, 10, 2, 0},
-  {  8, 12, 1, 1},{  9, 13, 1, 1},{ 11, 14, 0, 2},{ 15, 19, 3, 0},
+  { 1, 2, 0, 0},{ 3, 5, 1, 0},{ 4, 6, 0, 1},{ 7, 10, 2, 0},
+  { 8, 12, 1, 1},{ 9, 13, 1, 1},{ 11, 14, 0, 2},{ 15, 19, 3, 0},
   { 16, 23, 2, 1},{ 17, 24, 2, 1},{ 18, 25, 2, 1},{ 20, 27, 1, 2},
   { 21, 28, 1, 2},{ 22, 29, 1, 2},{ 26, 30, 0, 3},{ 31, 33, 4, 0},
   { 32, 35, 3, 1},{ 32, 35, 3, 1},{ 32, 35, 3, 1},{ 32, 35, 3, 1},
@@ -314,13 +292,10 @@ static const U8 State_table[256][4]={
   {130,244, 0,38},{245,135,39, 0},{246,137,38, 1},{138,247, 1,38},
   {140,248, 0,39},{249,135,40, 0},{250, 69,39, 1},{ 80,251, 1,39},
   {140,252, 0,40},{249,135,41, 0},{250, 69,40, 1},{ 80,251, 1,40},
-  {140,252, 0,41}};  // 252, 253-255 are reserved
+  {140,252, 0,41}};
 
 #define nex(state,sel) State_table[state][sel]
 
-///////////////////////////// Squash //////////////////////////////
-
-// return p = 1/(1 + exp(-d)), d scaled by 8 bits, p scaled by 12 bits
 int squash(int d) {
   static const int t[33]={
     1,2,3,6,10,16,27,45,73,120,194,310,488,747,1101,
@@ -333,8 +308,6 @@ int squash(int d) {
   return (t[d]*(128-w)+t[(d+1)]*w+64) >> 7;
 }
 
-//////////////////////////// Stretch ///////////////////////////////
-
 class Stretch {
   short t[4096];
 public:
@@ -346,7 +319,7 @@ public:
 
 Stretch::Stretch() {
   int pi=0;
-  for (int x=-2047; x<=2047; ++x) {  // invert squash()
+  for (int x=-2047; x<=2047; ++x) {
     int i=squash(x);
     for (int j=pi; j<=i; ++j)
       t[j]=x;
@@ -355,33 +328,31 @@ Stretch::Stretch() {
   t[4095]=2047;
 }
 
-//////////////////////////// Mixer /////////////////////////////
-
 #if !defined(__GNUC__)
 
-#if (2 == _M_IX86_FP) // 2 if /arch:SSE2 was used.
-# define __SSE2__
-#elif (1 == _M_IX86_FP) // 1 if /arch:SSE was used.
-# define __SSE__
+#if (2 == _M_IX86_FP)
+#define __SSE2__
+#elif (1 == _M_IX86_FP)
+#define __SSE__
 #endif
 
-#endif /* __GNUC__ */
+#endif
 
 static int dot_product (const short* const t, const short* const w, int n);
 
 static void train (const short* const t, short* const w, int n, const int e);
-#if defined(__AVX2__) // fast
+#if defined(__AVX2__)
 #include<immintrin.h>
 #define OPTIMIZE "AVX2-"
 static int dot_product (const short* const t, const short* const w, int n) {
   __m256i sum = _mm256_setzero_si256 ();
-  while ((n -= 16) >= 0) { // Each loop sums 16 products
+  while ((n -= 16) >= 0) {
     __m256i tmp = _mm256_madd_epi16 (*(__m256i *) &t[n], *(__m256i *) &w[n]);
     tmp = _mm256_srai_epi32 (tmp, 8);
     sum = _mm256_add_epi32 (sum, tmp);
-  } 
- // exctract high and low of sum and adds
-  __m128i low = _mm_add_epi32 (_mm256_extracti128_si256(sum,0),_mm256_extracti128_si256(sum,1)); 
+  }
+
+  __m128i low = _mm_add_epi32 (_mm256_extracti128_si256(sum,0),_mm256_extracti128_si256(sum,1));
   low = _mm_add_epi32 (low, _mm_srli_si128 (low, 8));
   low = _mm_add_epi32 (low, _mm_srli_si128 (low, 4));
   return _mm_cvtsi128_si32 (low);
@@ -402,7 +373,7 @@ static void train (const short* const t, short* const w, int n, const int e) {
   }
 }
 
-#elif defined(__SSE2__) // faster
+#elif defined(__SSE2__)
 #include <emmintrin.h>
 #define OPTIMIZE "SSE2-"
 
@@ -433,7 +404,7 @@ static void train (const short* const t, short* const w, int n, const int e) {
   }
 }
 
-#elif defined(__SSE__) // fast
+#elif defined(__SSE__)
 #include <xmmintrin.h>
 #define OPTIMIZE "SSE-"
 
@@ -494,7 +465,7 @@ void train(short *t, short *w, int n, int err) {
     w[i]=wt;
   }
 }
-#endif // slow!
+#endif
 
 std::vector<float> model_predictions(460, 0.5);
 unsigned int prediction_index = 0;
@@ -513,7 +484,6 @@ public:
   int nx;
   Mixer(int n, int m, int s=1, int w=0);
 
-  // Adjust weights to minimize coding cost of last prediction
   void update() {
     for (int i=0; i<ncxt; ++i) {
       int err=((y<<12)-pr[i])*7;
@@ -527,7 +497,6 @@ public:
     nx=0;
   }
 
-  // Input x (call up to N times)
   void add(int x) {
     model_predictions[prediction_index] = squash(x) * conversion_factor;
     ++prediction_index;
@@ -540,31 +509,29 @@ public:
     tx[nx++]=z;
   }
 
-  // Set a context (call S times, sum of ranges <= M)
   void set(int cx, int range) {
     cxt[ncxt++]=base+cx;
     base+=range;
   }
 
-  // predict next bit
   int p() {
-    while (nx&7) tx[nx++]=0;  // pad
-    if (mp) {  // combine outputs
-      // printf("%d\n", prediction_index);
-      prediction_index = 0;      
+    while (nx&7) tx[nx++]=0;
+    if (mp) {
+
+      prediction_index = 0;
       mp->update2();
       for (int i=0; i<ncxt; ++i) {
         int dp=dot_product(&tx[0], &wx[cxt[i]*N], nx);
-	dp=(dp*9)>>9;
+ dp=(dp*9)>>9;
         pr[i] = squash(dp);
         mp->add(dp);
       }
       return mp->p();
     }
-    else {  // S=1 context
-	int z=dot_product(&tx[0], &wx[0], nx);
-	base=squash( (z*15) >>13);
-	return squash(z>>9);
+    else {
+ int z=dot_product(&tx[0], &wx[0], nx);
+ base=squash( (z*15) >>13);
+ return squash(z>>9);
     }
   }
   ~Mixer();
@@ -573,7 +540,6 @@ public:
 Mixer::~Mixer() {
   delete mp;
 }
-
 
 Mixer::Mixer(int n, int m, int s, int w):
     N((n+7)&-8), M(m), S(s), wx(N*M),
@@ -586,37 +552,32 @@ Mixer::Mixer(int n, int m, int s, int w):
   if (S>1) mp=new Mixer(S, 1, 1, 0x7fff);
 }
 
-//////////////////////////// APM //////////////////////////////
-
 class APM {
-  int index;     // last p, context
-//const int N;   // number of contexts
-  Array<U16> t;  // [N][33]:  p, context -> p
+  int index;
+
+  Array<U16> t;
 public:
   APM(int n);
   int p(int pr=2048, int cxt=0, int rate=8) {
     pr=stretch(pr);
     int g=(y<<16)+(y<<rate)-y*2;
-    t[index]   += (g-t[index])   >> rate;
+    t[index] += (g-t[index]) >> rate;
     t[index+1] += (g-t[index+1]) >> rate;
-    const int w=pr&127;  // interpolation weight (33 points)
+    const int w=pr&127;
     index=((pr+2048)>>7)+cxt*33;
     return (t[index]*(128-w)+t[index+1]*w) >> 11;
   }
 };
 
-// maps p, cxt -> p initially
 APM::APM(int n): index(0), t(n*33) {
     for (int j=0; j<33; ++j) t[j]=squash((j-16)*128)*16;
     for (int i=33; i<n*33; ++i) t[i]=t[i-33];
 }
 
-//////////////////////////// StateMap //////////////////////////
-
 class StateMap {
 protected:
-  int cxt;  // context
-  U16 t[256]; // 256 states -> probability * 64K
+  int cxt;
+  U16 t[256];
 public:
   StateMap();
   int p(int cx) {
@@ -636,20 +597,15 @@ StateMap::StateMap(): cxt(0) {
   }
 }
 
-//////////////////////////// hash //////////////////////////////
-
-// Hash 2-5 ints.
 inline U32 hash(U32 a, U32 b, U32 c=0xffffffff) {
   U32 h=a*110002499u+b*30005491u+c*50004239u;
   return h^h>>9^a>>3^b>>3^c>>4;
 }
 
-///////////////////////////// BH ////////////////////////////////
-
 template <int B> class BH {
-  enum {M=7};  // search limit
-  Array<U8, 64> t; // elements
-  U32 n; // size-1
+  enum {M=7};
+  Array<U8, 64> t;
+  U32 n;
 public:
   BH(int i): t(i*B), n(i-1) {
   }
@@ -657,7 +613,7 @@ public:
 };
 
 template <int B>
-inline  U8* BH<B>::operator[](U32 i) {
+inline U8* BH<B>::operator[](U32 i) {
   int chk=(i>>16^i)&0xffff;
   i=i*M&n;
   U8 *p=&t[i*B] - B;
@@ -665,12 +621,12 @@ inline  U8* BH<B>::operator[](U32 i) {
   for (j=0; j<M; ++j) {
     p+=B;
     if (p[2]==0) { *(U16*)p=chk; break; }
-    if (*(U16*)p==chk) break;  // found
+    if (*(U16*)p==chk) break;
   }
-  if (j==0) return p;  // front
+  if (j==0) return p;
   if (j==M) {
     --j;
-    if ( /*M>2&&*/ p[2]>p[-2]) --j;
+    if ( p[2]>p[-2]) --j;
   }
   else chk=*(int*)p;
   p = &t[i*4];
@@ -678,8 +634,6 @@ inline  U8* BH<B>::operator[](U32 i) {
   *(int*)p=chk;
   return p;
 }
-
-/////////////////////////// ContextMap /////////////////////////
 
 inline int mix2(Mixer& m, int s, StateMap& sm) {
   int p1=sm.p(s);
@@ -709,18 +663,18 @@ class RunContextMap {
   int mulc;
 public:
   RunContextMap(int m, int c): t(m/4), mulc(c) {cp=t[0]+2;}
-  void set(U32 cx) {  // update count
+  void set(U32 cx) {
     if (cp[0]==0 || cp[1]!=b1) cp[0]=1, cp[1]=b1;
     else if (cp[0]<255) ++cp[0];
     cp=t[cx]+2;
   }
-  int p() {  // predict next bit
+  int p() {
     if ((cp[1]+256)>>(8-bpos)==c0)
       return (((cp[1]>>(7-bpos))&1)*2-1)*ilog(cp[0]+1)*mulc;
     else
       return 0;
   }
-  int mix(Mixer& m) {  // return run length
+  int mix(Mixer& m) {
     m.add(p());
     return cp[0]!=0;
   }
@@ -739,7 +693,7 @@ public:
   void set(U32 cx) {
     cxt=(cx*256)&(t.size()-256);
   }
-  void mix(Mixer& m/*, int rate=7*/) {
+  void mix(Mixer& m ) {
     if (pos<4000000)
     *cp += ((y<<16)-(*cp)+(1<<8)) >> 9;
     else
@@ -768,13 +722,12 @@ class ContextMap {
   void update(U32 cx, int c);
   int mix1(Mixer& m, int cc, int c1, int y1);
 public:
-  ContextMap(U32 m, int c=1);  // m = memory in bytes, a power of 2, C = c
+  ContextMap(U32 m, int c=1);
   ~ContextMap();
-  void set(U32 cx);   // set next whole byte context
+  void set(U32 cx);
   int mix(Mixer& m) {return mix1(m, c0, b1, y);}
 };
 
-// Find or create hash element matching checksum ch
 inline U8* ContextMap::E::get(U16 ch, int j) {
   ch+=j;
   if (chk[last&15]==ch) return &bh[last&15][0];
@@ -787,7 +740,6 @@ inline U8* ContextMap::E::get(U16 ch, int j) {
   return last=0xf0|bi, chk[bi]=ch, (U8*)memset(&bh[bi][0], 0, 7);
 }
 
-// Construct using m bytes of memory for c contexts
 ContextMap::ContextMap(U32 m, int c): C(c), Sz((m>>6)-1), t(m>>6), cp(c), cp0(c),
     cxt(c), runp(c), cn(0) {
   sm=new StateMap[C];
@@ -801,26 +753,24 @@ ContextMap::~ContextMap() {
   delete[] sm;
 }
 
-// Set the i'th context to cx
 inline void ContextMap::set(U32 cx) {
   int i=cn++;
-  cx=cx*123456791+i;  // permute (don't hash) cx to spread the distribution
+  cx=cx*123456791+i;
   cx=cx<<16|cx>>16;
   cxt[i]=cx*987654323+i;
 }
 
 int ContextMap::mix1(Mixer& m, int cc, int c1, int y1) {
-  // Update model with y
+
   int result=0;
   for (int i=0; i<cn; ++i) {
-	U8 *cpi=cp[i];
+ U8 *cpi=cp[i];
     if (cpi) {
       int ns=nex(*cpi, y1);
-      if (ns>=204 && (rnd() << ((452-ns)>>3))) ns-=4; // probabilistic increment
+      if (ns>=204 && (rnd() << ((452-ns)>>3))) ns-=4;
       *cpi=ns;
     }
 
-    // Update context pointers
     if (bpos>1 && runp[i][0]==0)
       cpi=0;
     else if (bpos==1||bpos==3||bpos==6)
@@ -830,47 +780,44 @@ int ContextMap::mix1(Mixer& m, int cc, int c1, int y1) {
     else {
       cp0[i]=cpi=t[(cxt[i]+cc)&Sz].get(cxt[i]>>16,i);
 
-      // Update pending bit histories for bits 2-7
       if (bpos==0) {
         if (cpi[3]==2) {
           const int c=cpi[4]+256;
           U8 *p=t[(cxt[i]+(c>>6))&Sz].get(cxt[i]>>16,i);
           p[0]=1+((c>>5)&1);
-          p[p[0]        ]=1+((c>>4)&1);
+          p[p[0] ]=1+((c>>4)&1);
           p[3+((c>>4)&3)]=1+((c>>3)&1);
           p=t[(cxt[i]+(c>>3))&Sz].get(cxt[i]>>16,i);
           p[0]=1+((c>>2)&1);
-          p[p[0]        ]=1+((c>>1)&1);
+          p[p[0] ]=1+((c>>1)&1);
           p[3+((c>>1)&3)]=1+(c&1);
           cpi[6]=0;
         }
 
-	U8 c0 = runp[i][0];
-        // Update run count of previous context
-        if (c0==0)  // new context
+ U8 c0 = runp[i][0];
+
+        if (c0==0)
           c0=2, runp[i][1]=c1;
-        else if (runp[i][1]!=c1)  // different byte in context
+        else if (runp[i][1]!=c1)
           c0=1, runp[i][1]=c1;
-        else if (c0<254)  // same byte in context
+        else if (c0<254)
           c0+=2;
-	runp[i][0] = c0;
+ runp[i][0] = c0;
         runp[i]=cpi+3;
       }
     }
 
-    // predict from last byte in context
-    int rc=runp[i][0];  // count*2, +1 if 2 different bytes seen
+    int rc=runp[i][0];
     if ((runp[i][1]+256)>>(8-bpos)==cc) {
-      int b=((runp[i][1]>>(7-bpos))&1)*2-1;  // predicted bit + for 1, - for 0
+      int b=((runp[i][1]>>(7-bpos))&1)*2-1;
       int c=ilog(rc+1);
-	if (rc&1) c=(c*15)/4;
-	     else c*=13;
+ if (rc&1) c=(c*15)/4;
+      else c*=13;
       m.add(b*c);
     }
     else
       m.add(0);
 
-    // predict from bit context
     result+=mix2(m, cpi ? *cpi : 0, sm[i]);
     cp[i]=cpi;
   }
@@ -878,48 +825,43 @@ int ContextMap::mix1(Mixer& m, int cc, int c1, int y1) {
   return result;
 }
 
-//////////////////////////// Models //////////////////////////////
-
 static U32 col, frstchar=0, spafdo=0, spaces=0, spacecount=0, words=0, wordcount=0, fails=0, failz=0, failcount=0;
 
-//////////////////////////// wordModel /////////////////////////
-
 void wordModel(Mixer& m) {
-  static U32 word0=0, word1=0, word2=0, word3=0, word4=0;  // hashes
+  static U32 word0=0, word1=0, word2=0, word3=0, word4=0;
   static ContextMap cm(MEM*31, 46);
-  static int nl1=-3, nl=-2;  // previous, current newline position
+  static int nl1=-3, nl=-2;
   static U32 t1[256];
   static U16 t2[0x10000];
 
-  // Update word hashes
   if (bpos==0) {
     U32 c=b1, f=0;
 
-	if (spaces&0x80000000) --spacecount;
-	if (words&0x80000000) --wordcount;
-	spaces=spaces*2;
-	words=words*2;
+ if (spaces&0x80000000) --spacecount;
+ if (words&0x80000000) --wordcount;
+ spaces=spaces*2;
+ words=words*2;
 
     if ( (c-'a') <= ('z'-'a') || c==8 || c==6 || (c>127&&b2!=12)) {
       ++words, ++wordcount;
       word0=word0*263*8+c;
     }
     else {
-	if (c==32 || c==10) { ++spaces, ++spacecount; if (c==10) nl1=nl, nl=pos-1; }
-	if (word0) {
-	  word4=word3*43;
-	  word3=word2*47;
-	  word2=word1*53;
-	  word1=word0*83;
-	  word0=0;
-	  if( c=='.'||c=='O'||c==('}'-'{'+'P') ) f=1, spafdo=0; else { ++spafdo; spafdo=min(63,spafdo); }
-	}
+ if (c==32 || c==10) { ++spaces, ++spacecount; if (c==10) nl1=nl, nl=pos-1; }
+ if (word0) {
+   word4=word3*43;
+   word3=word2*47;
+   word2=word1*53;
+   word1=word0*83;
+   word0=0;
+   if( c=='.'||c=='O'||c==('}'-'{'+'P') ) f=1, spafdo=0; else { ++spafdo; spafdo=min(63,spafdo); }
+ }
     }
-    
+
     U32 h=word0*271+c;
     cm.set(word0);
     cm.set(h+word1);
-    cm.set(  word0*91+word1*89);
+    cm.set( word0*91+word1*89);
     cm.set(h+word1*79+word2*71);
 
     cm.set(h+word2);
@@ -928,26 +870,25 @@ void wordModel(Mixer& m) {
     cm.set(h+word1*73+word3*61);
     cm.set(h+word2*67+word3*59);
 
-	  if (f) {
-	    word4=word3*31;
-	    word3=word2*37;
-	    word2=word1*41;
-	    word1='.';
-	  }
+   if (f) {
+     word4=word3*31;
+     word3=word2*37;
+     word2=word1*41;
+     word1='.';
+   }
 
     cm.set(b3|b4<<8);
     cm.set(spafdo*8 * ((w4&3)==1) );
 
     col=min(31, pos-nl);
-	if (col<=2) {
-		if (col==2) frstchar=min(c,96); else frstchar=0;
-	}
-	if (frstchar=='[' && c==32)	{ if(b3==']' || b4==']' ) frstchar=96; }
+ if (col<=2) {
+  if (col==2) frstchar=min(c,96); else frstchar=0;
+ }
+ if (frstchar=='[' && c==32) { if(b3==']' || b4==']' ) frstchar=96; }
     cm.set(frstchar<<11|c);
 
-    int above=buf[nl1+col]; // text column context
+    int above=buf[nl1+col];
 
-    // Text column models
     cm.set(col<<16|c<<8|above);
     cm.set(col<<8|c);
     cm.set(col*(c==32));
@@ -958,8 +899,7 @@ void wordModel(Mixer& m) {
     cm.set(spaces&0xff);
     cm.set(c*64+spacecount/2);
     cm.set((c<<13)+h);
-    cm.set(        h);
-
+    cm.set( h);
 
     U32 d=c4&0xffff;
     h=w4<<6;
@@ -1003,31 +943,28 @@ void wordModel(Mixer& m) {
   cm.mix(m);
 }
 
-//////////////////////////// recordModel ///////////////////////
-
 void recordModel(Mixer& m) {
-  static int cpos1[256]; //, cpos2[256], cpos3[256], cpos4[256]; //buf(1)->last 3 pos
-  static int wpos1[0x10000]; // buf(1..2) -> last position
+  static int cpos1[256];
+  static int wpos1[0x10000];
   static ContextMap cm(32768/4, 2), cn(32768/2, 5), co(32768, 4), cp(32768*2, 3), cq(32768*4, 3);
 
-  // Find record length
   if (!bpos) {
     int c=b1, w=(b2<<8)+c, d=w&0xf0ff, e=c4&0xffffff;
     cm.set(c<<8| (min(255, pos-cpos1[c])/4) );
     cm.set(w<<9| llog(pos-wpos1[w])>>2);
-    cn.set(w    );
+    cn.set(w );
     cn.set(d<<8 );
     cn.set(c<<16);
     cn.set((f4&0xffff)<<3);
     int col=pos&3;
     cn.set(col|2<<12);
 
-    co.set(c    );
+    co.set(c );
     co.set(w<<8 );
     co.set(w5&0x3ffff);
     co.set(e<<3);
 
-    cp.set(d    );
+    cp.set(d );
     cp.set(c<<8 );
     cp.set(w<<16);
 
@@ -1035,7 +972,6 @@ void recordModel(Mixer& m) {
     cq.set(c<<19);
     cq.set(e);
 
-    // update last context positions
     cpos1[c]=pos;
     wpos1[w]=pos;
   }
@@ -1048,13 +984,11 @@ void recordModel(Mixer& m) {
     cxtfl=3;
 }
 
-//////////////////////////// sparseModel ///////////////////////
-
 void sparseModel(Mixer& m) {
   static ContextMap cn(MEM*2, 5);
   static SmallStationaryContextMap scm1(0x20000,17), scm2(0x20000,12), scm3(0x20000,12),
-				   scm4(0x20000,13), scm5(0x10000,12), scm6(0x20000,12),
-				   scm7(0x2000 ,12), scm8(0x8000 ,13), scm9(0x1000 ,12), scma(0x10000,16);
+       scm4(0x20000,13), scm5(0x10000,12), scm6(0x20000,12),
+       scm7(0x2000 ,12), scm8(0x8000 ,13), scm9(0x1000 ,12), scma(0x10000,16);
 
   if (bpos==0) {
     cn.set(words&0x1ffff);
@@ -1087,21 +1021,17 @@ void sparseModel(Mixer& m) {
 }
 
 int primes[]={ 0, 257,251,241,239,233,229,227,223,211,199,197,193,191 };
-static U32 WRT_mpw[16]= { 3, 3, 3, 2, 2, 2, 1, 1,  1, 1, 1, 1, 1, 0, 0, 0 }, tri[4]={0,4,3,7}, trj[4]={0,6,6,12};
-static U32 WRT_mtt[16]= { 0, 0, 1, 2, 3, 4, 5, 5,  6, 6, 6, 6, 6, 7, 7, 7 };
-
-//////////////////////////// contextModel //////////////////////
+static U32 WRT_mpw[16]= { 3, 3, 3, 2, 2, 2, 1, 1, 1, 1, 1, 1, 1, 0, 0, 0 }, tri[4]={0,4,3,7}, trj[4]={0,6,6,12};
+static U32 WRT_mtt[16]= { 0, 0, 1, 2, 3, 4, 5, 5, 6, 6, 6, 6, 6, 7, 7, 7 };
 
 int contextModel2() {
   static ContextMap cm(MEM*31, 7);
   static RunContextMap rcm7(MEM/4,14), rcm9(MEM/4,18), rcm10(MEM/2,20);
   static Mixer m(456, 128*(16+14+14+12+14+16), 6, 512);
-  static U32 cxt[16];  // order 0-11 contexts
-  //static Filetype filetype=DEFAULT;
-  static int size=0;  // bytes remaining in block
-//  static const char* typenames[4]={"", "jpeg ", "exe ", "text "};
+  static U32 cxt[16];
 
-  // Parse filetype and size
+  static int size=0;
+
   if (bpos==0) {
     --size;
     if (size==-5) {
@@ -1112,7 +1042,6 @@ int contextModel2() {
   m.update();
   m.add(64);
 
-  // Normal model
   if (bpos==0) {
     int i=0, f2=buf(2);
 
@@ -1120,10 +1049,10 @@ int contextModel2() {
       if (b1!=(unsigned int)f2 && buf(3)!=f2 ) i=13, x4=x4*256+f2;
     }
 
-    for (; i>0; --i)  // update order 0-11 context hashes
+    for (; i>0; --i)
       cxt[i]=cxt[i-1]*primes[i];
-    
-    for (i=13; i>0; --i)  // update order 0-11 context hashes
+
+    for (i=13; i>0; --i)
       cxt[i]=cxt[i-1]*primes[i]+b1;
 
     cm.set(cxt[3]);
@@ -1138,7 +1067,7 @@ int contextModel2() {
     rcm9.set(cxt[9]);
     rcm10.set(cxt[11]);
 
-	x4=x4*256+b1;
+ x4=x4*256+b1;
   }
   rcm7.mix(m);
   rcm9.mix(m);
@@ -1159,40 +1088,38 @@ int contextModel2() {
     recordModel(m);
   }
 
-		U32 c1=b1, c2=b2, c;
-		if (c1==9 || c1==10 || c1==32) c1=16;
-		if (c2==9 || c2==10 || c2==32) c2=16;
+  U32 c1=b1, c2=b2, c;
+  if (c1==9 || c1==10 || c1==32) c1=16;
+  if (c2==9 || c2==10 || c2==32) c2=16;
 
-		m.set(256*order + (w4&240) + (c2>>4), 256*7);
+  m.set(256*order + (w4&240) + (c2>>4), 256*7);
 
-		c=(words>>1)&63;
-		m.set((w4&3)*64+c+order*256, 256*7);
+  c=(words>>1)&63;
+  m.set((w4&3)*64+c+order*256, 256*7);
 
-		c=(w4&255)+256*bpos;
-		m.set(c, 256*8);
+  c=(w4&255)+256*bpos;
+  m.set(c, 256*8);
 
-		if(bpos)
-		{
-		c=c0<<(8-bpos);  if(bpos==1)c+=b3/2;
-		c=(min(bpos,5))*256+(tt&63)+(c&192);
-		}
-		else c=(words&12)*16+(tt&63);
-		m.set(c, 1536);
+  if(bpos)
+  {
+  c=c0<<(8-bpos); if(bpos==1)c+=b3/2;
+  c=(min(bpos,5))*256+(tt&63)+(c&192);
+  }
+  else c=(words&12)*16+(tt&63);
+  m.set(c, 1536);
 
-		c=bpos; c2=(c0<<(8-bpos)) | (c1>>bpos);
-		m.set(order*256 + c + (c2&248), 256*7);
+  c=bpos; c2=(c0<<(8-bpos)) | (c1>>bpos);
+  m.set(order*256 + c + (c2&248), 256*7);
 
-		c=c*256+((c0<<(8-bpos))&255);
-		c1 = (words<<bpos) & 255;
-		m.set(c+(c1>>bpos), 2048);
+  c=c*256+((c0<<(8-bpos))&255);
+  c1 = (words<<bpos) & 255;
+  m.set(c+(c1>>bpos), 2048);
 
   return m.p();
 }
 
-//////////////////////////// Predictor /////////////////////////
-
 class Predictor {
-  int pr;  // next prediction
+  int pr;
 public:
   Predictor();
   int p() const {return pr;}
@@ -1204,32 +1131,31 @@ Predictor::Predictor(): pr(2048) {}
 void Predictor::update() {
   static APM a1(256), a2(0x8000), a3(0x8000), a4(0x20000), a5(0x10000), a6(0x10000);
 
-  // Update global context: pos, bpos, c0, c4, buf
   c0+=c0+y;
   if (c0>=256) {
     buf[pos++]=c0;
     c0-=256;
-	if (pos<=1024*1024) {
-		if (pos==1024*1024) sm_shft=9, sm_add=65535+511;
-		if (pos== 512*1024) sm_shft=8, sm_add=65535+255;
-		sm_add_y = sm_add & (-y);
-	}
-	int i=WRT_mpw[c0>>4];
-	w4=w4*4+i;
-	if (b1==12) i=2;
-	w5=w5*4+i;
-	b8=b7, b7=b6, b6=b5, b5=b4,
-	b4=b3; b3=b2; b2=b1; b1=c0;
-	if(c0=='.' || c0=='O' || c0=='M' || c0=='!' || c0==')' || c0==('}'-'{'+'P')) {
-					w5=(w5<<8)|0x3ff, x5=(x5<<8)+c0, f4=(f4&0xfffffff0)+2;
-					if(c0!='!' && c0!='O') w4|=12;
-					if(c0!='!') b2='.', tt=(tt&0xfffffff8)+1;
+ if (pos<=1024*1024) {
+  if (pos==1024*1024) sm_shft=9, sm_add=65535+511;
+  if (pos== 512*1024) sm_shft=8, sm_add=65535+255;
+  sm_add_y = sm_add & (-y);
+ }
+ int i=WRT_mpw[c0>>4];
+ w4=w4*4+i;
+ if (b1==12) i=2;
+ w5=w5*4+i;
+ b8=b7, b7=b6, b6=b5, b5=b4,
+ b4=b3; b3=b2; b2=b1; b1=c0;
+ if(c0=='.' || c0=='O' || c0=='M' || c0=='!' || c0==')' || c0==('}'-'{'+'P')) {
+     w5=(w5<<8)|0x3ff, x5=(x5<<8)+c0, f4=(f4&0xfffffff0)+2;
+     if(c0!='!' && c0!='O') w4|=12;
+     if(c0!='!') b2='.', tt=(tt&0xfffffff8)+1;
                                 }
     c4=(c4<<8)+c0;
-	x5=(x5<<8)+c0;
-	if (c0==32) --c0;
-	f4=f4*16+(c0>>4);
-	tt=tt*8+WRT_mtt[c0>>4];
+ x5=(x5<<8)+c0;
+ if (c0==32) --c0;
+ f4=f4*16+(c0>>4);
+ tt=tt*8+WRT_mtt[c0>>4];
     c0=1;
   }
   bpos=(bpos+1)&7;
@@ -1241,7 +1167,6 @@ void Predictor::update() {
         if (pr>=1820) ++fails, ++failcount;
         if (pr>= 848) ++failz;
 
-  // Filter the context model with APMs
   pr=contextModel2();
 
   int rate=6 + (pos>14*256*1024) + (pos>28*512*1024);
@@ -1252,19 +1177,19 @@ void Predictor::update() {
         if (fails&1) pz+=8;
         pz=pz/2;
 
-  pu=a4.p(pu,   (c0*2)^(hash(b1, (x5>>8)&255, (x5>>16)&0x80ff)&0x1ffff), rate);
-  pv=a2.p(pr,   (c0*8)^(hash(29,failz&2047)&0x7fff), rate+1);
-  pv=a5.p(pv,          hash(c0,w5&0xfffff)&0xffff, rate);
-  pt=a3.p(pr,  (c0*32)^(hash(19,     x5&0x80ffff)&0x7fff), rate);
-  pz=a6.p(pu,   (c0*4)^(hash(min(9,pz),x5&0x80ff)&0xffff), rate);
+  pu=a4.p(pu, (c0*2)^(hash(b1, (x5>>8)&255, (x5>>16)&0x80ff)&0x1ffff), rate);
+  pv=a2.p(pr, (c0*8)^(hash(29,failz&2047)&0x7fff), rate+1);
+  pv=a5.p(pv, hash(c0,w5&0xfffff)&0xffff, rate);
+  pt=a3.p(pr, (c0*32)^(hash(19, x5&0x80ffff)&0x7fff), rate);
+  pz=a6.p(pu, (c0*4)^(hash(min(9,pz),x5&0x80ff)&0xffff), rate);
 
-  if (fails&255)   pr =(pt*6+pu  +pv*11+pz*14 +16)>>5;
-  else		   pr =(pt*4+pu*5+pv*12+pz*11 +16)>>5;
+  if (fails&255) pr =(pt*6+pu +pv*11+pz*14 +16)>>5;
+  else pr =(pt*4+pu*5+pv*12+pz*11 +16)>>5;
 }
 
 Predictor paq8;
 
-}  // namespace
+}
 
 PAQ8HP::PAQ8HP(int memory) {
   level = memory;

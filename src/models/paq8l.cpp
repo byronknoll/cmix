@@ -26,7 +26,7 @@
 #include <time.h>
 #include <math.h>
 #include <ctype.h>
-#define NDEBUG  // remove for debugging (turns on Array bound checks)
+#define NDEBUG
 
 #ifdef UNIX
 #include <sys/types.h>
@@ -48,9 +48,9 @@
 #endif
 
 namespace {
-typedef unsigned char  U8;
+typedef unsigned char U8;
 typedef unsigned short U16;
-typedef unsigned int   U32;
+typedef unsigned int U32;
 
 #ifndef WINDOWS
 inline int min(int a, int b) {return a<b?a:b;}
@@ -60,8 +60,6 @@ inline int max(int a, int b) {return a<b?b:a;}
 void quit(const char* message=0) {
   throw message;
 }
-
-//////////////////////////// Array ////////////////////////////
 
 template <class T, int ALIGN=0> class Array {
 private:
@@ -131,8 +129,6 @@ template<class T, int ALIGN> void Array<T, ALIGN>::push_back(const T& x) {
   data[n++]=x;
 }
 
-/////////////////////////// String /////////////////////////////
-
 class String: public Array<char> {
 public:
   const char* c_str() const {return &(*this)[0];}
@@ -150,9 +146,6 @@ public:
   }
 };
 
-
-//////////////////////////// rnd ///////////////////////////////
-
 class Random{
   Array<U32> table;
   int i;
@@ -167,8 +160,6 @@ public:
     return ++i, table[i&63]=table[(i-24)&63]^table[(i-55)&63];
   }
 } rnd;
-
-////////////////////////////// Buf /////////////////////////////
 
 int pos;
 
@@ -191,19 +182,15 @@ public:
   }
 };
 
-/////////////////////// Global context /////////////////////////
-
-int level=DEFAULT_OPTION;  // Compression level 0 to 9
+int level=DEFAULT_OPTION;
 #define MEM (0x10000<<level)
-int y=0;  // Last bit, 0 or 1, set by encoder
+int y=0;
 
 int c0=1;
 U32 c4=0;
 int bpos=0;
 int blpos=0;
 Buf buf;
-
-///////////////////////////// ilog //////////////////////////////
 
 class Ilog {
   Array<U8> t;
@@ -229,11 +216,9 @@ inline int llog(U32 x) {
     return ilog(x);
 }
 
-///////////////////////// state table ////////////////////////
-
 static const U8 State_table[256][4]={
-  {  1,  2, 0, 0},{  3,  5, 1, 0},{  4,  6, 0, 1},{  7, 10, 2, 0},
-  {  8, 12, 1, 1},{  9, 13, 1, 1},{ 11, 14, 0, 2},{ 15, 19, 3, 0},
+  { 1, 2, 0, 0},{ 3, 5, 1, 0},{ 4, 6, 0, 1},{ 7, 10, 2, 0},
+  { 8, 12, 1, 1},{ 9, 13, 1, 1},{ 11, 14, 0, 2},{ 15, 19, 3, 0},
   { 16, 23, 2, 1},{ 17, 24, 2, 1},{ 18, 25, 2, 1},{ 20, 27, 1, 2},
   { 21, 28, 1, 2},{ 22, 29, 1, 2},{ 26, 30, 0, 3},{ 31, 33, 4, 0},
   { 32, 35, 3, 1},{ 32, 35, 3, 1},{ 32, 35, 3, 1},{ 32, 35, 3, 1},
@@ -295,11 +280,9 @@ static const U8 State_table[256][4]={
   {130,244, 0,38},{245,135,39, 0},{246,137,38, 1},{138,247, 1,38},
   {140,248, 0,39},{249,135,40, 0},{250, 69,39, 1},{ 80,251, 1,39},
   {140,252, 0,40},{249,135,41, 0},{250, 69,40, 1},{ 80,251, 1,40},
-  {140,252, 0,41}};  // 252, 253-255 are reserved
+  {140,252, 0,41}};
 
 #define nex(state,sel) State_table[state][sel]
-
-///////////////////////////// Squash //////////////////////////////
 
 class Squash {
   Array<U16> t;
@@ -325,8 +308,6 @@ Squash::Squash(): t(4096) {
     }
 }
 
-//////////////////////////// Stretch ///////////////////////////////
-
 class Stretch {
   Array<short> t;
 public:
@@ -338,7 +319,7 @@ public:
 
 Stretch::Stretch(): t(4096) {
   int pi=0;
-  for (int x=-2047; x<=2047; ++x) {  // invert squash()
+  for (int x=-2047; x<=2047; ++x) {
     int i=squash(x);
     for (int j=pi; j<=i; ++j)
       t[j]=x;
@@ -347,22 +328,20 @@ Stretch::Stretch(): t(4096) {
   t[4095]=2047;
 }
 
-//////////////////////////// Mixer /////////////////////////////
-
 #if !defined(__GNUC__)
 
-#if (2 == _M_IX86_FP) // 2 if /arch:SSE2 was used.
-# define __SSE2__
-#elif (1 == _M_IX86_FP) // 1 if /arch:SSE was used.
-# define __SSE__
+#if (2 == _M_IX86_FP)
+#define __SSE2__
+#elif (1 == _M_IX86_FP)
+#define __SSE__
 #endif
 
-#endif /* __GNUC__ */
+#endif
 
 static int dot_product (const short* const t, const short* const w, int n);
 
 static void train (const short* const t, short* const w, int n, const int e);
-#if defined(__AVX2__) // fast
+#if defined(__AVX2__)
 #include<immintrin.h>
 #define OPTIMIZE "AVX2-"
 static int dot_product (const short* const t, const short* const w, int n) {
@@ -371,8 +350,8 @@ static int dot_product (const short* const t, const short* const w, int n) {
     __m256i tmp = _mm256_madd_epi16 (*(__m256i *) &t[n], *(__m256i *) &w[n]);
     tmp = _mm256_srai_epi32 (tmp, 8);
     sum = _mm256_add_epi32 (sum, tmp);
-  } 
-  __m128i low = _mm_add_epi32 (_mm256_extracti128_si256(sum,0),_mm256_extracti128_si256(sum,1)); 
+  }
+  __m128i low = _mm_add_epi32 (_mm256_extracti128_si256(sum,0),_mm256_extracti128_si256(sum,1));
   low = _mm_add_epi32 (low, _mm_srli_si128 (low, 8));
   low = _mm_add_epi32 (low, _mm_srli_si128 (low, 4));
   return _mm_cvtsi128_si32 (low);
@@ -393,7 +372,7 @@ static void train (const short* const t, short* const w, int n, const int e) {
   }
 }
 
-#elif defined(__SSE2__) // faster
+#elif defined(__SSE2__)
 #include <emmintrin.h>
 #define OPTIMIZE "SSE2-"
 
@@ -424,7 +403,7 @@ static void train (const short* const t, short* const w, int n, const int e) {
   }
 }
 
-#elif defined(__SSE__) // fast
+#elif defined(__SSE__)
 #include <xmmintrin.h>
 #define OPTIMIZE "SSE-"
 
@@ -485,7 +464,7 @@ void train(short *t, short *w, int n, int err) {
     w[i]=wt;
   }
 }
-#endif // slow!
+#endif
 
 std::vector<float> model_predictions(1167, 0.5);
 unsigned int prediction_index = 0;
@@ -504,7 +483,6 @@ class Mixer {
 public:
   Mixer(int n, int m, int s=1, int w=0);
 
-  // Adjust weights to minimize coding cost of last prediction
   void update() {
     for (int i=0; i<ncxt; ++i) {
       int err=((y<<12)-pr[i])*7;
@@ -513,23 +491,20 @@ public:
     nx=base=ncxt=0;
   }
 
-  // Input x (call up to N times)
   void add(int x) {
     model_predictions[prediction_index] = squash(x) * conversion_factor;
     ++prediction_index;
     tx[nx++]=x;
   }
 
-  // Set a context (call S times, sum of ranges <= M)
   void set(int cx, int range) {
     cxt[ncxt++]=base+cx;
     base+=range;
   }
 
-  // predict next bit
   int p() {
-    while (nx&7) tx[nx++]=0;  // pad
-    if (mp) {  // combine outputs
+    while (nx&7) tx[nx++]=0;
+    if (mp) {
       prediction_index = 0;
       mp->update();
       for (int i=0; i<ncxt; ++i) {
@@ -539,7 +514,7 @@ public:
       mp->set(0, 1);
       return mp->p();
     }
-    else {  // S=1 context
+    else {
       int z = dot_product(&tx[0], &wx[0], nx);
       base = squash((z*16)>>13);
       return pr[0]=squash(z>>9);
@@ -552,7 +527,6 @@ Mixer::~Mixer() {
   delete mp;
 }
 
-
 Mixer::Mixer(int n, int m, int s, int w):
     N((n+7)&-8), M(m), S(s), tx(N), wx(N*M),
     cxt(S), ncxt(0), base(0), nx(0), pr(S), mp(0) {
@@ -563,12 +537,10 @@ Mixer::Mixer(int n, int m, int s, int w):
   if (S>1) mp=new Mixer(S, 1, 1, 0x7fff);
 }
 
-//////////////////////////// APM //////////////////////////////
-
 class APM {
-  int index;     // last p, context
-  const int N;   // number of contexts
-  Array<U16> t;  // [N][33]:  p, context -> p
+  int index;
+  const int N;
+  Array<U16> t;
 public:
   APM(int n);
   int p(int pr=2048, int cxt=0, int rate=7) {
@@ -576,24 +548,21 @@ public:
     int g=(y<<16)+(y<<rate)-y-y;
     t[index] += (g-t[index]) >> rate;
     t[index+1] += (g-t[index+1]) >> rate;
-    const int w=pr&127;  // interpolation weight (33 points)
+    const int w=pr&127;
     index=((pr+2048)>>7)+cxt*33;
     return (t[index]*(128-w)+t[index+1]*w) >> 11;
   }
 };
 
-// maps p, cxt -> p initially
 APM::APM(int n): index(0), N(n), t(n*33) {
   for (int i=0; i<N; ++i)
     for (int j=0; j<33; ++j)
       t[i*33+j] = i==0 ? squash((j-16)*128)*16 : t[j];
 }
 
-//////////////////////////// StateMap //////////////////////////
-
 class StateMap {
 protected:
-  int cxt;  // context
+  int cxt;
   Array<U16> t;
 public:
   StateMap();
@@ -613,15 +582,11 @@ StateMap::StateMap(): cxt(0), t(256) {
   }
 }
 
-//////////////////////////// hash //////////////////////////////
-
 inline U32 hash(U32 a, U32 b, U32 c=0xffffffff, U32 d=0xffffffff,
     U32 e=0xffffffff) {
   U32 h=a*200002979u+b*30005491u+c*50004239u+d*70004807u+e*110002499u;
   return h^h>>9^a>>2^b>>3^c>>4^d>>5^e>>6;
 }
-
-///////////////////////////// BH ////////////////////////////////
 
 template <int B> class BH {
   enum {M=8};
@@ -634,7 +599,7 @@ public:
 };
 
 template <int B>
-inline  U8* BH<B>::operator[](U32 i) {
+inline U8* BH<B>::operator[](U32 i) {
   int chk=(i>>16^i)&0xffff;
   i=i*M&n;
   U8 *p;
@@ -661,8 +626,6 @@ inline  U8* BH<B>::operator[](U32 i) {
   return &t[i*B+1];
 }
 
-/////////////////////////// ContextMap /////////////////////////
-
 inline int mix2(Mixer& m, int s, StateMap& sm) {
   int p1=sm.p(s);
   int n0=-!nex(s,2);
@@ -683,18 +646,18 @@ class RunContextMap {
   U8* cp;
 public:
   RunContextMap(int m): t(m/4) {cp=t[0]+1;}
-  void set(U32 cx) {  // update count
+  void set(U32 cx) {
     if (cp[0]==0 || cp[1]!=buf(1)) cp[0]=1, cp[1]=buf(1);
     else if (cp[0]<255) ++cp[0];
     cp=t[cx]+1;
   }
-  int p() {  // predict next bit
+  int p() {
     if ((cp[1]+256)>>(8-bpos)==c0)
       return (((cp[1]>>(7-bpos))&1)*2-1)*ilog(cp[0]+1)*8;
     else
       return 0;
   }
-  int mix(Mixer& m) {  // return run length
+  int mix(Mixer& m) {
     m.add(p());
     return cp[0]!=0;
   }
@@ -778,7 +741,7 @@ inline void ContextMap::set(U32 cx, int next) {
 }
 
 int ContextMap::mix1(Mixer& m, int cc, int bp, int c1, int y1) {
-  // Update model with y
+
   int result=0;
   for (int i=0; i<cn; ++i) {
     if (cp[i]) {
@@ -787,7 +750,6 @@ int ContextMap::mix1(Mixer& m, int cc, int bp, int c1, int y1) {
       *cp[i]=ns;
     }
 
-    // Update context pointers
     if (bpos>1 && runp[i][0]==0)
       cp[i]=0;
     else if (bpos==1||bpos==3||bpos==6)
@@ -797,7 +759,6 @@ int ContextMap::mix1(Mixer& m, int cc, int bp, int c1, int y1) {
     else {
       cp0[i]=cp[i]=t[(cxt[i]+cc)&(t.size()-1)].get(cxt[i]>>16);
 
-      // Update pending bit histories for bits 2-7
       if (bpos==0) {
         if (cp0[i][3]==2) {
           const int c=cp0[i][4]+256;
@@ -811,7 +772,7 @@ int ContextMap::mix1(Mixer& m, int cc, int bp, int c1, int y1) {
           p[3+((c>>1)&3)]=1+(c&1);
           cp0[i][6]=0;
         }
-        // Update run count of previous context
+
         if (runp[i][0]==0)
           runp[i][0]=2, runp[i][1]=c1;
         else if (runp[i][1]!=c1)
@@ -824,7 +785,6 @@ int ContextMap::mix1(Mixer& m, int cc, int bp, int c1, int y1) {
       }
     }
 
-    // predict from last byte in context
     int rc=runp[i][0];
     if ((runp[i][1]+256)>>(8-bp)==cc) {
       int b=((runp[i][1]>>(7-bp))&1)*2-1;
@@ -834,14 +794,11 @@ int ContextMap::mix1(Mixer& m, int cc, int bp, int c1, int y1) {
     else
       m.add(0);
 
-    // predict from bit context
     result+=mix2(m, cp[i] ? *cp[i] : 0, sm[i]);
   }
   if (bp==7) cn=0;
   return result;
 }
-
-//////////////////////////// matchModel ///////////////////////////
 
 int matchModel(Mixer& m) {
   const int MAXLEN=65534;
@@ -850,23 +807,22 @@ int matchModel(Mixer& m) {
   static int ptr=0;
   static int len=0;
   static int result=0;
-  
+
   static SmallStationaryContextMap scm1(0x20000);
 
   if (!bpos) {
-    h=(h*997*8+buf(1)+1)&(t.size()-1);  // update context hash
+    h=(h*997*8+buf(1)+1)&(t.size()-1);
     if (len) ++len, ++ptr;
-    else {  // find match
+    else {
       ptr=t[h];
       if (ptr && pos-ptr<(int)buf.size())
         while (buf(len+1)==buf[ptr-len-1] && len<MAXLEN) ++len;
     }
-    t[h]=pos;  // update hash table
+    t[h]=pos;
     result=len;
     scm1.set(pos);
   }
 
-  // predict
   if (len>MAXLEN) len=MAXLEN;
   int sgn;
   if (len && buf(1)==buf[ptr-1] && c0==(buf[ptr]+256)>>(8-bpos)) {
@@ -880,8 +836,6 @@ int matchModel(Mixer& m) {
   return result;
 }
 
-//////////////////////////// picModel //////////////////////////
-
 void picModel(Mixer& m) {
   static U32 r0, r1, r2, r3;
   static Array<U8> t(0x10200);
@@ -889,11 +843,9 @@ void picModel(Mixer& m) {
   static int cxt[N];
   static StateMap sm[N];
 
-  // update the model
   for (int i=0; i<N; ++i)
     t[cxt[i]]=nex(t[cxt[i]],y);
 
-  // update the contexts (pixels surrounding the predicted one)
   r0+=r0+y;
   r1+=r1+((buf(215)>>(7-bpos))&1);
   r2+=r2+((buf(431)>>(7-bpos))&1);
@@ -902,16 +854,14 @@ void picModel(Mixer& m) {
   cxt[1]=0x100+((r0&1)|((r1>>4)&0x3e)|((r2>>2)&0x40)|((r3>>1)&0x80));
   cxt[2]=0x200+((r0&0x3f)^(r1&0x3ffe)^((r2<<2)&0x7f00)^((r3<<5)&0xf800));
 
-  // predict
   for (int i=0; i<N; ++i)
     m.add(stretch(sm[i].p(t[cxt[i]])));
 }
 
-//////////////////////////// wordModel /////////////////////////
 U32 b2=0,b3=0,w4=0;
 U32 w5=0,f4=0,tt=0;
-U32 WRT_mpw[16]= { 4, 4, 3, 2, 2, 2, 1, 1,  1, 1, 1, 1, 0, 0, 0, 0 };
-U32 WRT_mtt[16]= { 0, 0, 1, 2, 3, 4, 5, 5,  6, 6, 6, 6, 7, 7, 7, 7 };
+U32 WRT_mpw[16]= { 4, 4, 3, 2, 2, 2, 1, 1, 1, 1, 1, 1, 0, 0, 0, 0 };
+U32 WRT_mtt[16]= { 0, 0, 1, 2, 3, 4, 5, 5, 6, 6, 6, 6, 7, 7, 7, 7 };
 int col=0;
 
 static U32 frstchar=0,spafdo=0,spaces=0,spacecount=0, words=0,wordcount=0,wordlen=0,wordlen1=0;
@@ -925,7 +875,7 @@ void wordModel(Mixer& m) {
     static U32 mask = 0;
     static Array<int> wpos(0x10000);
     static int w=0;
-    // Update word hashes
+
     if (bpos==0) {
         int c=c4&255,f=0;
         if (spaces&0x80000000) --spacecount;
@@ -956,39 +906,38 @@ void wordModel(Mixer& m) {
                 if (c==']'&& (frstchar!=':' || frstchar!='*')) xword0=word0;
                 ccword=0;
                 word0=wordlen=0;
-                if((c=='.'||c=='!'||c=='?' ||c=='}' ||c==')') && buf(2)!=10) f=1; 
-                
+                if((c=='.'||c=='!'||c=='?' ||c=='}' ||c==')') && buf(2)!=10) f=1;
+
             }
-            if ((c4&0xFFFF)==0x3D3D) xword1=word1,xword2=word2; // ==
-            if ((c4&0xFFFF)==0x2727) xword1=word1,xword2=word2; // ''
+            if ((c4&0xFFFF)==0x3D3D) xword1=word1,xword2=word2;
+            if ((c4&0xFFFF)==0x2727) xword1=word1,xword2=word2;
             if (c==32 || c==10 ) { ++spaces, ++spacecount; if (c==10 ) nl1=nl, nl=pos-1;}
-            else if (c=='.' || c=='!' || c=='?' || c==',' || c==';' || c==':') spafdo=0,ccword=c;//*31; 
+            else if (c=='.' || c=='!' || c=='?' || c==',' || c==';' || c==':') spafdo=0,ccword=c;
             else { ++spafdo; spafdo=min(63,spafdo); }
         }
         if (c>='0' && c<='9') {
             number0^=hash(number0, c,1);
         }
         else if (number0) {
-            number1=number0;//*11;
+            number1=number0;
             number0=0,ccword=0;
         }
-   
+
         col=min(255, pos-nl);
-        int above=buf[nl1+col]; // text column context
+        int above=buf[nl1+col];
         if (col<=2) frstchar=(col==2?min(c,96):0);
-        if (frstchar=='[' && c==32)    {if(buf(3)==']' || buf(4)==']' ) frstchar=96,xword0=0;}
+        if (frstchar=='[' && c==32) {if(buf(3)==']' || buf(4)==']' ) frstchar=96,xword0=0;}
         cm.set(hash(513,spafdo, spaces,ccword));
         cm.set(hash(514,frstchar, c));
         cm.set(hash(515,col, frstchar));
         cm.set(hash(516,spaces, (words&255)));
-        
+
         cm.set(hash(256,number0, word2));
         cm.set(hash(257,number0, word1));
         cm.set(hash(258,number1, c,ccword));
         cm.set(hash(259,number0, number1));
         cm.set(hash(260,word0, number1));
 
-       
         cm.set(hash(518,wordlen1,col));
         cm.set(hash(519,c,spacecount/2));
         U32 h=wordcount*64+spacecount;
@@ -1011,7 +960,7 @@ void wordModel(Mixer& m) {
           cm.set(hash(270,word0, xword1));
           cm.set(hash(271,word0, xword2));
           cm.set(hash(272,frstchar, xword2));
-        
+
         cm.set(hash(273,word0, cword0));
         cm.set(hash(274,number0, cword0));
         cm.set(hash(275,h, word2));
@@ -1021,10 +970,10 @@ void wordModel(Mixer& m) {
         cm.set(hash(279,h, word1,word3));
         cm.set(hash(280,h, word2,word3));
         if (f) {
-            word5=word4;//*29;
-            word4=word3;//*31;
-            word3=word2;//*37;
-            word2=word1;//*41;
+            word5=word4;
+            word4=word3;
+            word3=word2;
+            word2=word1;
             word1='.';
         }
         cm.set(hash(523,col,buf(1),above));
@@ -1033,8 +982,7 @@ void wordModel(Mixer& m) {
         cm.set(hash(526,col,c==32));
         cm.set(hash(281, w, llog(blpos-wpos[w])>>4));
         cm.set(hash(282,buf(1),llog(blpos-wpos[w])>>2));
-   
-        
+
    int fl = 0;
     if ((c4&0xff) != 0) {
       if (isalpha(c4&0xff)) fl = 1;
@@ -1046,7 +994,7 @@ void wordModel(Mixer& m) {
       else fl = 7;
     }
     mask = (mask<<3)|fl;
- 
+
     cm.set(hash(528,mask,0));
     cm.set(hash(529,mask,buf(1)));
     cm.set(hash(530,mask&0xff,col));
@@ -1056,13 +1004,11 @@ void wordModel(Mixer& m) {
     cm.mix(m);
 }
 
-//////////////////////////// nestModel ///////////////////////
-
 void nestModel(Mixer& m)
 {
   static int ic=0, bc=0, pc=0,vc=0, qc=0, lvc=0, wc=0;
   static ContextMap cm(MEM/2, 10);
- // static U32 mask = 0;
+
   if (bpos==0) {
     int c=c4&255, matched=1, vv;
     const int lc = (c >= 'A' && c <= 'Z'?c+'a'-'A':c);
@@ -1127,8 +1073,6 @@ void nestModel(Mixer& m)
   cm.mix(m);
 }
 
-//////////////////////////// recordModel ///////////////////////
-
 void recordModel(Mixer& m) {
   static int cpos1[256] , cpos2[256], cpos3[256], cpos4[256];
   static int wpos1[0x10000];
@@ -1136,7 +1080,6 @@ void recordModel(Mixer& m) {
   static int rcount1=0, rcount2=0;
   static ContextMap cm(32768, 3), cn(32768/2, 3), co(32768*2, 3), cp(MEM, 3);
 
-  // Find record length
   if (!bpos) {
     int w=c4&0xffff, c=w&255, d=w>>8;
 #if 1
@@ -1152,11 +1095,10 @@ void recordModel(Mixer& m) {
     if (rcount1>15 && rlen!=rlen1) rlen=rlen1, rcount1=rcount2=0;
     if (rcount2>15 && rlen!=rlen2) rlen=rlen2, rcount1=rcount2=0;
 
-    // Set 2 dimensional contexts
 #endif
     cm.set(c<<8| (min(255, pos-cpos1[c])/4) );
     cm.set(w<<9| llog(pos-wpos1[w])>>2);
-    
+
     cm.set(rlen|buf(rlen)<<10|buf(rlen*2)<<18);
     cn.set(w|rlen<<8);
     cn.set(d|rlen<<16);
@@ -1171,7 +1113,6 @@ void recordModel(Mixer& m) {
     cp.set(rlen|buf(1)<<10|col<<18);
     cp.set(col|rlen<<12);
 
-    // update last context positions
     cpos4[c]=cpos3[c];
     cpos3[c]=cpos2[c];
     cpos2[c]=cpos1[c];
@@ -1189,33 +1130,31 @@ void recordModel1(Mixer& m) {
   static int wpos1[0x10000];
   static ContextMap cm(32768, 2), cn(32768/2, 4+1), co(32768*4, 4),cp(32768*2, 3), cq(32768*2, 3);
 
-  // Find record length
   if (!bpos) {
     int w=c4&0xffff, c=w&255, d=w&0xf0ff,e=c4&0xffffff;
-   
+
     cm.set(c<<8| (min(255, pos-cpos1[c])/4));
     cm.set(w<<9| llog(pos-wpos1[w])>>2);
-  
+
     cn.set(w);
     cn.set(d<<8);
     cn.set(c<<16);
-    cn.set((f4&0xfffff)); 
+    cn.set((f4&0xfffff));
     int col=pos&3;
     cn.set(col|2<<12);
 
-    co.set(c    );
+    co.set(c );
     co.set(w<<8 );
     co.set(w5&0x3ffff);
     co.set(e<<3);
-    
-    cp.set(d    );
+
+    cp.set(d );
     cp.set(c<<8 );
     cp.set(w<<16);
 
     cq.set(w<<3 );
     cq.set(c<<19);
     cq.set(e);
-    // update last context positions
 
     cpos1[c]=pos;
     wpos1[w]=pos;
@@ -1226,8 +1165,6 @@ void recordModel1(Mixer& m) {
   cq.mix(m);
   cp.mix(m);
 }
-
-//////////////////////////// sparseModel ///////////////////////
 
 void sparseModel(Mixer& m, int seenbefore, int howmany) {
   static ContextMap cm(MEM*2, 40+2);
@@ -1270,7 +1207,7 @@ void sparseModel1(Mixer& m, int seenbefore, int howmany) {
   if (bpos==0) {
     scm5.set(seenbefore);
     scm6.set(howmany);
-  U32  h=x4<<6;
+  U32 h=x4<<6;
     cm.set(buf(1)+(h&0xffffff00));
     cm.set(buf(1)+(h&0x00ffff00));
     cm.set(buf(1)+(h&0x0000ff00));
@@ -1281,7 +1218,7 @@ void sparseModel1(Mixer& m, int seenbefore, int howmany) {
      h<<=6, d=c4&0xffffff;
     cm.set(d+(h&0xff000000));
 
-    for (int i=1; i<5; ++i) { 
+    for (int i=1; i<5; ++i) {
       cm.set(seenbefore|buf(i)<<8);
       cm.set((buf(i+3)<<8)|buf(i+1));
     }
@@ -1301,12 +1238,11 @@ void sparseModel1(Mixer& m, int seenbefore, int howmany) {
      h<<=6, d=c4&0xffffff;
     cm.set(d+(h&0xff000000));
     cm.set(w4&0xf0f0f0ff);
-    
-    //cm.set(f4);
+
     cm.set((w4&63)*128+(5<<17));
     cm.set((f4&0xffff)<<11|frstchar);
     cm.set(spafdo*8*((w4&3)==1));
-	
+
       scm1.set(words&127);
       scm2.set((words&12)*16+(w4&12)*4+(buf(1)>>4));
       scm3.set(w4&15);
@@ -1323,8 +1259,6 @@ void sparseModel1(Mixer& m, int seenbefore, int howmany) {
   scma.mix(m);
 }
 
-//////////////////////////// distanceModel ///////////////////////
-
 void distanceModel(Mixer& m) {
   static ContextMap cr(MEM, 3);
   if( bpos == 0 ){
@@ -1339,8 +1273,6 @@ void distanceModel(Mixer& m) {
   }
   cr.mix(m);
 }
-
-//////////////////////////// bmpModel /////////////////////////////////
 
 inline U32 i4(int i) {
   return buf(i)+256*buf(i-1)+65536*buf(i-2)+16777216*buf(i-3);
@@ -1366,33 +1298,33 @@ int bmpModel(Mixer& m) {
 
   if (!bpos && buf(54)=='B' && buf(53)=='M'
       && i4(44)==54 && i4(40)==40 && i4(24)==0) {
-    w=((i4(36)+3)&(-4))*3; 
+    w=((i4(36)+3)&(-4))*3;
     const int height=i4(32);
     eoi=pos;
     if (w<0x30000 && height<0x10000) {
-      eoi=pos+w*height; 
+      eoi=pos+w*height;
     }
     else
       eoi=pos;
   }
 
   if (!bpos) {
-    if (c4==0x49492a00) tiff=pos; 
+    if (c4==0x49492a00) tiff=pos;
     if (pos-tiff==4 && c4!=0x08000000) tiff=0;
-    if (tiff && pos-tiff==200) { 
-      int dirsize=i2(pos-tiff-4); 
+    if (tiff && pos-tiff==200) {
+      int dirsize=i2(pos-tiff-4);
       w=0;
       int bpp=0, compression=0, width=0, height=0;
       for (int i=tiff+6; i<pos-12 && --dirsize>0; i+=12) {
-        int tag=i2(pos-i); 
-        int tagfmt=i2(pos-i-2); 
-        int taglen=i4(pos-i-4); 
-        int tagval=i4(pos-i-8); 
+        int tag=i2(pos-i);
+        int tagfmt=i2(pos-i-2);
+        int taglen=i4(pos-i-4);
+        int tagval=i4(pos-i-8);
         if ((tagfmt==3||tagfmt==4) && taglen==1) {
           if (tag==256) width=tagval;
           if (tag==257) height=tagval;
           if (tag==259) compression=tagval;
-          if (tag==277) bpp=tagval; 
+          if (tag==277) bpp=tagval;
         }
       }
       if (width>0 && height>0 && width*height>50 && compression==1
@@ -1450,8 +1382,6 @@ int bmpModel(Mixer& m) {
   return w;
 }
 
-//////////////////////////// jpegModel /////////////////////////
-
 class IntBuf {
   Array<int> b;
 public:
@@ -1469,53 +1399,53 @@ struct HUF {U32 min, max; int val;};
 
 int jpegModel(Mixer& m) {
   enum {SOF0=0xc0, SOF1, SOF2, SOF3, DHT, RST0=0xd0, SOI=0xd8, EOI, SOS, DQT,
-    DNL, DRI, APP0=0xe0, COM=0xfe, FF}; 
-  static int jpeg=0; 
-  static int app; 
-  static int sof=0, sos=0, data=0; 
-  static Array<int> ht(8); 
-  static int htsize=0; 
-  static U32 huffcode=0; 
-  static int huffbits=0; 
-  static int huffsize=0; 
-  static int rs=-1; 
-  static int mcupos=0; 
-  static Array<HUF> huf(128); 
-  static int mcusize=0; 
+    DNL, DRI, APP0=0xe0, COM=0xfe, FF};
+  static int jpeg=0;
+  static int app;
+  static int sof=0, sos=0, data=0;
+  static Array<int> ht(8);
+  static int htsize=0;
+  static U32 huffcode=0;
+  static int huffbits=0;
+  static int huffsize=0;
+  static int rs=-1;
+  static int mcupos=0;
+  static Array<HUF> huf(128);
+  static int mcusize=0;
   static int linesize=0;
-  static int hufsel[2][10]; 
-  static Array<U8> hbuf(2048); 
-  static Array<int> color(10); 
-  static Array<int> pred(4); 
-  static int dc=0; 
-  static int width=0; 
-  static int row=0, column=0; 
+  static int hufsel[2][10];
+  static Array<U8> hbuf(2048);
+  static Array<int> color(10);
+  static Array<int> pred(4);
+  static int dc=0;
+  static int width=0;
+  static int row=0, column=0;
   static Buf cbuf(0x20000);
-  static int cpos=0; 
+  static int cpos=0;
   static int rs1;
   static int ssum=0, ssum1=0, ssum2=0, ssum3=0;
   static IntBuf cbuf2(0x20000);
   static Array<int> adv_pred(7), sumu(8), sumv(8);
-  static Array<int> ls(10); 
+  static Array<int> ls(10);
   static Array<int> lcp(4), zpos(64);
   static int dqt_state = -1, dqt_end = 0, qnum = 0;
   static Array<U8> qtab(256);
   static Array<int> qmap(10);
 
-  const static U8 zzu[64]={ 
+  const static U8 zzu[64]={
     0,1,0,0,1,2,3,2,1,0,0,1,2,3,4,5,4,3,2,1,0,0,1,2,3,4,5,6,7,6,5,4,
     3,2,1,0,1,2,3,4,5,6,7,7,6,5,4,3,2,3,4,5,6,7,7,6,5,4,5,6,7,7,6,7};
   const static U8 zzv[64]={
     0,0,1,2,1,0,0,1,2,3,4,3,2,1,0,0,1,2,3,4,5,6,5,4,3,2,1,0,0,1,2,3,
     4,5,6,7,7,6,5,4,3,2,1,2,3,4,5,6,7,7,6,5,4,3,4,5,6,7,7,6,5,6,7,7};
   if (!blpos && bpos==1) {
-	jpeg=0;
-  sof=0, sos=0, data=0; 
- 	htsize=0,huffcode=0, huffbits=0,huffsize=0; 
- 	rs=-1, mcupos=0, mcusize=0, linesize=0; 
- 	dc=0, width=0,row=0, column=0;
- 	cpos=0,ssum=0, ssum1=0, ssum2=0, ssum3=0;
- 	dqt_state = -1, dqt_end = 0, qnum = 0;
+ jpeg=0;
+  sof=0, sos=0, data=0;
+  htsize=0,huffcode=0, huffbits=0,huffsize=0;
+  rs=-1, mcupos=0, mcusize=0, linesize=0;
+  dc=0, width=0,row=0, column=0;
+  cpos=0,ssum=0, ssum1=0, ssum2=0, ssum3=0;
+  dqt_state = -1, dqt_end = 0, qnum = 0;
   }
 
   if (!bpos && !blpos) jpeg=0;
@@ -1539,7 +1469,7 @@ int jpegModel(Mixer& m) {
       app=buf(2)*256+buf(1)+2;
     if (buf(5)==FF && buf(4)==SOS) {
       int len=buf(3)*256+buf(2);
-      if (len==6+2*buf(1) && buf(1) && buf(1)<=4) 
+      if (len==6+2*buf(1) && buf(1) && buf(1)<=4)
         sos=pos-5, data=sos+len+2, jpeg=2;
     }
     if (buf(4)==FF && buf(3)==DHT && htsize<8) ht[htsize++]=pos-4;
@@ -1571,16 +1501,16 @@ int jpegModel(Mixer& m) {
       jassert(htsize>0);
       int i;
       for (i=0; i<htsize; ++i) {
-        int p=ht[i]+4; 
-        int end=p+buf[p-2]*256+buf[p-1]-2; 
-        int count=0; 
+        int p=ht[i]+4;
+        int end=p+buf[p-2]*256+buf[p-1]-2;
+        int count=0;
         while (p<end && end<pos && end<p+2100 && ++count<10) {
           int tc=buf[p]>>4, th=buf[p]&15;
           if (tc>=2 || th>=4) break;
           jassert(tc>=0 && tc<2 && th>=0 && th<4);
           HUF* h=&huf[tc*64+th*16];
-          int val=p+17; 
-          int hval=tc*1024+th*256; 
+          int val=p+17;
+          int hval=tc*1024+th*256;
           int j;
           for (j=0; j<256; ++j)
             hbuf[hval+j]=buf[val+j];
@@ -1603,14 +1533,14 @@ int jpegModel(Mixer& m) {
       int ns=buf[sos+4];
       int nf=buf[sof+9];
       jassert(ns<=4 && nf<=4);
-      mcusize=0; 
-      int hmax=0; 
+      mcusize=0;
+      int hmax=0;
       for (i=0; i<ns; ++i) {
         for (int j=0; j<nf; ++j) {
           if (buf[sos+2*i+5]==buf[sof+3*j+10]) {
-            int hv=buf[sof+3*j+11]; 
+            int hv=buf[sof+3*j+11];
             if (hv>>4>hmax) hmax=hv>>4;
-            hv=(hv&15)*(hv>>4); 
+            hv=(hv&15)*(hv>>4);
             jassert(hv>=1 && hv+mcusize<=10);
             while (hv) {
               jassert(mcusize<10);
@@ -1618,7 +1548,7 @@ int jpegModel(Mixer& m) {
               hufsel[1][mcusize]=buf[sos+2*i+6]&15;
               jassert (hufsel[0][mcusize]<4 && hufsel[1][mcusize]<4);
               color[mcusize]=i;
-              int tq=buf[sof+3*j+12]; 
+              int tq=buf[sof+3*j+12];
               jassert(tq>=0 && tq<4);
               qmap[mcusize]=tq;
               --hv;
@@ -1635,15 +1565,15 @@ int jpegModel(Mixer& m) {
         ls[j]=(mcusize-ls[j])<<6;
       }
       for (j=0; j<64; ++j) zpos[zzu[j]+8*zzv[j]]=j;
-      width=buf[sof+7]*256+buf[sof+8]; 
-      width=(width-1)/(hmax*8)+1; 
+      width=buf[sof+7]*256+buf[sof+8];
+      width=(width-1)/(hmax*8)+1;
       jassert(width>0);
-      mcusize*=64; 
+      mcusize*=64;
       row=column=0;
     }
   }
   {
-    if (mcusize && buf(1+(!bpos))!=FF) { 
+    if (mcusize && buf(1+(!bpos))!=FF) {
       jassert(huffbits<=32);
       huffcode+=huffcode+y;
       ++huffbits;
@@ -1669,8 +1599,8 @@ int jpegModel(Mixer& m) {
       if (rs>=0) {
         if (huffsize+(rs&15)==huffbits) {
           rs1=rs;
-          int x=0; 
-          if (mcupos&63) { 
+          int x=0;
+          if (mcupos&63) {
             if (rs==0) {
               mcupos=(mcupos+63)&-64;
               jassert(mcupos>=0 && mcupos<=mcusize && mcupos<=640);
@@ -1679,7 +1609,7 @@ int jpegModel(Mixer& m) {
                 cbuf[cpos++]=0;
               }
             }
-            else { 
+            else {
               jassert((rs&15)<=10);
               const int r=rs>>4;
               const int s=rs&15;
@@ -1696,7 +1626,7 @@ int jpegModel(Mixer& m) {
               ssum+=s;
             }
           }
-          else { 
+          else {
             jassert(rs<12);
             ++mcupos;
             x=huffcode&((1<<rs)-1);
@@ -1789,9 +1719,9 @@ int jpegModel(Mixer& m) {
     return 1;
   }
   const int N=28;
-  static BH<9> t(MEM); 
-  static Array<U32> cxt(N); 
-  static Array<U8*> cp(N); 
+  static BH<9> t(MEM);
+  static Array<U32> cxt(N);
+  static Array<U8*> cp(N);
   static StateMap sm[N];
   static Mixer m1(32, 770, 3);
   static APM a1(0x8000), a2(0x10000);
@@ -1860,8 +1790,6 @@ int jpegModel(Mixer& m) {
   return 1;
 }
 
-//////////////////////////// exeModel /////////////////////////
-
 U32 execxt(int i, int x=0) {
   int prefix=(buf(i+2)==0x0f)+2*(buf(i+2)==0x66)+3*(buf(i+2)==0x67)
     +4*(buf(i+3)==0x0f)+8*(buf(i+3)==0x66)+12*(buf(i+3)==0x67);
@@ -1879,8 +1807,6 @@ void exeModel(Mixer& m) {
   }
   cm.mix(m);
 }
-
-//////////////////////////// indirectModel /////////////////////
 
 void indirectModel(Mixer& m) {
   static ContextMap cm(MEM, 12);
@@ -1920,8 +1846,6 @@ void indirectModel(Mixer& m) {
   cm.mix(m);
 }
 
-//////////////////////////// dmcModel //////////////////////////
-
 struct DMCNode {
   unsigned int nx[2];
   U8 state;
@@ -1934,7 +1858,6 @@ void dmcModel(Mixer& m) {
   static StateMap sm;
   static int threshold=256;
 
-  // clone next state
   if (top>0 && top<(int)t.size()) {
     int next=t[curr].nx[y];
     int n=y?t[curr].c1:t[curr].c0;
@@ -1979,11 +1902,10 @@ void dmcModel(Mixer& m) {
 
    if (y) {
     if (t[curr].c1<=3840) t[curr].c1+=256;
-   } else  if (t[curr].c0<=3840)   t[curr].c0+=256;
+   } else if (t[curr].c0<=3840) t[curr].c0+=256;
   t[curr].state=nex(t[curr].state, y);
   curr=t[curr].nx[y];
 
-  // predict
   const int pr1=sm.p(t[curr].state);
   const int n1=t[curr].c1;
   const int n0=t[curr].c0;
@@ -1991,8 +1913,6 @@ void dmcModel(Mixer& m) {
   m.add(stretch(pr1));
   m.add(stretch(pr2));
 }
-
-//////////////////////////// contextModel //////////////////////
 
 typedef enum {DEFAULT, JPEG, EXE, TEXT} Filetype;
 
@@ -2002,16 +1922,15 @@ int contextModel2() {
   static ContextMap cm(MEM*31, 9);
   static RunContextMap rcm7(MEM), rcm9(MEM), rcm10(MEM);
   static Mixer m(1200, 10800, 8, 32);
-  static U32 cxt[16];  // order 0-11 contexts
+  static U32 cxt[16];
   static Filetype filetype=EXE;
 
   m.update();
   m.add(64);
 
-  // Test for special file types
-  int isjpeg=jpegModel(m);  // 1 if JPEG is detected, else 0
-  int ismatch=ilog(matchModel(m));  // Length of longest matching context
-  int isbmp=bmpModel(m);  // Image width (bytes) if BMP or TIFF detected, or 0
+  int isjpeg=jpegModel(m);
+  int ismatch=ilog(matchModel(m));
+  int isbmp=bmpModel(m);
 
   if (isjpeg) {
     return m.p();
@@ -2026,9 +1945,8 @@ int contextModel2() {
     return m.p();
   }
 
-  // Normal model
   if (bpos==0) {
-    for (int i=15; i>0; --i)  // update order 0-11 context hashes
+    for (int i=15; i>0; --i)
       cxt[i]=cxt[i-1]*257+(c4&255)+1;
     for (int i=0; i<7; ++i)
       cm.set(cxt[i]);
@@ -2039,7 +1957,7 @@ int contextModel2() {
     cm.set(cxt[14]);
   }
   int order=cm.mix(m);
-  
+
   rcm7.mix(m);
   rcm9.mix(m);
   rcm10.mix(m);
@@ -2080,11 +1998,8 @@ int contextModel2() {
   return pr;
 }
 
-
-//////////////////////////// Predictor /////////////////////////
-
 class Predictor {
-  int pr;  // next prediction
+  int pr;
 public:
   Predictor();
   int p() const {return pr;}
@@ -2097,41 +2012,40 @@ void Predictor::update() {
   static APM a(256), a1(0x10000), a2(0x10000), a3(0x10000),
                       a4(0x10000), a5(0x10000), a6(0x10000);
   static U32 x5=0;
-  // Update global context: pos, bpos, c0, c4, buf
+
   c0+=c0+y;
   if (c0>=256) {
     ++blpos;
-    	buf[pos++]=c0;
-	c0-=256;
-	c4=(c4<<8)+c0;
+     buf[pos++]=c0;
+ c0-=256;
+ c4=(c4<<8)+c0;
         int i=WRT_mpw[c0>>4];
-		w4=w4*4+i;
-		if (b2==3) i=2;
-		w5=w5*4+i;
-		b3=b2;
-        b2=c0;   
-	    x4=x4*256+c0,x5=(x5<<8)+c0;
-	    if(c0=='.' || c0=='!' || c0=='?' || c0=='/'|| c0==')') {
-			w5=(w5<<8)|0x3ff,f4=(f4&0xfffffff0)+2,x5=(x5<<8)+c0,x4=x4*256+c0;
+  w4=w4*4+i;
+  if (b2==3) i=2;
+  w5=w5*4+i;
+  b3=b2;
+        b2=c0;
+     x4=x4*256+c0,x5=(x5<<8)+c0;
+     if(c0=='.' || c0=='!' || c0=='?' || c0=='/'|| c0==')') {
+   w5=(w5<<8)|0x3ff,f4=(f4&0xfffffff0)+2,x5=(x5<<8)+c0,x4=x4*256+c0;
             if(c0!='!') w4|=12, tt=(tt&0xfffffff8)+1,b3='.';
-		}
-		if (c0==32) --c0;
-		tt=tt*8+WRT_mtt[c0>>4];
-		f4=f4*16+(c0>>4);
-	c0=1;
+  }
+  if (c0==32) --c0;
+  tt=tt*8+WRT_mtt[c0>>4];
+  f4=f4*16+(c0>>4);
+ c0=1;
   }
   bpos=(bpos+1)&7;
 
-  // Filter the context model with APMs
   int pr0=contextModel2();
 
   pr=a.p(pr0, c0);
-  
+
   int pr1=a1.p(pr0, c0+256*buf(1));
   int pr2=a2.p(pr0, c0^(hash(buf(1), buf(2))&0xffff));
   int pr3=a3.p(pr0, c0^(hash(buf(1), buf(2), buf(3))&0xffff));
   pr0=(pr0+pr1+pr2+pr3+2)>>2;
-  
+
       pr1=a4.p(pr, c0+256*buf(1));
       pr2=a5.p(pr, c0^(hash(buf(1), buf(2))&0xffff));
       pr3=a6.p(pr, c0^(hash(buf(1), buf(2), buf(3))&0xffff));
@@ -2143,7 +2057,7 @@ void Predictor::update() {
 
 Predictor paq8;
 
-}  // namespace
+}
 
 PAQ8L::PAQ8L(int memory) {
   level = memory;
