@@ -80,9 +80,9 @@ void Predictor::AddPAQ8L() {
 }
 
 void Predictor::AddPPM() {
-  AddByteModel(new PPM(7, manager_.bit_context_, 200, 78000000));
-  AddByteModel(new PPM(5, manager_.bit_context_, 200, 1000000));
-  AddByteModel(new PPM(3, manager_.bit_context_, 200, 1000000));
+  AddByteModel(new PPM(7, manager_.bit_context_, 10000, 78000000));
+  AddByteModel(new PPM(5, manager_.bit_context_, 10000, 1000000));
+  AddByteModel(new PPM(3, manager_.bit_context_, 10000, 1000000));
 }
 
 void Predictor::AddDMC() {
