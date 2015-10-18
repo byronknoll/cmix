@@ -80,9 +80,9 @@ void Predictor::AddPAQ8L() {
 }
 
 void Predictor::AddPPM() {
-  AddByteModel(new PPM(7, manager_.bit_context_, 10000, 78000000));
-  AddByteModel(new PPM(5, manager_.bit_context_, 10000, 1000000));
-  AddByteModel(new PPM(3, manager_.bit_context_, 10000, 1000000));
+  AddByteModel(new PPM(7, manager_.bit_context_, 10000, 80000000));
+  AddByteModel(new PPM(5, manager_.bit_context_, 10000, 20000000));
+  AddByteModel(new PPM(3, manager_.bit_context_, 10000, 5000000));
 }
 
 void Predictor::AddDMC() {
@@ -140,9 +140,9 @@ void Predictor::AddEnglish() {
     Add(new ByteRun(context.context_, manager_.bit_context_, 100, 10000000));
     if (params[0] == 1 && params.size() == 1) {
       Add(new Indirect(manager_.run_map_, context.context_,
-          manager_.bit_context_, delta, 1000000));
+          manager_.bit_context_, delta, 500000));
       Add(new DirectHash(context.context_, manager_.bit_context_, 30, 0,
-          2000000));
+          500000));
     }
   }
 }
