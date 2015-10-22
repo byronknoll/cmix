@@ -7,6 +7,7 @@ ByteMixer::ByteMixer(int input_neurons, int hidden_neurons,
     const unsigned int& bit_context, float learning_rate) :
     byte_(bit_context), learning_rate_(-learning_rate), outputs_(0.0, 256) {
   int output_neurons = 256;
+  input_neurons += hidden_neurons;
   weights_.resize(2);
   srand(0xDEADBEEF);
   for (size_t layer = 0; layer < weights_.size(); ++layer) {
@@ -81,6 +82,10 @@ void ByteMixer::Train() {
 }
 
 void ByteMixer::ByteUpdate() {
+  for (size_t index = 0; index < states_[1].size() - 1; ++index) {
+    int input_index = states_[0].size() - states_[1].size() + index;
+    states_[0][input_index] = states_[1][index];
+  }
   for (size_t layer = 0; layer < weights_.size(); ++layer) {
     int offset = layer + 1;
     for (size_t neuron = 0; neuron < weights_[layer].size(); ++neuron) {
