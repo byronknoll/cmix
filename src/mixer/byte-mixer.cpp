@@ -89,9 +89,24 @@ void ByteMixer::ByteUpdate() {
   for (size_t layer = 0; layer < weights_.size(); ++layer) {
     int offset = layer + 1;
     for (size_t neuron = 0; neuron < weights_[layer].size(); ++neuron) {
-      states_[offset][neuron] = std::inner_product(
-          &states_[layer][0], &states_[layer][states_[layer].size()],
-          &weights_[layer][neuron][0], 0.0);
+      float x1 = 0, x2 = 0, x3 = 0, x4 = 0, x5 = 0, x6 = 0, x7 = 0, x8 = 0;
+      size_t weight = 0;
+      for (; weight < states_[layer].size(); weight += 8) {
+        x1 += states_[layer][weight] * weights_[layer][neuron][weight];
+        x2 += states_[layer][weight+1] * weights_[layer][neuron][weight+1];
+        x3 += states_[layer][weight+2] * weights_[layer][neuron][weight+2];
+        x4 += states_[layer][weight+3] * weights_[layer][neuron][weight+3];
+        x5 += states_[layer][weight+4] * weights_[layer][neuron][weight+4];
+        x6 += states_[layer][weight+5] * weights_[layer][neuron][weight+5];
+        x7 += states_[layer][weight+6] * weights_[layer][neuron][weight+6];
+        x8 += states_[layer][weight+7] * weights_[layer][neuron][weight+7];
+      }
+      states_[offset][neuron] = x1 + x2 + x3 + x4 + x5 + x6 + x7 + x8;
+      weight -= 7;
+      for (; weight < states_[layer].size(); ++weight) {
+        states_[offset][neuron] += states_[layer][weight] *
+            weights_[layer][neuron][weight];
+      }
     }
     states_[offset] = 1 / (1 + exp(-states_[offset]));
     if (layer != weights_.size() - 1) {
