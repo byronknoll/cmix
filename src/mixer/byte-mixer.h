@@ -2,12 +2,13 @@
 #define BYTE_MIXER_H
 
 #include "../models/byte-model.h"
+#include "logistic.h"
 
 #include <valarray>
 
 class ByteMixer : public ByteModel {
  public:
-  ByteMixer(int input_neurons, int hidden_neurons,
+  ByteMixer(const Logistic& logistic, int input_neurons, int hidden_neurons,
       const unsigned int& bit_context, float learning_rate);
   void SetInput(int index, float val);
   void Train();
@@ -15,6 +16,7 @@ class ByteMixer : public ByteModel {
 
  private:
   const unsigned int& byte_;
+  const Logistic& logistic_;
   float learning_rate_;
   std::valarray<std::valarray<std::valarray<float>>> weights_;
   std::valarray<std::valarray<float>> states_, errors_;

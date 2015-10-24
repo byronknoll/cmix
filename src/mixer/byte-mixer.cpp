@@ -3,9 +3,10 @@
 #include <stdlib.h>
 #include <math.h>
 
-ByteMixer::ByteMixer(int input_neurons, int hidden_neurons,
-    const unsigned int& bit_context, float learning_rate) :
-    byte_(bit_context), learning_rate_(-learning_rate), outputs_(0.0, 256) {
+ByteMixer::ByteMixer(const Logistic& logistic, int input_neurons,
+    int hidden_neurons, const unsigned int& bit_context, float learning_rate) :
+    byte_(bit_context), logistic_(logistic), learning_rate_(-learning_rate),
+    outputs_(0.0, 256) {
   int output_neurons = 256;
   input_neurons += hidden_neurons;
   weights_.resize(2);
@@ -107,10 +108,7 @@ void ByteMixer::ByteUpdate() {
         states_[offset][neuron] += states_[layer][weight] *
             weights_[layer][neuron][weight];
       }
-    }
-    states_[offset] = 1 / (1 + exp(-states_[offset]));
-    if (layer != weights_.size() - 1) {
-      states_[offset][states_[offset].size() - 1] = 1;
+      states_[offset][neuron] = logistic_.Squash(states_[offset][neuron]);
     }
   }
   probs_ = states_[states_.size() - 1];
