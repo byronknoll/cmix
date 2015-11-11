@@ -6,7 +6,8 @@ OBJS = build/preprocessor.o build/encoder.o build/decoder.o build/predictor.o bu
 
 all: CFLAGS += -Ofast -march=native -s
 all: LFLAGS += -Ofast -march=native -s
-all: cmix
+all: build cmix
+	
 
 debug: CFLAGS += -ggdb
 debug: LFLAGS += -ggdb
@@ -95,6 +96,9 @@ build/sparse.o: src/contexts/sparse.h src/contexts/sparse.cpp src/contexts/conte
 
 build/bit-context.o: src/contexts/bit-context.h src/contexts/bit-context.cpp
 	$(CC) $(CFLAGS) src/contexts/bit-context.cpp -o build/bit-context.o
+
+build:
+	mkdir -p build/
 
 clean:
 	rm -f -r build/* cmix
