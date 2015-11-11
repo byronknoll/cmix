@@ -1,9 +1,15 @@
-cmix version 7
+cmix version 8
 http://www.byronknoll.com/cmix.html
-Released by Byron Knoll on February 4, 2015.
+Released by Byron Knoll on November 10, 2015.
 cmix is free software distributed under the GNU General Public License.
 
 To run cmix in Windows, try compiling in Cygwin using G++.
+
+Changes from version 7 to version 8:
+- Added a recurrent backpropagation neural network to mix byte-level models
+- Added some PPM models
+- Memory tuning
+- Minor refactoring
 
 Changes from version 6 to version 7:
 - Fixed bug that caused cmix to crash in Windows
