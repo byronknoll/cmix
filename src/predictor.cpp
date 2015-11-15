@@ -33,18 +33,37 @@ Predictor::Predictor() : manager_(), logistic_(10000, 1000) {
   AddMixers();
   AddSSE();
 
-  // printf("Number of models: %lu\n", models_.size());
-  // printf("Number of mixer neurons: %llu\n", GetNumNeurons());
+  // PrintStats();
+}
+
+void Predictor::PrintStats() {
+  printf("Number of models: %llu\n", GetNumModels());
+  printf("Number of neurons: %llu\n", GetNumNeurons());
+  printf("Number of connections: %llu\n", GetNumConnections());
+}
+
+unsigned long long Predictor::GetNumModels() {
+  return models_.size() + byte_models_.size() + 1;
 }
 
 unsigned long long Predictor::GetNumNeurons() {
-  unsigned long long neurons = models_.size();
+  unsigned long long neurons = GetNumModels();
   for (unsigned int i = 0; i < layers_.size(); ++i) {
     for (const auto& mixer : mixers_[i]) {
       neurons += mixer->GetNumNeurons();
     }
   }
   return neurons;
+}
+
+unsigned long long Predictor::GetNumConnections() {
+  unsigned long long connections = 0;
+  for (unsigned int i = 0; i < layers_.size(); ++i) {
+    for (const auto& mixer : mixers_[i]) {
+      connections += mixer->GetNumConnections();
+    }
+  }
+  return connections;
 }
 
 void Predictor::Add(Model* model) {

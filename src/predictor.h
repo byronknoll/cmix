@@ -20,7 +20,10 @@ class Predictor {
   void Perceive(int bit);
 
  private:
+  void PrintStats();
+  unsigned long long GetNumModels();
   unsigned long long GetNumNeurons();
+  unsigned long long GetNumConnections();
   void Add(Model* model);
   void AddByteModel(ByteModel* model);
   void Add(int layer, Mixer* mixer);

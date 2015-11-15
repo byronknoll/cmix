@@ -14,6 +14,7 @@ class Mixer {
   float Mix();
   void Perceive(int bit);
   unsigned long long GetNumNeurons();
+  unsigned long long GetNumConnections();
 
  private:
   const std::valarray<float>& inputs_;

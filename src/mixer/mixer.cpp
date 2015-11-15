@@ -23,3 +23,7 @@ void Mixer::Perceive(int bit) {
 unsigned long long Mixer::GetNumNeurons() {
   return weights_.size();
 }
+
+unsigned long long Mixer::GetNumConnections() {
+  return weights_.size() * weights_[0].size();
+}
