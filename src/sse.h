@@ -17,8 +17,7 @@ class SSE {
  private:
   const unsigned int& bit_context_;
   const unsigned long long& byte_context_;
-  unsigned int num_buckets_;
-  unsigned int bucket_;
+  int num_buckets_, bucket_;
   float divisor_;
   std::vector<std::vector<std::array<float, 256>>> predictions_;
 
