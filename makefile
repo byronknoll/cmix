@@ -7,11 +7,10 @@ OBJS = build/preprocessor.o build/encoder.o build/decoder.o build/predictor.o bu
 all: CFLAGS += -Ofast -march=native -s
 all: LFLAGS += -Ofast -march=native -s
 all: build cmix
-	
 
 debug: CFLAGS += -ggdb
 debug: LFLAGS += -ggdb
-debug: cmix
+debug: build cmix
 
 cmix: $(OBJS) src/runner.cpp
 	$(CC) $(LFLAGS) $(OBJS) src/runner.cpp -o cmix
