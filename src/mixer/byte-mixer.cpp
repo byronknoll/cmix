@@ -92,14 +92,13 @@ void ByteMixer::ByteUpdate() {
     for (size_t neuron = 0; neuron < weights_[layer].size(); ++neuron) {
       float x1 = 0, x2 = 0, x3 = 0, x4 = 0;
       size_t weight = 0;
-      for (; weight < states_[layer].size(); weight += 4) {
+      for (; weight < states_[layer].size() - 3; weight += 4) {
         x1 += states_[layer][weight] * weights_[layer][neuron][weight];
         x2 += states_[layer][weight+1] * weights_[layer][neuron][weight+1];
         x3 += states_[layer][weight+2] * weights_[layer][neuron][weight+2];
         x4 += states_[layer][weight+3] * weights_[layer][neuron][weight+3];
       }
       states_[offset][neuron] = x1 + x2 + x3 + x4;
-      weight -= 3;
       for (; weight < states_[layer].size(); ++weight) {
         states_[offset][neuron] += states_[layer][weight] *
             weights_[layer][neuron][weight];
