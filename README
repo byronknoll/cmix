@@ -3,7 +3,11 @@ http://www.byronknoll.com/cmix.html
 Released by Byron Knoll on November 10, 2015.
 cmix is free software distributed under the GNU General Public License.
 
-To run cmix in Windows, try compiling in Cygwin using G++.
+In Linux, use "make" to compile cmix using G++. In Windows, cmix can be compiled and run using Cygwin.
+
+cmix can only compress/decompress single files. To compress multiple files or directories, use TAR to concatenate files.
+
+For some files, preprocessing using "precomp" may improve compression: https://github.com/schnaader/precomp-cpp
 
 Changes from version 7 to version 8:
 - Added a recurrent backpropagation neural network to mix byte-level models
