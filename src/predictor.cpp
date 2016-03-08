@@ -6,9 +6,11 @@
 #include "models/match.h"
 #include "models/dmc.h"
 #include "models/ppm.h"
+#include "models/bracket.h"
 #include "models/paq8l.h"
 #include "models/paq8hp.h"
 #include "contexts/context-hash.h"
+#include "contexts/bracket-context.h"
 #include "contexts/sparse.h"
 #include "contexts/indirect-hash.h"
 #include "contexts/bit-context.h"
@@ -17,6 +19,7 @@
 #include <vector>
 
 Predictor::Predictor() : manager_(), logistic_(10000, 1000) {
+  AddBracket();
   AddPAQ8HP();
   AddPAQ8L();
   AddPPM();
@@ -96,6 +99,16 @@ void Predictor::AddPAQ8L() {
   for (unsigned int i = 0; i < predictions.size(); ++i) {
     Add(new Facade(predictions[i]));
   }
+}
+
+void Predictor::AddBracket() {
+  Add(new Bracket(manager_.bit_context_));
+  const Context& context = manager_.AddContext(std::unique_ptr<Context>(
+      new BracketContext(manager_.bit_context_)));
+  Add(new Direct(context.context_, manager_.bit_context_, 30, 0,
+      context.size_));
+  Add(new Indirect(manager_.nonstationary_, context.context_,
+      manager_.bit_context_, 300, context.size_));
 }
 
 void Predictor::AddPPM() {

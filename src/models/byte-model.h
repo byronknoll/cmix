@@ -5,7 +5,7 @@
 
 #include <valarray>
 
-class ByteModel : Model {
+class ByteModel : public Model {
  public:
   virtual ~ByteModel() {}
   ByteModel();
