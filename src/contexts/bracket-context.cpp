@@ -1,26 +1,35 @@
 #include "bracket-context.h"
 
 BracketContext::BracketContext(const unsigned int& bit_context) :
-    byte_(bit_context), max_(256), active_(0), distance_(0) {
+    byte_(bit_context), max_(256) {
   brackets_ = {{'(',')'}, {'{','}'}, {'[',']'}, {'<','>'}};
   context_ = 0;
   size_ = 257 * max_;
 }
 
 void BracketContext::Update() {
-  if (active_ != -1) {
-    if (brackets_[active_] == byte_) {
-      active_ = -1;
-    } else if (distance_ < max_ - 1) {
-      ++distance_;
+  bool removed = false;
+  if (!active_.empty()) {
+    if (brackets_[active_[active_.size() - 1]] == byte_) removed = true;
+    if (brackets_[active_[active_.size() - 1]] == byte_ ||
+        distance_[distance_.size() - 1] >= max_ - 1) {
+      active_.pop_back();
+      distance_.pop_back();
+    } else {
+      ++distance_[distance_.size() - 1];
     }
   }
-  if (brackets_.find(byte_) != brackets_.end()) {
-    active_ = byte_;
-    distance_ = 0;
+  if (brackets_.find(byte_) != brackets_.end() && !removed) {
+    active_.push_back(byte_);
+    distance_.push_back(0);
+    if (brackets_.size() > 15) {
+      active_.erase(active_.begin());
+      distance_.erase(distance_.begin());
+    }
   }
-  if (active_ != -1) {
-    context_ = max_ * (active_ + 1) + distance_;
+  if (!active_.empty()) {
+    context_ = max_ * (active_[active_.size() - 1] + 1) +
+        distance_[distance_.size() - 1];
   } else {
     context_ = 0;
   }
