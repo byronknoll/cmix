@@ -14,7 +14,8 @@ class Bracket : public ByteModel {
 
  private:
   std::unordered_map<unsigned char, unsigned char> brackets_;
-  int active_, distance_, max_;
+  int max_;
+  std::vector<int> active_, distance_;
   const unsigned int& byte_;
   std::vector<std::vector<std::pair<double, double>>> stats_;
 };
