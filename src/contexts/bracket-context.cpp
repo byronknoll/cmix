@@ -8,9 +8,7 @@ BracketContext::BracketContext(const unsigned int& bit_context) :
 }
 
 void BracketContext::Update() {
-  bool removed = false;
   if (!active_.empty()) {
-    if (brackets_[active_[active_.size() - 1]] == byte_) removed = true;
     if (brackets_[active_[active_.size() - 1]] == byte_ ||
         distance_[distance_.size() - 1] >= distance_limit_ - 1) {
       active_.pop_back();
@@ -19,7 +17,7 @@ void BracketContext::Update() {
       ++distance_[distance_.size() - 1];
     }
   }
-  if (brackets_.find(byte_) != brackets_.end() && !removed) {
+  if (brackets_.find(byte_) != brackets_.end()) {
     active_.push_back(byte_);
     distance_.push_back(0);
     if (brackets_.size() > stack_limit_) {
