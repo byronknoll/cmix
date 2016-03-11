@@ -37,5 +37,7 @@ void BracketContext::Update() {
 bool BracketContext::IsEqual(Context* c) {
   BracketContext* p = dynamic_cast<BracketContext*>(c);
   if (!p) return false;
+  if (distance_limit_ == p->distance_limit_ && stack_limit_ == p->stack_limit_)
+    return true;
   return false;
 }
