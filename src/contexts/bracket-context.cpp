@@ -1,7 +1,8 @@
 #include "bracket-context.h"
 
-BracketContext::BracketContext(const unsigned int& bit_context) :
-    byte_(bit_context), distance_limit_(256), stack_limit_(15) {
+BracketContext::BracketContext(const unsigned int& bit_context,
+    int distance_limit, int stack_limit) : byte_(bit_context),
+    distance_limit_(distance_limit), stack_limit_(stack_limit) {
   brackets_ = {{'(',')'}, {'{','}'}, {'[',']'}, {'<','>'}};
   context_ = 0;
   size_ = 257 * distance_limit_;

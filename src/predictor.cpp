@@ -102,9 +102,9 @@ void Predictor::AddPAQ8L() {
 }
 
 void Predictor::AddBracket() {
-  Add(new Bracket(manager_.bit_context_));
+  Add(new Bracket(manager_.bit_context_, 200, 10, 100000));
   const Context& context = manager_.AddContext(std::unique_ptr<Context>(
-      new BracketContext(manager_.bit_context_)));
+      new BracketContext(manager_.bit_context_, 256, 15)));
   Add(new Direct(context.context_, manager_.bit_context_, 30, 0,
       context.size_));
   Add(new Indirect(manager_.nonstationary_, context.context_,

@@ -8,7 +8,8 @@
 
 class BracketContext : public Context {
  public:
-  BracketContext(const unsigned int& bit_context);
+  BracketContext(const unsigned int& bit_context, int distance_limit,
+      int stack_limit);
   void Update();
   bool IsEqual(Context* c);
 

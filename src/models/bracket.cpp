@@ -1,7 +1,8 @@
 #include "bracket.h"
 
-Bracket::Bracket(const unsigned int& bit_context) : distance_limit_(200),
-    stack_limit_(10), stats_limit_(100000), byte_(bit_context),
+Bracket::Bracket(const unsigned int& bit_context, int distance_limit,
+    int stack_limit, int stats_limit) : distance_limit_(distance_limit),
+    stack_limit_(stack_limit), stats_limit_(stats_limit), byte_(bit_context),
     stats_(256, std::vector<std::pair<unsigned int, unsigned int>>
     (distance_limit_, {1, 256})) {
   brackets_ = {{'(',')'}, {'{','}'}, {'[',']'}, {'<','>'}, {'\'','\''},
