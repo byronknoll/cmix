@@ -12,7 +12,7 @@ Bracket::Bracket(const unsigned int& bit_context, int distance_limit,
 void Bracket::ByteUpdate() {
   probs_ = 1./256;
   if (active_.empty() || (brackets_.find(byte_) != brackets_.end() &&
-      active_[active_.size() - 1] != byte_)) {
+      !(active_[active_.size() - 1] == byte_ && brackets_[byte_] == byte_))) {
     if (brackets_.find(byte_) != brackets_.end()) {
       active_.push_back(byte_);
       distance_.push_back(0);
