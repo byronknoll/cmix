@@ -45,7 +45,7 @@ build/mixer.o: src/mixer/mixer.h src/mixer/mixer.cpp src/mixer/logistic.h
 build/sse.o: src/sse.h src/sse.cpp
 	$(CC) $(CFLAGS) src/sse.cpp -o build/sse.o
 
-build/manager.o: src/manager.h src/manager.cpp src/contexts/context.h src/contexts/bit-context.h
+build/manager.o: src/manager.h src/manager.cpp src/contexts/context.h src/contexts/bit-context.h src/states/nonstationary.h src/states/run-map.h
 	$(CC) $(CFLAGS) src/manager.cpp -o build/manager.o
 
 build/direct.o: src/models/direct.h src/models/direct.cpp src/models/model.h

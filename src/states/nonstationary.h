@@ -12,7 +12,7 @@ class Nonstationary : public State {
   int Next(int state, int bit) const;
 
  private:
-  std::array<unsigned char, 1024> table_;
+  std::array<std::array<unsigned char, 2>, 256> table_;
 };
 
 #endif
