@@ -9,6 +9,7 @@ float ByteModel::Predict() {
     denom += probs_[i];
     if (i > mid_) num += probs_[i];
   }
+  if (denom == 0) return 0.5;
   return num / denom;
 }
 
