@@ -286,6 +286,7 @@ void Predictor::AddMixers() {
   }
 
   unsigned long long input_size = models_.size() + byte_models_.size() + 1;
+  layers_[0]->SetNumModels(input_size);
   std::vector<std::vector<double>> model_params = {{0, 8, 0.005},
       {0, 8, 0.0005}, {1, 8, 0.005}, {1, 8, 0.0005}, {2, 4, 0.005},
       {3, 2, 0.002}};
@@ -330,6 +331,7 @@ void Predictor::AddMixers() {
       bit_context3.size_, input_size));
 
   input_size = mixers_[0].size() + auxiliary_.size();
+  layers_[1]->SetNumModels(input_size);
 
   Add(1, new Mixer(layers_[1]->inputs_, logistic_, manager_.zero_context_,
       0.005, 1, input_size));
@@ -351,13 +353,9 @@ void Predictor::AddMixers() {
       0.0005, 8, input_size));
 
   input_size = mixers_[1].size() + auxiliary_.size();
+  layers_[2]->SetNumModels(input_size);
   Add(2, new Mixer(layers_[2]->inputs_, logistic_, manager_.zero_context_,
       0.0003, 1, input_size));
-
-  layers_[0]->SetNumModels(models_.size() + byte_models_.size() + 1);
-  for (unsigned int i = 1; i < layers_.size(); ++i) {
-    layers_[i]->SetNumModels(mixers_[i-1].size() + auxiliary_.size());
-  }
 }
 
 float Predictor::Predict() {
