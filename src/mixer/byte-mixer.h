@@ -18,6 +18,7 @@ class ByteMixer : public ByteModel {
   const unsigned int& byte_;
   const Logistic& logistic_;
   float learning_rate_;
+  unsigned long long steps_;
   std::valarray<std::valarray<std::valarray<float>>> weights_;
   std::valarray<std::valarray<float>> states_, errors_;
   std::valarray<float> outputs_;

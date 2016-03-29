@@ -6,7 +6,7 @@
 ByteMixer::ByteMixer(const Logistic& logistic, int input_neurons,
     int hidden_neurons, const unsigned int& bit_context, float learning_rate) :
     byte_(bit_context), logistic_(logistic), learning_rate_(-learning_rate),
-    outputs_(0.0, 256) {
+    steps_(1), outputs_(0.0, 256) {
   int output_neurons = 256;
   input_neurons += hidden_neurons;
   weights_.resize(2);
@@ -74,12 +74,14 @@ void ByteMixer::Train() {
     errors_[layer] *= states_[next] * (1.0f - states_[next]);
   }
 
+  float rate = (1.0 / sqrt(0.0000001 * steps_ + 0.8)) * learning_rate_;
   for (size_t layer = 0; layer < weights_.size(); ++layer) {
     for (size_t neuron = 0; neuron < weights_[layer].size(); ++neuron) {
-      weights_[layer][neuron] += (learning_rate_ * errors_[layer][neuron]) *
+      weights_[layer][neuron] += (rate * errors_[layer][neuron]) *
           states_[layer];
     }
   }
+  ++steps_;
 }
 
 void ByteMixer::ByteUpdate() {
