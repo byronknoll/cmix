@@ -17,6 +17,7 @@
 #include "models/facade.h"
 
 #include <vector>
+#include <stdio.h>
 
 Predictor::Predictor() : manager_(), logistic_(10000, 1000) {
   AddBracket();

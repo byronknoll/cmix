@@ -1,6 +1,7 @@
 #include <fstream>
 #include <ctime>
 #include <stdio.h>
+#include <cstdlib>
 
 #include "preprocess/preprocessor.h"
 #include "coder/encoder.h"

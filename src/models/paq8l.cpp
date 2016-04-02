@@ -52,14 +52,12 @@ typedef unsigned char U8;
 typedef unsigned short U16;
 typedef unsigned int U32;
 
-#ifndef WINDOWS
+#ifndef min
 inline int min(int a, int b) {return a<b?a:b;}
 inline int max(int a, int b) {return a<b?b:a;}
 #endif
 
-void quit(const char* message=0) {
-  throw message;
-}
+void quit(const char* message=0) {}
 
 template <class T, int ALIGN=0> class Array {
 private:

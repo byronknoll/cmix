@@ -48,9 +48,7 @@ inline int min(int a, int b) {return a<b?a:b;}
 inline int max(int a, int b) {return a<b?b:a;}
 #endif
 
-void quit(const char* message=0) {
-  throw message;
-}
+void quit(const char* message=0) {}
 
 typedef enum {DEFAULT, JPEG, EXE, BINTEXT, TEXT } Filetype;
 
