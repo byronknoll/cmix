@@ -107,7 +107,8 @@ int main(int argc, char* argv[]) {
       input_bytes = ftell(data_in);
       fseek(data_in, 0L, SEEK_SET);
 
-      preprocessor::encode(data_in, temp_out, input_bytes, dictionary);
+      preprocessor::encode(data_in, temp_out, input_bytes, temp_path,
+          dictionary);
       fclose(data_in);
       fclose(temp_out);
       preprocessor::pretrain(&p, dictionary);
@@ -151,7 +152,7 @@ int main(int argc, char* argv[]) {
       FILE* data_out = fopen(output_path.c_str(), "wb");
       if (!data_out) return fail();
 
-      preprocessor::decode(temp_in, data_out, dictionary);
+      preprocessor::decode(temp_in, data_out, temp_path, dictionary);
       fseek(data_out, 0L, SEEK_END);
       output_bytes = ftell(data_out);
       fclose(temp_in);

@@ -328,8 +328,10 @@ int decode_exe(FILE* in) {
   return c[--q];
 }
 
-void encode_text(FILE* in, FILE* out, int len, FILE* dictionary) {
-  FILE* temp_input = tmpfile();
+void encode_text(FILE* in, FILE* out, int len, string temp_path,
+    FILE* dictionary) {
+  string path1 = temp_path + "2";
+  FILE* temp_input = fopen(path1.c_str(), "wb+");
   if (!temp_input) abort();
 
   for (int i = 0; i < len; ++i) {
@@ -337,7 +339,8 @@ void encode_text(FILE* in, FILE* out, int len, FILE* dictionary) {
   }
   rewind(temp_input);
 
-  FILE* temp_output = tmpfile();
+  string path2 = temp_path + "3";
+  FILE* temp_output = fopen(path2.c_str(), "wb+");
   if (!temp_output) abort();
 
   WRT wrt;
@@ -362,15 +365,20 @@ void encode_text(FILE* in, FILE* out, int len, FILE* dictionary) {
 
   fclose(temp_input);
   fclose(temp_output);
+  remove(path1.c_str());
+  remove(path2.c_str());
 }
 
 FILE* wrt_temp;
 WRT* wrt_decoder = NULL;
 bool wrt_enabled = true;
 
-void reset_text_decoder(FILE* in) {
-  if (wrt_temp) fclose(wrt_temp);
-  wrt_temp = tmpfile();
+void reset_text_decoder(FILE* in, string path) {
+  if (wrt_temp) {
+    fclose(wrt_temp);
+    remove(path.c_str());
+  }
+  wrt_temp = fopen(path.c_str(), "wb+");
   if (!wrt_temp) abort();
 
   unsigned int size = 0;
@@ -402,7 +410,7 @@ int decode_text(FILE* in, FILE* dictionary) {
   return wrt_decoder->WRT_decode_char(wrt_temp, NULL, 0, dictionary);
 }
 
-void encode(FILE* in, FILE* out, int n, FILE* dictionary) {
+void encode(FILE* in, FILE* out, int n, string temp_path, FILE* dictionary) {
   Filetype type=DEFAULT;
   long begin=ftell(in);
 
@@ -426,7 +434,7 @@ void encode(FILE* in, FILE* out, int n, FILE* dictionary) {
   text_fraction /= n;
   if (text_fraction > 0.95) {
     fprintf(out, "%c%c%c%c%c", TEXT, n>>24, n>>16, n>>8, n);    
-    encode_text(in, out, n, dictionary);
+    encode_text(in, out, n, temp_path, dictionary);
     return;
   }
 
@@ -441,7 +449,7 @@ void encode(FILE* in, FILE* out, int n, FILE* dictionary) {
         case JPEG: encode_jpeg(in, out, len); break;
         case BMP:  encode_bmp(in, out, len, bmp_info); break;
         case EXE:  encode_exe(in, out, len, begin); break;
-        case TEXT: encode_text(in, out, len, dictionary); break;
+        case TEXT: encode_text(in, out, len, temp_path, dictionary); break;
         default:   encode_default(in, out, len); break;
       }
     }
@@ -451,7 +459,7 @@ void encode(FILE* in, FILE* out, int n, FILE* dictionary) {
   }
 }
 
-int decode2(FILE* in, FILE* dictionary) {
+int decode2(FILE* in, string temp_path, FILE* dictionary) {
   static Filetype type=DEFAULT;
   static int len=0;
   while (len==0) {
@@ -463,7 +471,7 @@ int decode2(FILE* in, FILE* dictionary) {
     len|=getc(in)<<8;
     len|=getc(in);
     if (len<0) len=1;
-    if (type == TEXT) reset_text_decoder(in);
+    if (type == TEXT) reset_text_decoder(in, temp_path);
   }
   --len;
   switch (type) {
@@ -475,10 +483,17 @@ int decode2(FILE* in, FILE* dictionary) {
   }
 }
 
-void decode(FILE* in, FILE* out, FILE* dictionary) {
+void decode(FILE* in, FILE* out, string temp_path, FILE* dictionary) {
+  string path = temp_path + "2";
   while (true) {
-    int result = decode2(in, dictionary);
-    if (result == -1) return;
+    int result = decode2(in, path, dictionary);
+    if (result == -1) {
+      if (wrt_temp) {
+        fclose(wrt_temp);
+        remove(path.c_str());
+      }
+      return;
+    }
     putc(result, out);
   }
 }
