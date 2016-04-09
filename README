@@ -1,13 +1,22 @@
-cmix version 8
+cmix version 9
 http://www.byronknoll.com/cmix.html
-Released by Byron Knoll on November 10, 2015.
+Released by Byron Knoll on April 8, 2016.
 cmix is free software distributed under the GNU General Public License.
 
-In Linux, use "make" to compile cmix using G++. In Windows, cmix can be compiled and run using Cygwin.
+In Linux or OS X, use "make" to compile cmix using g++. In Windows, cmix can be compiled with MinGW (http://nuwen.net/mingw.html) or Cygwin (https://www.cygwin.com).
 
-cmix can only compress/decompress single files. To compress multiple files or directories, use TAR to concatenate files.
+cmix can only compress/decompress single files. To compress multiple files or directories, create an archive file using "tar" (or some similar tool).
 
 For some files, preprocessing using "precomp" may improve compression: https://github.com/schnaader/precomp-cpp
+
+Compiling with "-Ofast -march=native" will have the best performance, but this can also cause compression results to vary slightly between different computers. Compile with "-O3" to improve compatibility between computers.
+
+Changes from version 8 to version 9:
+- Improved Windows compatibility
+- Learning rate decay
+- New nonstationary state table
+- Bracket matching models
+- Minor bug fixes and memory tuning
 
 Changes from version 7 to version 8:
 - Added a recurrent backpropagation neural network to mix byte-level models
