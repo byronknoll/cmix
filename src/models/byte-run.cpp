@@ -4,7 +4,7 @@ ByteRun::ByteRun(const unsigned long long& byte_context,
     const unsigned int& bit_context, float delta,
     unsigned long long map_size) :  byte_context_(byte_context),
     bit_context_(bit_context), byte_prediction_(0), run_length_(0),
-    map_index_(0), bit_pos_(128), divisor_(1.0 / delta), map_(map_size, 0),
+    bit_pos_(128), map_index_(0), divisor_(1.0 / delta), map_(map_size, 0),
     counts_(map_size, 0) {
   for (int i = 0; i < 256; ++i) {
     predictions_[i] = 0.5 + ((i + 0.5) / 512);

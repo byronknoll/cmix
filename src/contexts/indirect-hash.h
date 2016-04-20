@@ -15,9 +15,7 @@ class IndirectHash : public Context {
  private:
   const unsigned int& byte_;
   unsigned long long context1_;
-  unsigned int hash_size1_;
-  unsigned int hash_size2_;
-  unsigned int size1_;
+  unsigned int hash_size1_, hash_size2_, size1_;
   std::vector<unsigned long long> hashes_;
 };
 

@@ -19,8 +19,7 @@ class Mixer {
  private:
   const std::valarray<float>& inputs_;
   const Logistic& logistic_;
-  float p_;
-  float learning_rate_;
+  float p_, learning_rate_;
   const unsigned long long& context_;
   unsigned long long steps_;
   std::vector<std::valarray<float>> weights_;

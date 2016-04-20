@@ -12,10 +12,8 @@ class Logistic {
  private:
   float SlowStretch(float p);
   float SlowSquash(float p);
-  int stretch_size_;
-  int squash_size_;
-  std::vector<float> stretch_table_;
-  std::vector<float> squash_table_;
+  int stretch_size_, squash_size_;
+  std::vector<float> stretch_table_, squash_table_;
 };
 
 #endif

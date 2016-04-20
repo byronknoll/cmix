@@ -15,8 +15,7 @@ class MixerInput {
 
  private:
   const Logistic& logistic_;
-  float min_;
-  float max_;
+  float min_, max_;
 };
 
 #endif

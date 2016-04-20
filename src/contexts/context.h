@@ -7,8 +7,7 @@ class Context {
   virtual void Update() {}
   virtual bool IsEqual(Context* c) {return false;}
 
-  unsigned long long context_;
-  unsigned long long size_;
+  unsigned long long context_, size_;
 };
 
 #endif

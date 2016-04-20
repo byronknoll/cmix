@@ -19,8 +19,7 @@ class DirectHash : public Model {
   const unsigned int& bit_context_;
   unsigned long long index_;
   int limit_;
-  float delta_;
-  float divisor_;
+  float delta_, divisor_;
   std::vector<std::array<float, 256>> predictions_;
   std::vector<std::array<unsigned char, 256>> counts_;
   std::vector<unsigned long long> checksums_;

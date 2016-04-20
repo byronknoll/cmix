@@ -1,7 +1,7 @@
 #include "dmc.h"
 
-DMC::DMC(float delta, unsigned int max_size) : cur_(0), delta_(delta),
-    max_size_(max_size), threshold_(2), big_threshold_(2) {
+DMC::DMC(float delta, unsigned int max_size) : cur_(0), max_size_(max_size),
+     delta_(delta), threshold_(2), big_threshold_(2) {
   Reset();
 }
 

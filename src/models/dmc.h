@@ -22,9 +22,8 @@ class DMC : public Model {
   void Reset();
 
   std::vector<Node> nodes_;
-  unsigned int cur_;
+  unsigned int cur_, max_size_;
   float delta_;
-  unsigned int max_size_;
   int threshold_, big_threshold_;
 };
 

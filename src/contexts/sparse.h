@@ -14,8 +14,7 @@ class Sparse : public Context {
 
  private:
   const std::vector<unsigned long long>& recent_contexts_;
-  std::vector<unsigned int> orders_;
-  std::vector<unsigned int> factors_;
+  std::vector<unsigned int> orders_, factors_;
 };
 
 #endif

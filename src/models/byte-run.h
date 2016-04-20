@@ -18,13 +18,10 @@ class ByteRun : public Model {
  private:
   const unsigned long long& byte_context_;
   const unsigned int& bit_context_;
-  unsigned char byte_prediction_;
-  unsigned char run_length_;
+  unsigned char byte_prediction_, run_length_, bit_pos_;
   unsigned int map_index_;
-  unsigned char bit_pos_;
   float divisor_;
-  std::vector<unsigned char> map_;
-  std::vector<unsigned char> counts_;
+  std::vector<unsigned char> map_, counts_;
   std::array<float, 256> predictions_;
 };
 
