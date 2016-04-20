@@ -10,7 +10,8 @@ class BitContext {
   unsigned long long context_, size_;
 
  private:
-  const unsigned long long& bit_context_, byte_context_;
+  const unsigned long long& bit_context_;
+  const unsigned long long& byte_context_;
 };
 
 #endif
