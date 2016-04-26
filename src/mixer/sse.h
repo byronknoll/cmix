@@ -1,7 +1,7 @@
 #ifndef SSE_H
 #define SSE_H
 
-#include "mixer/logistic.h"
+#include "logistic.h"
 
 #include <vector>
 #include <array>

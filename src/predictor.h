@@ -5,7 +5,7 @@
 #include "mixer/mixer-input.h"
 #include "mixer/mixer.h"
 #include "mixer/byte-mixer.h"
-#include "sse.h"
+#include "mixer/sse.h"
 #include "models/model.h"
 #include "models/byte-model.h"
 #include "manager.h"

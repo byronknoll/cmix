@@ -24,7 +24,7 @@ build/encoder.o: src/coder/encoder.h src/coder/encoder.cpp src/predictor.h
 build/decoder.o: src/coder/decoder.h src/coder/decoder.cpp src/predictor.h
 	$(CC) $(CFLAGS) src/coder/decoder.cpp -o build/decoder.o
 
-build/predictor.o: src/predictor.h src/predictor.cpp src/mixer/mixer-input.h src/mixer/byte-mixer.h src/mixer/mixer.h src/sse.h src/models/model.h src/models/byte-model.h src/models/direct.h src/models/direct-hash.h src/models/indirect.h src/models/byte-run.h src/models/match.h src/models/dmc.h src/models/bracket.h src/models/ppm.h src/models/facade.h src/models/paq8l.h src/models/paq8hp.h src/manager.h src/contexts/context-hash.h src/contexts/bracket-context.h src/contexts/sparse.h src/contexts/indirect-hash.h src/contexts/bit-context.h src/models/facade.h src/mixer/logistic.h
+build/predictor.o: src/predictor.h src/predictor.cpp src/mixer/mixer-input.h src/mixer/byte-mixer.h src/mixer/mixer.h src/mixer/sse.h src/models/model.h src/models/byte-model.h src/models/direct.h src/models/direct-hash.h src/models/indirect.h src/models/byte-run.h src/models/match.h src/models/dmc.h src/models/bracket.h src/models/ppm.h src/models/facade.h src/models/paq8l.h src/models/paq8hp.h src/manager.h src/contexts/context-hash.h src/contexts/bracket-context.h src/contexts/sparse.h src/contexts/indirect-hash.h src/contexts/bit-context.h src/models/facade.h src/mixer/logistic.h
 	$(CC) $(CFLAGS) src/predictor.cpp -o build/predictor.o
 
 build/logistic.o: src/mixer/logistic.h src/mixer/logistic.cpp
@@ -42,8 +42,8 @@ build/byte-model.o: src/models/byte-model.h src/models/byte-model.cpp src/models
 build/mixer.o: src/mixer/mixer.h src/mixer/mixer.cpp src/mixer/logistic.h
 	$(CC) $(CFLAGS) src/mixer/mixer.cpp -o build/mixer.o
 
-build/sse.o: src/sse.h src/sse.cpp
-	$(CC) $(CFLAGS) src/sse.cpp -o build/sse.o
+build/sse.o: src/mixer/sse.h src/mixer/sse.cpp
+	$(CC) $(CFLAGS) src/mixer/sse.cpp -o build/sse.o
 
 build/manager.o: src/manager.h src/manager.cpp src/contexts/context.h src/contexts/bit-context.h src/states/nonstationary.h src/states/run-map.h
 	$(CC) $(CFLAGS) src/manager.cpp -o build/manager.o
