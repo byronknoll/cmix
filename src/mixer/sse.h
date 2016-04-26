@@ -20,7 +20,6 @@ class SSE {
   int num_buckets_, bucket_;
   float divisor_;
   std::vector<std::vector<std::array<float, 256>>> predictions_;
-
 };
 
 #endif

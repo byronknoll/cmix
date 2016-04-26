@@ -106,10 +106,10 @@ void Predictor::AddBracket() {
   Add(new Bracket(manager_.bit_context_, 200, 10, 100000));
   const Context& context = manager_.AddContext(std::unique_ptr<Context>(
       new BracketContext(manager_.bit_context_, 256, 15)));
-  Add(new Direct(context.context_, manager_.bit_context_, 30, 0,
-      context.size_));
-  Add(new Indirect(manager_.nonstationary_, context.context_,
-      manager_.bit_context_, 300, context.size_));
+  Add(new Direct(context.GetContext(), manager_.bit_context_, 30, 0,
+      context.Size()));
+  Add(new Indirect(manager_.nonstationary_, context.GetContext(),
+      manager_.bit_context_, 300, context.Size()));
 }
 
 void Predictor::AddPPM() {
@@ -131,8 +131,8 @@ void Predictor::AddByteRun() {
   for (const auto& params : model_params) {
     const Context& context = manager_.AddContext(std::unique_ptr<Context>(
         new ContextHash(manager_.bit_context_, params[0], params[1])));
-    Add(new ByteRun(context.context_, manager_.bit_context_, delta,
-        std::min(max_size, context.size_)));
+    Add(new ByteRun(context.GetContext(), manager_.bit_context_, delta,
+        std::min(max_size, context.Size())));
   }
 }
 
@@ -144,8 +144,8 @@ void Predictor::AddNonstationary() {
   for (const auto& params : model_params) {
     const Context& context = manager_.AddContext(std::unique_ptr<Context>(
         new ContextHash(manager_.bit_context_, params[0], params[1])));
-    Add(new Indirect(manager_.nonstationary_, context.context_,
-        manager_.bit_context_, delta, std::min(max_size, context.size_)));
+    Add(new Indirect(manager_.nonstationary_, context.GetContext(),
+        manager_.bit_context_, delta, std::min(max_size, context.Size())));
   }
 }
 
@@ -159,7 +159,7 @@ void Predictor::AddEnglish() {
   for (const auto& params : model_params) {
     std::unique_ptr<Context> hash(new Sparse(manager_.words_, params));
     const Context& context = manager_.AddContext(std::move(hash));
-    Add(new Indirect(manager_.nonstationary_, context.context_,
+    Add(new Indirect(manager_.nonstationary_, context.GetContext(),
         manager_.bit_context_, delta, max_size));
   }
 
@@ -168,13 +168,14 @@ void Predictor::AddEnglish() {
   for (const auto& params : model_params2) {
     std::unique_ptr<Context> hash(new Sparse(manager_.words_, params));
     const Context& context = manager_.AddContext(std::move(hash));
-    Add(new Match(manager_.history_, context.context_, manager_.bit_context_,
-        200, 0.5, 10000000, &(manager_.longest_match_)));
-    Add(new ByteRun(context.context_, manager_.bit_context_, 100, 10000000));
+    Add(new Match(manager_.history_, context.GetContext(),
+        manager_.bit_context_, 200, 0.5, 10000000, &(manager_.longest_match_)));
+    Add(new ByteRun(context.GetContext(), manager_.bit_context_, 100,
+        10000000));
     if (params[0] == 1 && params.size() == 1) {
-      Add(new Indirect(manager_.run_map_, context.context_,
+      Add(new Indirect(manager_.run_map_, context.GetContext(),
           manager_.bit_context_, delta, 500000));
-      Add(new DirectHash(context.context_, manager_.bit_context_, 30, 0,
+      Add(new DirectHash(context.GetContext(), manager_.bit_context_, 30, 0,
           500000));
     }
   }
@@ -190,7 +191,7 @@ void Predictor::AddSparse() {
     if (params.size() > 1) max_size = 256 * 256;
     std::unique_ptr<Context> hash(new Sparse(manager_.recent_bytes_, params));
     const Context& context = manager_.AddContext(std::move(hash));
-    Add(new Indirect(manager_.nonstationary_, context.context_,
+    Add(new Indirect(manager_.nonstationary_, context.GetContext(),
         manager_.bit_context_, delta, max_size));
   }
   std::vector<std::vector<unsigned int>> model_params2 = {{1}, {0, 2}, {0, 4},
@@ -198,9 +199,10 @@ void Predictor::AddSparse() {
   for (const auto& params : model_params2) {
     std::unique_ptr<Context> hash(new Sparse(manager_.recent_bytes_, params));
     const Context& context = manager_.AddContext(std::move(hash));
-    Add(new Match(manager_.history_, context.context_, manager_.bit_context_,
-        200, 0.5, 10000000, &(manager_.longest_match_)));
-    Add(new ByteRun(context.context_, manager_.bit_context_, 100, 10000000));
+    Add(new Match(manager_.history_, context.GetContext(),
+        manager_.bit_context_, 200, 0.5, 10000000, &(manager_.longest_match_)));
+    Add(new ByteRun(context.GetContext(), manager_.bit_context_, 100,
+        10000000));
   }
 }
 
@@ -212,11 +214,11 @@ void Predictor::AddDirect() {
     const Context& context = manager_.AddContext(std::unique_ptr<Context>(
         new ContextHash(manager_.bit_context_,params[0], params[1])));
     if (params[0] < 3) {
-      Add(new Direct(context.context_, manager_.bit_context_, limit, delta,
-          context.size_));
+      Add(new Direct(context.GetContext(), manager_.bit_context_, limit, delta,
+          context.Size()));
     } else {
-      Add(new DirectHash(context.context_, manager_.bit_context_, limit, delta,
-          100000));
+      Add(new DirectHash(context.GetContext(), manager_.bit_context_, limit,
+          delta, 100000));
     }
   }
 }
@@ -229,8 +231,8 @@ void Predictor::AddRunMap() {
   for (const auto& params : model_params) {
     const Context& context = manager_.AddContext(std::unique_ptr<Context>(
         new ContextHash(manager_.bit_context_, params[0], params[1])));
-    Add(new Indirect(manager_.run_map_, context.context_, manager_.bit_context_,
-        delta, std::min(max_size, context.size_)));
+    Add(new Indirect(manager_.run_map_, context.GetContext(),
+        manager_.bit_context_, delta, std::min(max_size, context.Size())));
   }
 }
 
@@ -244,8 +246,8 @@ void Predictor::AddMatch() {
   for (const auto& params : model_params) {
     const Context& context = manager_.AddContext(std::unique_ptr<Context>(
         new ContextHash(manager_.bit_context_,params[0], params[1])));
-    Add(new Match(manager_.history_, context.context_, manager_.bit_context_,
-        limit, delta, std::min(max_size, context.size_),
+    Add(new Match(manager_.history_, context.GetContext(),
+        manager_.bit_context_, limit, delta, std::min(max_size, context.Size()),
         &(manager_.longest_match_)));
   }
 }
@@ -260,8 +262,8 @@ void Predictor::AddDoubleIndirect() {
     const Context& context = manager_.AddContext(std::unique_ptr<Context>(
         new IndirectHash(manager_.bit_context_, params[0], params[1],
         params[2], params[3])));
-    Add(new Indirect(manager_.nonstationary_, context.context_,
-        manager_.bit_context_, delta, std::min(max_size, context.size_)));
+    Add(new Indirect(manager_.nonstationary_, context.GetContext(),
+        manager_.bit_context_, delta, std::min(max_size, context.Size())));
   }
 }
 
@@ -271,8 +273,8 @@ void Predictor::AddSSE() {
   for (const auto& params : model_params) {
     const Context& context = manager_.AddContext(std::unique_ptr<Context>(
         new ContextHash(manager_.bit_context_, params[0], params[1])));
-    sse_.push_back(std::unique_ptr<SSE>(new SSE(logistic_, context.context_,
-        manager_.bit_context_, params[2], params[3], context.size_)));
+    sse_.push_back(std::unique_ptr<SSE>(new SSE(logistic_, context.GetContext(),
+        manager_.bit_context_, params[2], params[3], context.Size())));
   }
 }
 
@@ -296,66 +298,66 @@ void Predictor::AddMixers() {
         new ContextHash(manager_.bit_context_, params[0], params[1])));
     const BitContext& bit_context = manager_.AddBitContext(std::unique_ptr
         <BitContext>(new BitContext(manager_.long_bit_context_,
-        context.context_, context.size_)));
-    Add(0, new Mixer(layers_[0]->inputs_, logistic_, bit_context.context_,
-        params[2], bit_context.size_, input_size));
+        context.GetContext(), context.Size())));
+    Add(0, new Mixer(layers_[0]->Inputs(), logistic_, bit_context.GetContext(),
+        params[2], bit_context.Size(), input_size));
   }
 
   model_params = {{0, 0.001}, {2, 0.002}, {3, 0.005}};
   for (const auto& params : model_params) {
-    Add(0, new Mixer(layers_[0]->inputs_, logistic_,
+    Add(0, new Mixer(layers_[0]->Inputs(), logistic_,
         manager_.recent_bytes_[params[0]], params[1], 256, input_size));
   }
-  Add(0, new Mixer(layers_[0]->inputs_, logistic_, manager_.zero_context_,
+  Add(0, new Mixer(layers_[0]->Inputs(), logistic_, manager_.zero_context_,
       0.00005, 1, input_size));
-  Add(0, new Mixer(layers_[0]->inputs_, logistic_, manager_.line_break_,
+  Add(0, new Mixer(layers_[0]->Inputs(), logistic_, manager_.line_break_,
       0.0007, 100, input_size));
-  Add(0, new Mixer(layers_[0]->inputs_, logistic_, manager_.longest_match_,
+  Add(0, new Mixer(layers_[0]->Inputs(), logistic_, manager_.longest_match_,
       0.0005, 8, input_size));
 
   const BitContext& bit_context1 = manager_.AddBitContext(std::unique_ptr
       <BitContext>(new BitContext(manager_.long_bit_context_,
       manager_.recent_bytes_[1], 256)));
-  Add(0, new Mixer(layers_[0]->inputs_, logistic_, bit_context1.context_,
-      0.005, bit_context1.size_, input_size));
+  Add(0, new Mixer(layers_[0]->Inputs(), logistic_, bit_context1.GetContext(),
+      0.005, bit_context1.Size(), input_size));
 
   const BitContext& bit_context2 = manager_.AddBitContext(std::unique_ptr
       <BitContext>(new BitContext(manager_.recent_bytes_[1],
       manager_.recent_bytes_[0], 256)));
-  Add(0, new Mixer(layers_[0]->inputs_, logistic_, bit_context2.context_, 0.005,
-      bit_context2.size_, input_size));
+  Add(0, new Mixer(layers_[0]->Inputs(), logistic_, bit_context2.GetContext(),
+      0.005, bit_context2.Size(), input_size));
 
   const BitContext& bit_context3 = manager_.AddBitContext(std::unique_ptr
       <BitContext>(new BitContext(manager_.recent_bytes_[2],
       manager_.recent_bytes_[1], 256)));
-  Add(0, new Mixer(layers_[0]->inputs_, logistic_, bit_context3.context_, 0.003,
-      bit_context3.size_, input_size));
+  Add(0, new Mixer(layers_[0]->Inputs(), logistic_, bit_context3.GetContext(),
+      0.003, bit_context3.Size(), input_size));
 
   input_size = mixers_[0].size() + auxiliary_.size();
   layers_[1]->SetNumModels(input_size);
 
-  Add(1, new Mixer(layers_[1]->inputs_, logistic_, manager_.zero_context_,
+  Add(1, new Mixer(layers_[1]->Inputs(), logistic_, manager_.zero_context_,
       0.005, 1, input_size));
-  Add(1, new Mixer(layers_[1]->inputs_, logistic_, manager_.zero_context_,
+  Add(1, new Mixer(layers_[1]->Inputs(), logistic_, manager_.zero_context_,
       0.0005, 1, input_size));
-  Add(1, new Mixer(layers_[1]->inputs_, logistic_, manager_.long_bit_context_,
+  Add(1, new Mixer(layers_[1]->Inputs(), logistic_, manager_.long_bit_context_,
       0.005, 256, input_size));
-  Add(1, new Mixer(layers_[1]->inputs_, logistic_, manager_.long_bit_context_,
+  Add(1, new Mixer(layers_[1]->Inputs(), logistic_, manager_.long_bit_context_,
       0.0005, 256, input_size));
-  Add(1, new Mixer(layers_[1]->inputs_, logistic_, manager_.long_bit_context_,
+  Add(1, new Mixer(layers_[1]->Inputs(), logistic_, manager_.long_bit_context_,
       0.00001, 256, input_size));
-  Add(1, new Mixer(layers_[1]->inputs_, logistic_, manager_.recent_bytes_[0],
+  Add(1, new Mixer(layers_[1]->Inputs(), logistic_, manager_.recent_bytes_[0],
       0.005, 256, input_size));
-  Add(1, new Mixer(layers_[1]->inputs_, logistic_, manager_.recent_bytes_[1],
+  Add(1, new Mixer(layers_[1]->Inputs(), logistic_, manager_.recent_bytes_[1],
       0.005, 256, input_size));
-  Add(1, new Mixer(layers_[1]->inputs_, logistic_, manager_.recent_bytes_[2],
+  Add(1, new Mixer(layers_[1]->Inputs(), logistic_, manager_.recent_bytes_[2],
       0.005, 256, input_size));
-  Add(1, new Mixer(layers_[1]->inputs_, logistic_, manager_.longest_match_,
+  Add(1, new Mixer(layers_[1]->Inputs(), logistic_, manager_.longest_match_,
       0.0005, 8, input_size));
 
   input_size = mixers_[1].size() + auxiliary_.size();
   layers_[2]->SetNumModels(input_size);
-  Add(2, new Mixer(layers_[2]->inputs_, logistic_, manager_.zero_context_,
+  Add(2, new Mixer(layers_[2]->Inputs(), logistic_, manager_.zero_context_,
       0.0003, 1, input_size));
 }
 
@@ -376,8 +378,8 @@ float Predictor::Predict() {
       layers_[layer]->SetInput(i, mixers_[layer - 1][i]->Mix());
     }
     for (unsigned int i = 0; i < auxiliary_.size(); ++i) {
-      layers_[layer]->inputs_[mixers_[layer - 1].size() + i] =
-          layers_[0]->inputs_[auxiliary_[i]];
+      layers_[layer]->SetProcessedInput(mixers_[layer - 1].size() + i,
+          layers_[0]->Inputs()[auxiliary_[i]]);
     }
   }
   float mixer_output = mixers_[2][0]->Mix();
