@@ -2,6 +2,7 @@
 #include "models/direct.h"
 #include "models/direct-hash.h"
 #include "models/indirect.h"
+#include "models/shared-indirect.h"
 #include "models/byte-run.h"
 #include "models/match.h"
 #include "models/dmc.h"
@@ -151,7 +152,6 @@ void Predictor::AddNonstationary() {
 
 void Predictor::AddEnglish() {
   float delta = 200;
-  unsigned long long max_size = 200000;
   std::vector<std::vector<unsigned int>> model_params = {{0}, {0, 1}, {7, 2},
       {7}, {1}, {1, 2}, {1, 2, 3}, {1, 3}, {1, 4}, {1, 5}, {2, 3}, {3, 4},
       {1, 2, 4}, {1, 2, 3, 4}, {2, 3, 4}, {2}, {1, 2, 3, 4, 5},
@@ -159,8 +159,8 @@ void Predictor::AddEnglish() {
   for (const auto& params : model_params) {
     std::unique_ptr<Context> hash(new Sparse(manager_.words_, params));
     const Context& context = manager_.AddContext(std::move(hash));
-    Add(new Indirect(manager_.nonstationary_, context.GetContext(),
-        manager_.bit_context_, delta, max_size));
+    Add(new SharedIndirect(manager_.nonstationary_, context.GetContext(),
+        manager_.bit_context_, delta, manager_.shared_map_));
   }
 
   std::vector<std::vector<unsigned int>> model_params2 = {{0}, {1}, {7},
@@ -173,8 +173,8 @@ void Predictor::AddEnglish() {
     Add(new ByteRun(context.GetContext(), manager_.bit_context_, 100,
         10000000));
     if (params[0] == 1 && params.size() == 1) {
-      Add(new Indirect(manager_.run_map_, context.GetContext(),
-          manager_.bit_context_, delta, 500000));
+      Add(new SharedIndirect(manager_.run_map_, context.GetContext(),
+          manager_.bit_context_, delta, manager_.shared_map_));
       Add(new DirectHash(context.GetContext(), manager_.bit_context_, 30, 0,
           500000));
     }
