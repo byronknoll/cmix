@@ -12,7 +12,7 @@ class Indirect : public Model {
   Indirect(const State& state,
       const unsigned long long& byte_context,
       const unsigned int& bit_context, float delta,
-      unsigned long long map_size);
+      std::vector<unsigned char>& map);
   float Predict();
   void Perceive(int bit);
   void ByteUpdate();
@@ -20,10 +20,10 @@ class Indirect : public Model {
  private:
   const unsigned long long& byte_context_;
   const unsigned int& bit_context_;
-  unsigned int map_index_;
+  unsigned long long map_index_, map_offset_;
   float divisor_;
   const State& state_;
-  std::vector<unsigned char> map_;
+  std::vector<unsigned char>& map_;
   std::array<float, 256> predictions_;
 };
 
