@@ -17,7 +17,7 @@ float Mixer::Mix() {
 }
 
 void Mixer::Perceive(int bit) {
-  float update = (0.75 / pow(0.0000001 * steps_ + 0.8, 0.8)) * learning_rate_ *
+  float update = (0.8 / pow(0.0000001 * steps_ + 0.8, 0.8)) * learning_rate_ *
       (bit - p_);
   ++steps_;
   weights_[context_] += update * inputs_;
