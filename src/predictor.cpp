@@ -17,9 +17,12 @@
 #include "models/facade.h"
 
 #include <vector>
+#include <stdlib.h>
 #include <stdio.h>
 
 Predictor::Predictor() : manager_(), logistic_(10000, 1000) {
+  srand(0xDEADBEEF);
+
   AddBracket();
   AddPAQ8HP();
   AddPAQ8L();

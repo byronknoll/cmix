@@ -10,7 +10,6 @@ ByteMixer::ByteMixer(const Logistic& logistic, int input_neurons,
   int output_neurons = 256;
   input_neurons += hidden_neurons;
   weights_.resize(2);
-  srand(0xDEADBEEF);
   for (size_t layer = 0; layer < weights_.size(); ++layer) {
     if (layer == weights_.size() - 1) {
       weights_[layer].resize(output_neurons);
