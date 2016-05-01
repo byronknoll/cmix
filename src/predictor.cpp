@@ -13,6 +13,7 @@
 #include "contexts/bracket-context.h"
 #include "contexts/sparse.h"
 #include "contexts/indirect-hash.h"
+#include "contexts/interval.h"
 #include "contexts/bit-context.h"
 #include "models/facade.h"
 
@@ -312,6 +313,24 @@ void Predictor::AddMixers() {
   Add(0, new Mixer(layers_[0]->Inputs(), logistic_, manager_.longest_match_,
       0.0005, 8, input_size));
 
+  std::vector<int> map1(256, 0), map2(256, 0);
+  for (int i = 0; i < 256; ++i) {
+    map1[i] = (i < 1) + (i < 32) + (i < 64) + (i < 128) + (i < 255) +
+      (i < 142) + (i < 138) + (i < 140) + (i < 137) + (i < 97);
+    map2[i] = (i < 41) + (i < 92) + (i < 124) + (i < 58) +
+        (i < 11) + (i < 46) + (i < 36) + (i < 47) +
+        (i < 64) + (i < 4) + (i < 61) + (i < 97) +
+        (i < 125) + (i < 45) + (i < 48);
+  }
+  const Context& interval1 = manager_.AddContext(std::unique_ptr<Context>(
+      new Interval(manager_.bit_context_, map1)));
+  Add(0, new Mixer(layers_[0]->Inputs(), logistic_, interval1.GetContext(),
+      0.001, interval1.Size(), input_size));
+  const Context& interval2 = manager_.AddContext(std::unique_ptr<Context>(
+      new Interval(manager_.bit_context_, map2)));
+  Add(0, new Mixer(layers_[0]->Inputs(), logistic_, interval2.GetContext(),
+      0.001, interval2.Size(), input_size));
+
   const BitContext& bit_context1 = manager_.AddBitContext(std::unique_ptr
       <BitContext>(new BitContext(manager_.long_bit_context_,
       manager_.recent_bytes_[1], 256)));
@@ -351,6 +370,10 @@ void Predictor::AddMixers() {
       0.005, 256, input_size));
   Add(1, new Mixer(layers_[1]->Inputs(), logistic_, manager_.longest_match_,
       0.0005, 8, input_size));
+  Add(1, new Mixer(layers_[1]->Inputs(), logistic_, interval1.GetContext(),
+      0.001, interval1.Size(), input_size));
+  Add(1, new Mixer(layers_[1]->Inputs(), logistic_, interval2.GetContext(),
+      0.001, interval2.Size(), input_size));
 
   input_size = mixers_[1].size() + auxiliary_.size();
   layers_[2]->SetNumModels(input_size);
