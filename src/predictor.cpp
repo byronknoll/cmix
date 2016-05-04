@@ -14,6 +14,7 @@
 #include "contexts/sparse.h"
 #include "contexts/indirect-hash.h"
 #include "contexts/interval.h"
+#include "contexts/interval-hash.h"
 #include "contexts/bit-context.h"
 #include "models/facade.h"
 
@@ -37,6 +38,7 @@ Predictor::Predictor() : manager_(), logistic_(10000, 1000) {
   AddRunMap();
   AddMatch();
   AddDoubleIndirect();
+  AddInterval();
 
   AddMixers();
   AddSSE();
@@ -261,6 +263,24 @@ void Predictor::AddDoubleIndirect() {
         new IndirectHash(manager_.bit_context_, params[0], params[1],
         params[2], params[3])));
     Add(new Indirect(manager_.nonstationary_, context.GetContext(),
+        manager_.bit_context_, delta, manager_.shared_map_));
+  }
+}
+
+void Predictor::AddInterval() {
+  std::vector<int> map(256, 0);
+  for (int i = 0; i < 256; ++i) {
+    map[i] = (i < 41) + (i < 92) + (i < 124) + (i < 58) +
+        (i < 11) + (i < 46) + (i < 36) + (i < 47) +
+        (i < 64) + (i < 4) + (i < 61) + (i < 97) +
+        (i < 125) + (i < 45) + (i < 48);
+  }
+  std::vector<std::vector<unsigned int>> model_params = {{2, 8}, {4, 7}, {8, 3}, {12, 1}, {16, 1}};
+  float delta = 400;
+  for (const auto& params : model_params) {
+    const Context& interval = manager_.AddContext(std::unique_ptr<Context>(
+        new IntervalHash(manager_.bit_context_, map, params[0], params[1])));
+    Add(new Indirect(manager_.nonstationary_, interval.GetContext(),
         manager_.bit_context_, delta, manager_.shared_map_));
   }
 }

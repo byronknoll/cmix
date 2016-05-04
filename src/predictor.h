@@ -40,6 +40,7 @@ class Predictor {
   void AddRunMap();
   void AddMatch();
   void AddDoubleIndirect();
+  void AddInterval();
   void AddSSE();
   void AddMixers();
 
