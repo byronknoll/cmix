@@ -108,7 +108,7 @@ template<class T, int ALIGN> void Array<T, ALIGN>::create(U32 i) {
     ptr=0;
     return;
   }
-  const U32 sz=ALIGN+n*sizeof(T);
+  const size_t sz=ALIGN+n*sizeof(T);
   ptr = (char*)calloc(sz, 1);
   if (!ptr) quit("Out of memory");
   data = (ALIGN ? (T*)(ptr+ALIGN-(((long long)ptr)&(ALIGN-1))) : (T*)ptr);
@@ -181,7 +181,10 @@ public:
 };
 
 int level=DEFAULT_OPTION;
-#define MEM (0x10000<<level)
+unsigned long long MEM() {
+  return 0x10000UL<<level;
+}
+
 int y=0;
 
 int c0=1;
@@ -800,7 +803,7 @@ int ContextMap::mix1(Mixer& m, int cc, int bp, int c1, int y1) {
 
 int matchModel(Mixer& m) {
   const int MAXLEN=65534;
-  static Array<int> t(MEM);
+  static Array<int> t(MEM());
   static int h=0;
   static int ptr=0;
   static int len=0;
@@ -868,7 +871,7 @@ void wordModel(Mixer& m) {
     static U32 xword0=0,xword1=0,xword2=0,cword0=0,ccword=0;
     static U32 number0=0, number1=0;
     static U32 text0=0;
-    static ContextMap cm(MEM*31, 44);
+    static ContextMap cm(MEM()*31, 44);
     static int nl1=-3, nl=-2;
     static U32 mask = 0;
     static Array<int> wpos(0x10000);
@@ -1005,7 +1008,7 @@ void wordModel(Mixer& m) {
 void nestModel(Mixer& m)
 {
   static int ic=0, bc=0, pc=0,vc=0, qc=0, lvc=0, wc=0;
-  static ContextMap cm(MEM/2, 10);
+  static ContextMap cm(MEM()/2, 10);
 
   if (bpos==0) {
     int c=c4&255, matched=1, vv;
@@ -1076,7 +1079,7 @@ void recordModel(Mixer& m) {
   static int wpos1[0x10000];
   static int rlen=2, rlen1=3, rlen2=4;
   static int rcount1=0, rcount2=0;
-  static ContextMap cm(32768, 3), cn(32768/2, 3), co(32768*2, 3), cp(MEM, 3);
+  static ContextMap cm(32768, 3), cn(32768/2, 3), co(32768*2, 3), cp(MEM(), 3);
 
   if (!bpos) {
     int w=c4&0xffff, c=w&255, d=w>>8;
@@ -1165,7 +1168,7 @@ void recordModel1(Mixer& m) {
 }
 
 void sparseModel(Mixer& m, int seenbefore, int howmany) {
-  static ContextMap cm(MEM*2, 40+2);
+  static ContextMap cm(MEM()*2, 40+2);
   if (bpos==0) {
     cm.set(seenbefore);
     cm.set(howmany);
@@ -1199,7 +1202,7 @@ void sparseModel(Mixer& m, int seenbefore, int howmany) {
 
 U32 x4=0;
 void sparseModel1(Mixer& m, int seenbefore, int howmany) {
-   static ContextMap cm(MEM*4, 31);
+   static ContextMap cm(MEM()*4, 31);
     static SmallStationaryContextMap scm1(0x10000), scm2(0x20000), scm3(0x2000),
      scm4(0x8000), scm5(0x2000),scm6(0x2000), scma(0x10000);
   if (bpos==0) {
@@ -1258,7 +1261,7 @@ void sparseModel1(Mixer& m, int seenbefore, int howmany) {
 }
 
 void distanceModel(Mixer& m) {
-  static ContextMap cr(MEM, 3);
+  static ContextMap cr(MEM(), 3);
   if( bpos == 0 ){
     static int pos00=0,pos20=0,posnl=0;
     int c=c4&0xff;
@@ -1292,7 +1295,7 @@ int bmpModel(Mixer& m) {
   static SmallStationaryContextMap scm1(SC), scm2(SC),
     scm3(SC), scm4(SC), scm5(SC), scm6(SC), scm7(SC), scm8(SC), scm9(SC*2),
     scm10(512);
-  static ContextMap cm(MEM*4, 15);
+  static ContextMap cm(MEM()*4, 15);
 
   if (!bpos && buf(54)=='B' && buf(53)=='M'
       && i4(44)==54 && i4(40)==40 && i4(24)==0) {
@@ -1717,7 +1720,7 @@ int jpegModel(Mixer& m) {
     return 1;
   }
   const int N=28;
-  static BH<9> t(MEM);
+  static BH<9> t(MEM());
   static Array<U32> cxt(N);
   static Array<U8*> cp(N);
   static StateMap sm[N];
@@ -1798,7 +1801,7 @@ U32 execxt(int i, int x=0) {
 
 void exeModel(Mixer& m) {
   const int N=12;
-  static ContextMap cm(MEM, N);
+  static ContextMap cm(MEM(), N);
   if (!bpos) {
     for (int i=0; i<N; ++i)
       cm.set(execxt(i, buf(1)*(i>4)));
@@ -1807,7 +1810,7 @@ void exeModel(Mixer& m) {
 }
 
 void indirectModel(Mixer& m) {
-  static ContextMap cm(MEM, 12);
+  static ContextMap cm(MEM(), 12);
   static U32 t1[256];
   static U16 t2[0x10000];
   static U16 t3[0x8000];
@@ -1852,7 +1855,7 @@ struct DMCNode {
 
 void dmcModel(Mixer& m) {
   static int top=0, curr=0;
-  static Array<DMCNode> t(MEM*2);
+  static Array<DMCNode> t(MEM()*2);
   static StateMap sm;
   static int threshold=256;
 
@@ -1917,8 +1920,8 @@ typedef enum {DEFAULT, JPEG, EXE, TEXT} Filetype;
 U32 last_prediction = 2048;
 
 int contextModel2() {
-  static ContextMap cm(MEM*31, 9);
-  static RunContextMap rcm7(MEM), rcm9(MEM), rcm10(MEM);
+  static ContextMap cm(MEM()*31, 9);
+  static RunContextMap rcm7(MEM()), rcm9(MEM()), rcm10(MEM());
   static Mixer m(1200, 10800, 8, 32);
   static U32 cxt[16];
   static Filetype filetype=EXE;
@@ -2059,7 +2062,7 @@ Predictor paq8;
 
 PAQ8L::PAQ8L(int memory) {
   level = memory;
-  buf.setsize(MEM*8);
+  buf.setsize(MEM()*8);
 }
 
 float PAQ8L::Predict() {
