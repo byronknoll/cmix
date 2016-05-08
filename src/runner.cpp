@@ -65,7 +65,8 @@ void Decompress(unsigned long long output_length, std::ifstream* is,
   }
 }
 
-int fail() {
+int Fail() {
+  printf("cmix version 10\n");
   printf("With preprocessing:\n");
   printf("    compress:   cmix -c [dictionary] [input] [output]\n");
   printf("    store:      cmix -s [dictionary] [input] [output]\n");
@@ -76,10 +77,125 @@ int fail() {
   return -1;
 }
 
+bool Store(const std::string& input_path, const std::string& temp_path,
+    const std::string& output_path, FILE* dictionary,
+    unsigned long long* input_bytes, unsigned long long* output_bytes) {
+  FILE* data_in = fopen(input_path.c_str(), "rb");
+  if (!data_in) return false;
+  FILE* data_out = fopen(output_path.c_str(), "wb");
+  if (!data_out) return false;
+  fseek(data_in, 0L, SEEK_END);
+  *input_bytes = ftell(data_in);
+  fseek(data_in, 0L, SEEK_SET);
+  WriteHeader(0, data_out);
+  preprocessor::encode(data_in, data_out, *input_bytes, temp_path, dictionary);
+  fseek(data_out, 0L, SEEK_END);
+  *output_bytes = ftell(data_out);
+  fclose(data_in);
+  fclose(data_out);
+  return true;
+}
+
+bool RunCompression(bool enable_preprocess, const std::string& input_path,
+    const std::string& temp_path, const std::string& output_path,
+    FILE* dictionary, unsigned long long* input_bytes,
+    unsigned long long* output_bytes) {
+  Predictor p;
+  std::string path = temp_path;
+  if (enable_preprocess) {
+    FILE* data_in = fopen(input_path.c_str(), "rb");
+    if (!data_in) return false;
+    FILE* temp_out = fopen(temp_path.c_str(), "wb");
+    if (!temp_out) return false;
+
+    fseek(data_in, 0L, SEEK_END);
+    *input_bytes = ftell(data_in);
+    fseek(data_in, 0L, SEEK_SET);
+
+    preprocessor::encode(data_in, temp_out, *input_bytes, temp_path,
+        dictionary);
+    fclose(data_in);
+    fclose(temp_out);
+    preprocessor::pretrain(&p, dictionary);
+  } else {
+    path = input_path;
+  }
+
+  std::ifstream temp_in(path, std::ios::in | std::ios::binary);
+  if (!temp_in.is_open()) return false;
+  std::ofstream data_out(output_path, std::ios::out | std::ios::binary);
+  if (!data_out.is_open()) return false;
+
+  temp_in.seekg(0, std::ios::end);
+  unsigned long long temp_bytes = temp_in.tellg();
+  if (!enable_preprocess) *input_bytes = temp_bytes;
+  temp_in.seekg(0, std::ios::beg);
+
+  WriteHeader(temp_bytes, &data_out);
+  Compress(temp_bytes, &temp_in, &data_out, output_bytes, &p);
+  temp_in.close();
+  data_out.close();
+  if (enable_preprocess) remove(temp_path.c_str());
+  return true;
+}
+
+bool RunDecompression(bool enable_preprocess, const std::string& input_path,
+    const std::string& temp_path, const std::string& output_path,
+    FILE* dictionary, unsigned long long* input_bytes,
+    unsigned long long* output_bytes) {
+  std::ifstream data_in(input_path, std::ios::in | std::ios::binary);
+  if (!data_in.is_open()) return false;
+
+  data_in.seekg(0, std::ios::end);
+  *input_bytes = data_in.tellg();
+  data_in.seekg(0, std::ios::beg);
+  ReadHeader(&data_in, output_bytes);
+
+  if (*output_bytes == 0) {  // undo store
+    if (!enable_preprocess) return false;
+    data_in.close();
+    FILE* in = fopen(input_path.c_str(), "rb");
+    if (!in) return Fail();
+    FILE* data_out = fopen(output_path.c_str(), "wb");
+    if (!data_out) return false;
+    fseek(in, 5L, SEEK_SET);
+    preprocessor::decode(in, data_out, temp_path, dictionary);
+    fseek(data_out, 0L, SEEK_END);
+    *output_bytes = ftell(data_out);
+    fclose(in);
+    fclose(data_out);
+    return true;
+  }
+  Predictor p;
+  if (enable_preprocess) preprocessor::pretrain(&p, dictionary);
+
+  std::ofstream temp_out(temp_path, std::ios::out | std::ios::binary);
+  if (!temp_out.is_open()) return false;
+
+  Decompress(*output_bytes, &data_in, &temp_out, &p);
+  data_in.close();
+  temp_out.close();
+
+  if (enable_preprocess) {
+    FILE* temp_in = fopen(temp_path.c_str(), "rb");
+    if (!temp_in) return false;
+    FILE* data_out = fopen(output_path.c_str(), "wb");
+    if (!data_out) return false;
+
+    preprocessor::decode(temp_in, data_out, temp_path, dictionary);
+    fseek(data_out, 0L, SEEK_END);
+    *output_bytes = ftell(data_out);
+    fclose(temp_in);
+    fclose(data_out);
+    remove(temp_path.c_str());
+  }
+  return true;
+}
+
 int main(int argc, char* argv[]) {
   if (argc < 4 || argc > 5 || argv[1][0] != '-' ||
       (argv[1][1] != 'c' && argv[1][1] != 'd' && argv[1][1] != 's')) {
-    return fail();
+    return Fail();
   }
 
   clock_t start = clock();
@@ -91,7 +207,7 @@ int main(int argc, char* argv[]) {
   if (argc == 5) {
     enable_preprocess = true;
     dictionary = fopen(argv[2], "rb");
-    if (!dictionary) return fail();
+    if (!dictionary) return Fail();
     input_path = argv[3];
     output_path = argv[4];
   }
@@ -101,103 +217,21 @@ int main(int argc, char* argv[]) {
 
   unsigned long long input_bytes = 0, output_bytes = 0;
 
-  if (argv[1][1] == 's') {  // store
-    if (!enable_preprocess) return fail();
-    FILE* data_in = fopen(input_path.c_str(), "rb");
-    if (!data_in) return fail();
-    FILE* data_out = fopen(output_path.c_str(), "wb");
-    if (!data_out) return fail();
-    fseek(data_in, 0L, SEEK_END);
-    input_bytes = ftell(data_in);
-    fseek(data_in, 0L, SEEK_SET);
-    WriteHeader(0, data_out);
-    preprocessor::encode(data_in, data_out, input_bytes, temp_path, dictionary);
-    fseek(data_out, 0L, SEEK_END);
-    output_bytes = ftell(data_out);
-    fclose(data_in);
-    fclose(data_out);
-  } else if (argv[1][1] == 'c') {  // compress
-    Predictor p;
-    if (enable_preprocess) {
-      FILE* data_in = fopen(input_path.c_str(), "rb");
-      if (!data_in) return fail();
-      FILE* temp_out = fopen(temp_path.c_str(), "wb");
-      if (!temp_out) return fail();
-
-      fseek(data_in, 0L, SEEK_END);
-      input_bytes = ftell(data_in);
-      fseek(data_in, 0L, SEEK_SET);
-
-      preprocessor::encode(data_in, temp_out, input_bytes, temp_path,
-          dictionary);
-      fclose(data_in);
-      fclose(temp_out);
-      preprocessor::pretrain(&p, dictionary);
-    } else {
-      temp_path = input_path;
+  if (argv[1][1] == 's') {
+    if (!enable_preprocess) return Fail();
+    if (!Store(input_path, temp_path, output_path, dictionary, &input_bytes,
+        &output_bytes)) {
+      return Fail();
     }
-
-    std::ifstream temp_in(temp_path, std::ios::in | std::ios::binary);
-    if (!temp_in.is_open()) return fail();
-    std::ofstream data_out(output_path, std::ios::out | std::ios::binary);
-    if (!data_out.is_open()) return fail();
-
-    temp_in.seekg(0, std::ios::end);
-    unsigned long long temp_bytes = temp_in.tellg();
-    if (!enable_preprocess) input_bytes = temp_bytes;
-    temp_in.seekg(0, std::ios::beg);
-
-    WriteHeader(temp_bytes, &data_out);
-    Compress(temp_bytes, &temp_in, &data_out, &output_bytes, &p);
-    temp_in.close();
-    data_out.close();
-    if (enable_preprocess) remove(temp_path.c_str());
-  } else {  // decompress
-    std::ifstream data_in(input_path, std::ios::in | std::ios::binary);
-    if (!data_in.is_open()) return fail();
-
-    data_in.seekg(0, std::ios::end);
-    input_bytes = data_in.tellg();
-    data_in.seekg(0, std::ios::beg);
-    ReadHeader(&data_in, &output_bytes);
-
-    if (output_bytes == 0) {  // undo store
-      if (!enable_preprocess) return fail();
-      data_in.close();
-      FILE* in = fopen(input_path.c_str(), "rb");
-      if (!in) return fail();
-      FILE* data_out = fopen(output_path.c_str(), "wb");
-      if (!data_out) return fail();
-      fseek(in, 5L, SEEK_SET);
-      preprocessor::decode(in, data_out, temp_path, dictionary);
-      fseek(data_out, 0L, SEEK_END);
-      output_bytes = ftell(data_out);
-      fclose(in);
-      fclose(data_out);
-    } else {
-      Predictor p;
-      if (enable_preprocess) preprocessor::pretrain(&p, dictionary);
-
-      std::ofstream temp_out(temp_path, std::ios::out | std::ios::binary);
-      if (!temp_out.is_open()) return fail();
-
-      Decompress(output_bytes, &data_in, &temp_out, &p);
-      data_in.close();
-      temp_out.close();
-
-      if (enable_preprocess) {
-        FILE* temp_in = fopen(temp_path.c_str(), "rb");
-        if (!temp_in) return fail();
-        FILE* data_out = fopen(output_path.c_str(), "wb");
-        if (!data_out) return fail();
-
-        preprocessor::decode(temp_in, data_out, temp_path, dictionary);
-        fseek(data_out, 0L, SEEK_END);
-        output_bytes = ftell(data_out);
-        fclose(temp_in);
-        fclose(data_out);
-        remove(temp_path.c_str());
-      }
+  } else if (argv[1][1] == 'c') {
+    if (!RunCompression(enable_preprocess, input_path, temp_path, output_path,
+        dictionary, &input_bytes, &output_bytes)) {
+      return Fail();
+    }
+  } else {
+    if (!RunDecompression(enable_preprocess, input_path, temp_path, output_path,
+        dictionary, &input_bytes, &output_bytes)) {
+      return Fail();
     }
   }
 
