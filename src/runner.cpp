@@ -8,6 +8,18 @@
 #include "coder/decoder.h"
 #include "predictor.h"
 
+int Help() {
+  printf("cmix version 10\n");
+  printf("With preprocessing:\n");
+  printf("    compress:   cmix -c [dictionary] [input] [output]\n");
+  printf("    store:      cmix -s [dictionary] [input] [output]\n");
+  printf("    decompress: cmix -d [dictionary] [input] [output]\n");
+  printf("Without preprocessing:\n");
+  printf("    compress:   cmix -c [input] [output]\n");
+  printf("    decompress: cmix -d [input] [output]\n");
+  return -1;
+}
+
 void WriteHeader(unsigned long long length, std::ofstream* os) {
   for (int i = 4; i >= 0; --i) {
     char c = length >> (8*i);
@@ -63,18 +75,6 @@ void Decompress(unsigned long long output_length, std::ifstream* is,
       fflush(stdout);
     }
   }
-}
-
-int Fail() {
-  printf("cmix version 10\n");
-  printf("With preprocessing:\n");
-  printf("    compress:   cmix -c [dictionary] [input] [output]\n");
-  printf("    store:      cmix -s [dictionary] [input] [output]\n");
-  printf("    decompress: cmix -d [dictionary] [input] [output]\n");
-  printf("Without preprocessing:\n");
-  printf("    compress:   cmix -c [input] [output]\n");
-  printf("    decompress: cmix -d [input] [output]\n");
-  return -1;
 }
 
 bool Store(const std::string& input_path, const std::string& temp_path,
@@ -155,7 +155,7 @@ bool RunDecompression(bool enable_preprocess, const std::string& input_path,
     if (!enable_preprocess) return false;
     data_in.close();
     FILE* in = fopen(input_path.c_str(), "rb");
-    if (!in) return Fail();
+    if (!in) return false;
     FILE* data_out = fopen(output_path.c_str(), "wb");
     if (!data_out) return false;
     fseek(in, 5L, SEEK_SET);
@@ -195,7 +195,7 @@ bool RunDecompression(bool enable_preprocess, const std::string& input_path,
 int main(int argc, char* argv[]) {
   if (argc < 4 || argc > 5 || argv[1][0] != '-' ||
       (argv[1][1] != 'c' && argv[1][1] != 'd' && argv[1][1] != 's')) {
-    return Fail();
+    return Help();
   }
 
   clock_t start = clock();
@@ -207,7 +207,7 @@ int main(int argc, char* argv[]) {
   if (argc == 5) {
     enable_preprocess = true;
     dictionary = fopen(argv[2], "rb");
-    if (!dictionary) return Fail();
+    if (!dictionary) return Help();
     input_path = argv[3];
     output_path = argv[4];
   }
@@ -218,20 +218,20 @@ int main(int argc, char* argv[]) {
   unsigned long long input_bytes = 0, output_bytes = 0;
 
   if (argv[1][1] == 's') {
-    if (!enable_preprocess) return Fail();
+    if (!enable_preprocess) return Help();
     if (!Store(input_path, temp_path, output_path, dictionary, &input_bytes,
         &output_bytes)) {
-      return Fail();
+      return Help();
     }
   } else if (argv[1][1] == 'c') {
     if (!RunCompression(enable_preprocess, input_path, temp_path, output_path,
         dictionary, &input_bytes, &output_bytes)) {
-      return Fail();
+      return Help();
     }
   } else {
     if (!RunDecompression(enable_preprocess, input_path, temp_path, output_path,
         dictionary, &input_bytes, &output_bytes)) {
-      return Fail();
+      return Help();
     }
   }
 
