@@ -21,7 +21,8 @@ class Mixer {
   const Logistic& logistic_;
   float p_, learning_rate_;
   const unsigned long long& context_;
-  unsigned long long steps_;
+  unsigned long long max_steps_, steps_;
+  std::vector<unsigned long long> context_steps_;
   std::vector<std::valarray<float>> weights_;
 };
 

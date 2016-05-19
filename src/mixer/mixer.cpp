@@ -7,7 +7,8 @@ Mixer::Mixer(const std::valarray<float>& inputs, const Logistic& logistic,
     const unsigned long long& context, float learning_rate,
     unsigned long long context_size, unsigned long long input_size) :
     inputs_(inputs), logistic_(logistic), p_(0.5),
-    learning_rate_(learning_rate), context_(context), steps_(0),
+    learning_rate_(learning_rate), context_(context), max_steps_(1),
+    steps_(0), context_steps_(context_size, 0),
     weights_(context_size, std::valarray<float>(0.0, input_size)) {}
 
 float Mixer::Mix() {
@@ -17,9 +18,14 @@ float Mixer::Mix() {
 }
 
 void Mixer::Perceive(int bit) {
-  float update = (0.9 / pow(0.0000001 * steps_ + 0.8, 0.8)) * learning_rate_ *
-      (bit - p_);
+  float decay = 0.9 / pow(0.0000001 * steps_ + 0.8, 0.8);
+  decay *= 1.2 - ((0.4 * context_steps_[context_]) / max_steps_);
+  float update = decay * learning_rate_ * (bit - p_);
   ++steps_;
+  ++context_steps_[context_];
+  if (context_steps_[context_] > max_steps_) {
+    max_steps_ = context_steps_[context_];
+  }
   weights_[context_] += update * inputs_;
 }
 
