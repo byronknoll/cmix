@@ -19,7 +19,7 @@ float Mixer::Mix() {
 
 void Mixer::Perceive(int bit) {
   float decay = 0.9 / pow(0.0000001 * steps_ + 0.8, 0.8);
-  decay *= 1.25 - ((0.5 * context_steps_[context_]) / max_steps_);
+  decay *= 1.3 - ((0.6 * context_steps_[context_]) / max_steps_);
   float update = decay * learning_rate_ * (bit - p_);
   ++steps_;
   ++context_steps_[context_];
