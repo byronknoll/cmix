@@ -1,6 +1,6 @@
-cmix version 9
+cmix version 10
 http://www.byronknoll.com/cmix.html
-Released by Byron Knoll on April 8, 2016.
+Released by Byron Knoll on May 30, 2016.
 cmix is free software distributed under the GNU General Public License.
 
 In Linux or OS X, use "make" to compile cmix using g++. In Windows, cmix can be compiled with MinGW (http://nuwen.net/mingw.html) or Cygwin (https://www.cygwin.com).
@@ -9,7 +9,13 @@ cmix can only compress/decompress single files. To compress multiple files or di
 
 For some files, preprocessing using "precomp" may improve compression: https://github.com/schnaader/precomp-cpp
 
-Compiling with "-Ofast -march=native" will have the best performance, but this can also cause compression results to vary slightly between different computers. Compile with "-O3" to improve compatibility between computers.
+Compiling with "-Ofast -march=native" will have the fastest performance, but this can also cause compression results to vary slightly between different computers. Compile with "-O3" to improve compatibility between computers.
+
+Changes from version 9 to version 10:
+- Learning rate decay tuning
+- Added "interval" context (adapted from MCM https://github.com/mathieuchartier/mcm)
+- Added "only preprocessing" compression option
+- Refactoring and memory tuning
 
 Changes from version 8 to version 9:
 - Improved Windows compatibility

@@ -11,9 +11,9 @@
 int Help() {
   printf("cmix version 10\n");
   printf("With preprocessing:\n");
-  printf("    compress:   cmix -c [dictionary] [input] [output]\n");
-  printf("    store:      cmix -s [dictionary] [input] [output]\n");
-  printf("    decompress: cmix -d [dictionary] [input] [output]\n");
+  printf("    compress:           cmix -c [dictionary] [input] [output]\n");
+  printf("    only preprocessing: cmix -s [dictionary] [input] [output]\n");
+  printf("    decompress:         cmix -d [dictionary] [input] [output]\n");
   printf("Without preprocessing:\n");
   printf("    compress:   cmix -c [input] [output]\n");
   printf("    decompress: cmix -d [input] [output]\n");
