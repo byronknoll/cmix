@@ -6,6 +6,7 @@
 #include "models/match.h"
 #include "models/dmc.h"
 #include "models/ppm.h"
+#include "models/ppmd.h"
 #include "models/bracket.h"
 #include "models/paq8l.h"
 #include "models/paq8hp.h"
@@ -29,6 +30,7 @@ Predictor::Predictor() : manager_(), logistic_(10000, 1000) {
   AddPAQ8HP();
   AddPAQ8L();
   AddPPM();
+  AddPPMD();
   AddDMC();
   AddByteRun();
   AddNonstationary();
@@ -119,9 +121,13 @@ void Predictor::AddBracket() {
 }
 
 void Predictor::AddPPM() {
-  AddByteModel(new PPM(7, manager_.bit_context_, 10000, 70000000));
-  AddByteModel(new PPM(5, manager_.bit_context_, 10000, 20000000));
+  AddByteModel(new PPM(7, manager_.bit_context_, 10000, 11000000));
+  AddByteModel(new PPM(5, manager_.bit_context_, 10000, 7000000));
   AddByteModel(new PPM(3, manager_.bit_context_, 10000, 5000000));
+}
+
+void Predictor::AddPPMD() {
+  AddByteModel(new PPMD(15, 1680, manager_.bit_context_));
 }
 
 void Predictor::AddDMC() {

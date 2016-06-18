@@ -30,6 +30,7 @@ class Predictor {
   void AddPAQ8L();
   void AddPAQ8HP();
   void AddPPM();
+  void AddPPMD();
   void AddBracket();
   void AddDMC();
   void AddByteRun();
