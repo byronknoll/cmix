@@ -127,7 +127,7 @@ void Predictor::AddPPM() {
 }
 
 void Predictor::AddPPMD() {
-  AddByteModel(new PPMD(15, 1680, manager_.bit_context_));
+  AddByteModel(new PPMD(16, 1680, manager_.bit_context_));
 }
 
 void Predictor::AddDMC() {
