@@ -127,7 +127,8 @@ void PPM::ByteUpdate() {
       if (probs_[node->entries[i].symbol] == 0) sum += node->entries[i].count;
     }
     float escape_prob = escape_map_[EscapeContext(node->escape, sum, order)];
-    float factor = (1 - escape_prob) * escape / sum;
+    float factor = (1 - escape_prob) * escape;
+    if (sum != 0) factor /= sum;
     for (unsigned int i = 0; i < node->entries.size(); ++i) {
       if (probs_[node->entries[i].symbol] == 0) {
         probs_[node->entries[i].symbol] = factor * node->entries[i].count;

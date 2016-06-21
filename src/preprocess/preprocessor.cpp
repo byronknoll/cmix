@@ -418,7 +418,7 @@ void encode(FILE* in, FILE* out, int n, string temp_path, FILE* dictionary) {
   int remainder = n;
   int text_bytes = 0;
   while (remainder > 0) {
-    Filetype nextType=detect(in, n, type);
+    Filetype nextType=detect(in, remainder, type);
     long end=ftell(in);
     int len=int(end-begin);
     if (type == TEXT) text_bytes += len;

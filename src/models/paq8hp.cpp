@@ -339,39 +339,8 @@ Stretch::Stretch() {
 static int dot_product (const short* const t, const short* const w, int n);
 
 static void train (const short* const t, short* const w, int n, const int e);
-#if defined(__AVX2__)
-#include<immintrin.h>
-#define OPTIMIZE "AVX2-"
-static int dot_product (const short* const t, const short* const w, int n) {
-  __m256i sum = _mm256_setzero_si256 ();
-  while ((n -= 16) >= 0) {
-    __m256i tmp = _mm256_madd_epi16 (*(__m256i *) &t[n], *(__m256i *) &w[n]);
-    tmp = _mm256_srai_epi32 (tmp, 8);
-    sum = _mm256_add_epi32 (sum, tmp);
-  }
 
-  __m128i low = _mm_add_epi32 (_mm256_extracti128_si256(sum,0),_mm256_extracti128_si256(sum,1));
-  low = _mm_add_epi32 (low, _mm_srli_si128 (low, 8));
-  low = _mm_add_epi32 (low, _mm_srli_si128 (low, 4));
-  return _mm_cvtsi128_si32 (low);
-}
-
-static void train (const short* const t, short* const w, int n, const int e) {
-  if (e) {
-    const __m256i one = _mm256_set1_epi16 (1);
-    const __m256i err = _mm256_set1_epi16 (short(e));
-    while ((n -= 16) >= 0) {
-      __m256i tmp = _mm256_adds_epi16 (*(__m256i *) &t[n], *(__m256i *) &t[n]);
-      tmp = _mm256_mulhi_epi16 (tmp, err);
-      tmp = _mm256_adds_epi16 (tmp, one);
-      tmp = _mm256_srai_epi16 (tmp, 1);
-      tmp = _mm256_adds_epi16 (tmp, *(__m256i *) &w[n]);
-      *(__m256i *) &w[n] = tmp;
-    }
-  }
-}
-
-#elif defined(__SSE2__)
+#if defined(__SSE2__)
 #include <emmintrin.h>
 #define OPTIMIZE "SSE2-"
 
@@ -827,7 +796,7 @@ static U32 col, frstchar=0, spafdo=0, spaces=0, spacecount=0, words=0, wordcount
 
 void wordModel(Mixer& m) {
   static U32 word0=0, word1=0, word2=0, word3=0, word4=0;
-  static ContextMap cm(MEM*31, 46);
+  static ContextMap cm((unsigned int)MEM*31, 46);
   static int nl1=-3, nl=-2;
   static U32 t1[256];
   static U16 t2[0x10000];
@@ -1023,7 +992,7 @@ static U32 WRT_mpw[16]= { 3, 3, 3, 2, 2, 2, 1, 1, 1, 1, 1, 1, 1, 0, 0, 0 }, tri[
 static U32 WRT_mtt[16]= { 0, 0, 1, 2, 3, 4, 5, 5, 6, 6, 6, 6, 6, 7, 7, 7 };
 
 int contextModel2() {
-  static ContextMap cm(MEM*31, 7);
+  static ContextMap cm((unsigned int)MEM*31, 7);
   static RunContextMap rcm7(MEM/4,14), rcm9(MEM/4,18), rcm10(MEM/2,20);
   static Mixer m(456, 128*(16+14+14+12+14+16), 6, 512);
   static U32 cxt[16];

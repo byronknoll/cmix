@@ -342,38 +342,8 @@ Stretch::Stretch(): t(4096) {
 static int dot_product (const short* const t, const short* const w, int n);
 
 static void train (const short* const t, short* const w, int n, const int e);
-#if defined(__AVX2__)
-#include<immintrin.h>
-#define OPTIMIZE "AVX2-"
-static int dot_product (const short* const t, const short* const w, int n) {
-  __m256i sum = _mm256_setzero_si256 ();
-  while ((n -= 16) >= 0) {
-    __m256i tmp = _mm256_madd_epi16 (*(__m256i *) &t[n], *(__m256i *) &w[n]);
-    tmp = _mm256_srai_epi32 (tmp, 8);
-    sum = _mm256_add_epi32 (sum, tmp);
-  }
-  __m128i low = _mm_add_epi32 (_mm256_extracti128_si256(sum,0),_mm256_extracti128_si256(sum,1));
-  low = _mm_add_epi32 (low, _mm_srli_si128 (low, 8));
-  low = _mm_add_epi32 (low, _mm_srli_si128 (low, 4));
-  return _mm_cvtsi128_si32 (low);
-}
 
-static void train (const short* const t, short* const w, int n, const int e) {
-  if (e) {
-    const __m256i one = _mm256_set1_epi16 (1);
-    const __m256i err = _mm256_set1_epi16 (short(e));
-    while ((n -= 16) >= 0) {
-      __m256i tmp = _mm256_adds_epi16 (*(__m256i *) &t[n], *(__m256i *) &t[n]);
-      tmp = _mm256_mulhi_epi16 (tmp, err);
-      tmp = _mm256_adds_epi16 (tmp, one);
-      tmp = _mm256_srai_epi16 (tmp, 1);
-      tmp = _mm256_adds_epi16 (tmp, *(__m256i *) &w[n]);
-      *(__m256i *) &w[n] = tmp;
-    }
-  }
-}
-
-#elif defined(__SSE2__)
+#if defined(__SSE2__)
 #include <emmintrin.h>
 #define OPTIMIZE "SSE2-"
 
@@ -804,7 +774,7 @@ int ContextMap::mix1(Mixer& m, int cc, int bp, int c1, int y1) {
 int matchModel(Mixer& m) {
   const int MAXLEN=65534;
   static Array<int> t(MEM());
-  static int h=0;
+  static unsigned int h=0;
   static int ptr=0;
   static int len=0;
   static int result=0;
@@ -1007,7 +977,8 @@ void wordModel(Mixer& m) {
 
 void nestModel(Mixer& m)
 {
-  static int ic=0, bc=0, pc=0,vc=0, qc=0, lvc=0, wc=0;
+  static int ic=0, bc=0, pc=0, qc=0, lvc=0;
+  static unsigned int vc=0, wc=0;
   static ContextMap cm(MEM()/2, 10);
 
   if (bpos==0) {
@@ -1061,12 +1032,12 @@ void nestModel(Mixer& m)
     if (bc > 300) bc = ic = pc = qc = 0;
 
     cm.set((3*vc+77*pc+373*ic+qc)&0xffff);
-    cm.set((31*vc+27*pc+281*qc)&0xffff);
-    cm.set((13*vc+271*ic+qc+bc)&0xffff);
+    cm.set(((unsigned int)31*vc+27*pc+281*qc)&0xffff);
+    cm.set(((unsigned int)13*vc+271*ic+qc+bc)&0xffff);
     cm.set((17*pc+7*ic)&0xffff);
-    cm.set((13*vc+ic)&0xffff);
+    cm.set(((unsigned int)13*vc+ic)&0xffff);
     cm.set((vc/3+pc)&0xffff);
-    cm.set((7*wc+qc)&0xffff);
+    cm.set(((unsigned int)7*wc+qc)&0xffff);
     cm.set((vc&0xffff)|((f4&0xf)<<16));
     cm.set(((3*pc)&0xffff)|((f4&0xf)<<16));
     cm.set((ic&0xffff)|((f4&0xf)<<16));
