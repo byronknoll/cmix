@@ -2,6 +2,7 @@
 
 #include <stdlib.h>
 #include <math.h>
+#include <numeric>
 
 ByteMixer::ByteMixer(const Logistic& logistic, int input_neurons,
     int hidden_neurons, const unsigned int& bit_context, float learning_rate) :
