@@ -19,7 +19,6 @@ namespace {
 #define STRICT
 #define NDEBUG
 #define WIN32
-#define _WIN32_WINNT 0x0500
 
 template <class T> T Min( T x, T y ) { return (x<y) ? x : y; }
 template <class T> T Max( T x, T y ) { return (x>y) ? x : y; }
