@@ -5,6 +5,8 @@ cmix is free software distributed under the GNU General Public License.
 
 In Linux or OS X, use "make" to compile cmix using g++. In Windows, cmix can be compiled with MinGW (http://nuwen.net/mingw.html) or Cygwin (https://www.cygwin.com).
 
+When running cmix, it is recommended to always enable preprocessing with dictionary/english.dic for best compression results.
+
 cmix can only compress/decompress single files. To compress multiple files or directories, create an archive file using "tar" (or some similar tool).
 
 For some files, preprocessing using "precomp" may improve compression: https://github.com/schnaader/precomp-cpp
