@@ -503,7 +503,7 @@ inline void encodeWord(FILE* fileout,unsigned char* s,int s_size,EWordType wordT
   else
    spaceBefore=NONE;
 
-   encodeCodeWord(i,fileout);
+  encodeCodeWord(i,fileout);
 
   if (size>0)
    encodeAsText(s+size,s_size-size,fileout);
@@ -2184,52 +2184,52 @@ void WRT_start_decoding(FILE* file,FILE* fileout,int header,FILE* english_dictio
  if (!initialize((longDictLen<=0)?NULL:s,(shortDictLen<=0)?NULL:t,false,english_dictionary))
   return;
 
-  {
+ {
 #if USE_EOLC
-   int EOLlen= readEOLstream(file)+4;
+  int EOLlen= readEOLstream(file)+4;
 #else
-   int EOLlen= 4;
+  int EOLlen= 4;
 #endif
 
-   fseek(file, i, SEEK_SET );
-   EOLlen+=i;
+  fseek(file, i, SEEK_SET );
+  EOLlen+=i;
 
 #ifdef POWERED_BY_PAQ
-   WRTd_filter->reads+=i;
+  WRTd_filter->reads+=i;
 #endif
 
-   originalFileLen=fileLen-EOLlen;
-   bufferedChar=-1;
-   lastChar=0;
-   fftell=0;
-   fftelld=0;
-   WRTd_upper=false;
-   upperWord=UFALSE;
-   preprocessing=0;
-   s_size=0;
-   initOrder=true;
-   lastEOL=-1;
-   EOLType=UNDEFINED;
+  originalFileLen=fileLen-EOLlen;
+  bufferedChar=-1;
+  lastChar=0;
+  fftell=0;
+  fftelld=0;
+  WRTd_upper=false;
+  upperWord=UFALSE;
+  preprocessing=0;
+  s_size=0;
+  initOrder=true;
+  lastEOL=-1;
+  EOLType=UNDEFINED;
 
-   if (!IF_OPTION(OPTION_NORMAL_TEXT_FILTER) && !IF_OPTION(OPTION_USE_DICTIONARY))
-   {
-    autoSwitch=1<<(31-1);
-    preprocessing=autoSwitch;
-   }
-   else
-    if (!IF_OPTION(OPTION_NORMAL_TEXT_FILTER))
-     autoSwitch=AUTO_SWITCH*4;
-    else
-     autoSwitch=AUTO_SWITCH;
-
-    if (IF_OPTION(OPTION_SPACELESS_WORDS))
-     spaceBefore=SPACE;
-    else
-     spaceBefore=NONE;
-
-    DECODE_GETC(WRTd_c,file);
-    PRINT_CHARS(("WRT_start_decoding WRTd_c=%d ftell=%d\n",WRTd_c,ftell(file)));
+  if (!IF_OPTION(OPTION_NORMAL_TEXT_FILTER) && !IF_OPTION(OPTION_USE_DICTIONARY))
+  {
+   autoSwitch=1<<(31-1);
+   preprocessing=autoSwitch;
   }
+  else
+   if (!IF_OPTION(OPTION_NORMAL_TEXT_FILTER))
+    autoSwitch=AUTO_SWITCH*4;
+   else
+    autoSwitch=AUTO_SWITCH;
+
+  if (IF_OPTION(OPTION_SPACELESS_WORDS))
+   spaceBefore=SPACE;
+  else
+   spaceBefore=NONE;
+
+  DECODE_GETC(WRTd_c,file);
+  PRINT_CHARS(("WRT_start_decoding WRTd_c=%d ftell=%d\n",WRTd_c,ftell(file)));
+ }
 }
 
 void WRT_prepare_decoding()
