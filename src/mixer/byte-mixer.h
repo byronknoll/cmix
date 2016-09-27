@@ -2,26 +2,19 @@
 #define BYTE_MIXER_H
 
 #include "../models/byte-model.h"
-#include "logistic.h"
-
-#include <valarray>
+#include "lstm.h"
 
 class ByteMixer : public ByteModel {
  public:
-  ByteMixer(const Logistic& logistic, int input_neurons, int hidden_neurons,
-      const unsigned int& bit_context, float learning_rate);
+  ByteMixer(unsigned int input_size, unsigned int num_cells,
+      unsigned int num_layers, int horizon, float learning_rate,
+      const unsigned int& bit_context);
   void SetInput(int index, float val);
-  void Train();
   void ByteUpdate();
 
  private:
   const unsigned int& byte_;
-  const Logistic& logistic_;
-  float learning_rate_;
-  unsigned long long steps_;
-  std::valarray<std::valarray<std::valarray<float>>> weights_;
-  std::valarray<std::valarray<float>> states_, errors_;
-  std::valarray<float> outputs_;
+  Lstm lstm_;
 };
 
 #endif

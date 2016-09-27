@@ -303,8 +303,8 @@ void Predictor::AddSSE() {
 }
 
 void Predictor::AddMixers() {
-  byte_mixer_.reset(new ByteMixer(logistic_, 256 * byte_models_.size(), 128,
-      manager_.bit_context_, 0.3));
+  byte_mixer_.reset(new ByteMixer(256 * byte_models_.size(), 40, 3, 10, 0.05,
+      manager_.bit_context_));
 
   for (int i = 0; i < 3; ++i) {
     layers_.push_back(std::unique_ptr<MixerInput>(new MixerInput(logistic_,
@@ -463,7 +463,6 @@ void Predictor::Perceive(int bit) {
     for (const auto& model : byte_models_) {
       model->ByteUpdate();
     }
-    byte_mixer_->Train();
     for (unsigned int i = 0; i < byte_models_.size(); ++i) {
       const std::valarray<float>& p = byte_models_[i]->BytePredict();
       for (unsigned int j = 0; j < 256; ++j) {

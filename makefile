@@ -2,7 +2,7 @@ CC = g++
 CFLAGS = -std=c++11 -Wall -c
 LFLAGS = -std=c++11 -Wall
 
-OBJS = build/preprocessor.o build/encoder.o build/decoder.o build/predictor.o build/logistic.o build/mixer-input.o build/mixer.o build/byte-mixer.o build/byte-model.o build/sse.o build/manager.o build/direct.o build/direct-hash.o build/indirect.o build/nonstationary.o build/run-map.o build/byte-run.o build/match.o build/dmc.o build/ppm.o build/ppmd.o build/bracket.o build/paq8l.o build/paq8hp.o build/bracket-context.o build/context-hash.o build/sparse.o build/indirect-hash.o build/interval.o build/interval-hash.o build/bit-context.o
+OBJS = build/preprocessor.o build/encoder.o build/decoder.o build/predictor.o build/logistic.o build/mixer-input.o build/mixer.o build/byte-mixer.o build/byte-model.o build/sse.o build/manager.o build/direct.o build/direct-hash.o build/indirect.o build/nonstationary.o build/run-map.o build/byte-run.o build/match.o build/dmc.o build/ppm.o build/ppmd.o build/bracket.o build/paq8l.o build/paq8hp.o build/bracket-context.o build/context-hash.o build/sparse.o build/lstm.o build/layer.o build/indirect-hash.o build/interval.o build/interval-hash.o build/bit-context.o
 
 all: CFLAGS += -Ofast -march=native -s
 all: LFLAGS += -Ofast -march=native -s
@@ -33,7 +33,7 @@ build/logistic.o: src/mixer/logistic.h src/mixer/logistic.cpp
 build/mixer-input.o: src/mixer/mixer-input.h src/mixer/mixer-input.cpp src/mixer/logistic.h
 	$(CC) $(CFLAGS) src/mixer/mixer-input.cpp -o build/mixer-input.o
 
-build/byte-mixer.o: src/models/byte-model.h src/mixer/byte-mixer.h src/mixer/byte-mixer.cpp src/mixer/logistic.h
+build/byte-mixer.o: src/models/byte-model.h src/mixer/byte-mixer.h src/mixer/byte-mixer.cpp src/mixer/lstm.h
 	$(CC) $(CFLAGS) src/mixer/byte-mixer.cpp -o build/byte-mixer.o
 
 build/byte-model.o: src/models/byte-model.h src/models/byte-model.cpp src/models/model.h
@@ -62,6 +62,12 @@ build/byte-run.o: src/models/byte-run.h src/models/byte-run.cpp src/models/model
 
 build/match.o: src/models/match.h src/models/match.cpp src/models/model.h
 	$(CC) $(CFLAGS) src/models/match.cpp -o build/match.o
+
+build/lstm.o: src/mixer/lstm.h src/mixer/lstm.cpp src/mixer/layer.h
+	$(CC) $(CFLAGS) src/mixer/lstm.cpp -o build/lstm.o
+
+build/layer.o: src/mixer/layer.h src/mixer/layer.cpp
+	$(CC) $(CFLAGS) src/mixer/layer.cpp -o build/layer.o
 
 build/dmc.o: src/models/dmc.h src/models/dmc.cpp src/models/model.h
 	$(CC) $(CFLAGS) src/models/dmc.cpp -o build/dmc.o
