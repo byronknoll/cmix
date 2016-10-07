@@ -303,7 +303,7 @@ void Predictor::AddSSE() {
 }
 
 void Predictor::AddMixers() {
-  byte_mixer_.reset(new ByteMixer(256 * byte_models_.size(), 40, 3, 10, 0.05,
+  byte_mixer_.reset(new ByteMixer(256 * byte_models_.size(), 60, 2, 40, 0.05,
       manager_.bit_context_));
 
   for (int i = 0; i < 3; ++i) {
