@@ -42,7 +42,7 @@ build/byte-model.o: src/models/byte-model.h src/models/byte-model.cpp src/models
 build/mixer.o: src/mixer/mixer.h src/mixer/mixer.cpp src/mixer/logistic.h
 	$(CC) $(CFLAGS) src/mixer/mixer.cpp -o build/mixer.o
 
-build/sse.o: src/mixer/sse.h src/mixer/sse.cpp
+build/sse.o: src/mixer/sse.h src/mixer/sse.cpp src/mixer/logistic.h
 	$(CC) $(CFLAGS) src/mixer/sse.cpp -o build/sse.o
 
 build/manager.o: src/manager.h src/manager.cpp src/contexts/context.h src/contexts/bit-context.h src/states/nonstationary.h src/states/run-map.h
@@ -86,9 +86,6 @@ build/paq8l.o: src/models/paq8l.h src/models/paq8l.cpp src/models/model.h
 
 build/paq8hp.o: src/models/paq8hp.h src/models/paq8hp.cpp src/models/model.h
 	$(CC) $(CFLAGS) src/models/paq8hp.cpp -o build/paq8hp.o
-
-build/paq8pxd.o: src/models/paq8pxd.h src/models/paq8pxd.cpp src/models/model.h
-	$(CC) $(CFLAGS) src/models/paq8pxd.cpp -o build/paq8pxd.o
 
 build/nonstationary.o: src/states/nonstationary.h src/states/nonstationary.cpp src/states/state.h
 	$(CC) $(CFLAGS) src/states/nonstationary.cpp -o build/nonstationary.o
