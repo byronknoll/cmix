@@ -1,14 +1,5 @@
 #include "lstm.h"
 
-namespace {
-inline float Rand() {
-  return static_cast <float> (rand()) / static_cast <float> (RAND_MAX);
-}
-inline float Logistic(float val) {
-  return 1 / (1 + exp(-val));
-}
-}
-
 Lstm::Lstm(unsigned int input_size, unsigned int num_cells,
     unsigned int num_layers, int horizon, float learning_rate) :
     input_history_(horizon), probs_(1.0 / 256, 256),
@@ -35,7 +26,7 @@ Lstm::Lstm(unsigned int input_size, unsigned int num_cells,
   float range = 0.4;
   for (unsigned int i = 0; i < output_layer_[0].size(); ++i) {
     for (unsigned int j = 0; j < output_layer_[0][i].size(); ++j) {
-      output_layer_[0][i][j] = low + Rand() * range;
+      output_layer_[0][i][j] = low + Layer::Rand() * range;
     }
   }
 }
@@ -94,7 +85,8 @@ std::valarray<float>& Lstm::Predict(unsigned char input) {
     }
   }
   for (unsigned int i = 0; i < 256; ++i) {
-    output_[epoch_][i] = Logistic((hidden_ * output_layer_[epoch_][i]).sum());
+    output_[epoch_][i] = Layer::Logistic(
+        (hidden_ * output_layer_[epoch_][i]).sum());
   }
   probs_ = output_[epoch_];
   double sum = 0, min = 0.000001;

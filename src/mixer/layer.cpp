@@ -3,15 +3,6 @@
 #include <math.h>
 #include <algorithm>
 
-namespace {
-inline float Rand() {
-  return static_cast <float> (rand()) / static_cast <float> (RAND_MAX);
-}
-inline float Logistic(float val) {
-  return 1 / (1 + exp(-val));
-}
-}
-
 Layer::Layer(unsigned int input_size, unsigned int auxiliary_input_size,
     unsigned int num_cells, int horizon, float learning_rate) :
     state_(num_cells), hidden_(num_cells), hidden_error_(num_cells),

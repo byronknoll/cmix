@@ -2,6 +2,8 @@
 #define LAYER_H
 
 #include <valarray>
+#include <stdlib.h>
+#include <math.h>
 
 class Layer {
  public:
@@ -10,6 +12,10 @@ class Layer {
   const std::valarray<float>& ForwardPass(const std::valarray<float>& input);
   const std::valarray<float>& BackwardPass(const std::valarray<float>& input,
       const std::valarray<float>& hidden_error, int epoch);
+  static inline float Rand() {
+    return static_cast <float> (rand()) / static_cast <float> (RAND_MAX);
+  }
+  static inline float Logistic(float val) { return 1 / (1 + exp(-val)); }
 
  private:
   std::valarray<float> state_, hidden_, hidden_error_, output_gate_error_,
