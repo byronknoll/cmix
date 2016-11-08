@@ -9,7 +9,7 @@
 #include "predictor.h"
 
 int Help() {
-  printf("cmix version 11\n");
+  printf("cmix version 12\n");
   printf("With preprocessing:\n");
   printf("    compress:           cmix -c [dictionary] [input] [output]\n");
   printf("    only preprocessing: cmix -s [dictionary] [input] [output]\n");
