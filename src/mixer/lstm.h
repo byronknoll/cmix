@@ -2,6 +2,7 @@
 #define LSTM_COMPRESS_H
 
 #include <valarray>
+#include <vector>
 #include <memory>
 
 #include "layer.h"
