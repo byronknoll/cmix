@@ -312,7 +312,7 @@ void Predictor::AddMixers() {
     mixers_.push_back(std::vector<std::unique_ptr<Mixer>>());
   }
 
-  unsigned long long input_size = models_.size() + byte_models_.size() + 1;
+  unsigned long long input_size = GetNumModels();
   layers_[0]->SetNumModels(input_size);
   std::vector<std::vector<double>> model_params = {{0, 8, 0.005},
       {0, 8, 0.0005}, {1, 8, 0.005}, {1, 8, 0.0005}, {2, 4, 0.005},

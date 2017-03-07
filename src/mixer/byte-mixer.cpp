@@ -1,9 +1,5 @@
 #include "byte-mixer.h"
 
-#include <stdlib.h>
-#include <math.h>
-#include <numeric>
-
 ByteMixer::ByteMixer(unsigned int input_size, unsigned int num_cells,
     unsigned int num_layers, int horizon, float learning_rate,
     const unsigned int& bit_context) : byte_(bit_context),
