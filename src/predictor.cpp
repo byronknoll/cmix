@@ -305,6 +305,7 @@ void Predictor::AddSSE() {
 void Predictor::AddMixers() {
   byte_mixer_.reset(new ByteMixer(256 * byte_models_.size(), 60, 2, 40, 0.05,
       manager_.bit_context_));
+  auxiliary_.push_back(models_.size() + byte_models_.size());
 
   for (int i = 0; i < 3; ++i) {
     layers_.push_back(std::unique_ptr<MixerInput>(new MixerInput(logistic_,
