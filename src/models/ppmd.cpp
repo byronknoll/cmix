@@ -758,6 +758,7 @@ PPM_CONTEXT* UpdateModel( PPM_CONTEXT* MinContext ) {
       p[0].Freq += (p[0].Freq<14);
     }
   }
+  pc = MaxContext;
 
   if( !OrderFall && iFSuccessor ) {
     FoundState->iSuccessor = CreateSuccessors( 1, p, MinContext );
