@@ -2,6 +2,7 @@
 
 #include <math.h>
 #include <algorithm>
+#include <numeric>
 
 Layer::Layer(unsigned int input_size, unsigned int auxiliary_input_size,
     unsigned int num_cells, int horizon, float learning_rate) :
@@ -42,13 +43,17 @@ const std::valarray<float>& Layer::ForwardPass(const std::valarray<float>&
     input) {
   last_state_[epoch_] = state_;
   for (unsigned int i = 0; i < state_.size(); ++i) {
-    forget_gate_state_[epoch_][i] = Logistic((input * forget_gate_[i]).sum());
+    forget_gate_state_[epoch_][i] = Logistic(std::inner_product(&input[0],
+        &input[input.size()], &forget_gate_[i][0], 0.0));
     state_[i] *= forget_gate_state_[epoch_][i];
-    input_node_state_[epoch_][i] = tanh((input * input_node_[i]).sum());
-    input_gate_state_[epoch_][i] = Logistic((input * input_gate_[i]).sum());
+    input_node_state_[epoch_][i] = tanh(std::inner_product(&input[0],
+        &input[input.size()], &input_node_[i][0], 0.0));
+    input_gate_state_[epoch_][i] = Logistic(std::inner_product(&input[0],
+        &input[input.size()], &input_gate_[i][0], 0.0));
     state_[i] += input_node_state_[epoch_][i] * input_gate_state_[epoch_][i];
     tanh_state_[epoch_][i] = tanh(state_[i]);
-    output_gate_state_[epoch_][i] = Logistic((input * output_gate_[i]).sum());
+    output_gate_state_[epoch_][i] = Logistic(std::inner_product(&input[0],
+        &input[input.size()], &output_gate_[i][0], 0.0));
     hidden_[i] = output_gate_state_[epoch_][i] * tanh_state_[epoch_][i];
   }
   ++epoch_;

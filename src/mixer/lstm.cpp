@@ -1,5 +1,7 @@
 #include "lstm.h"
 
+#include <numeric>
+
 Lstm::Lstm(unsigned int input_size, unsigned int num_cells,
     unsigned int num_layers, int horizon, float learning_rate) :
     input_history_(horizon), probs_(1.0 / 256, 256),
@@ -85,8 +87,8 @@ std::valarray<float>& Lstm::Predict(unsigned char input) {
     }
   }
   for (unsigned int i = 0; i < 256; ++i) {
-    output_[epoch_][i] = Layer::Logistic(
-        (hidden_ * output_layer_[epoch_][i]).sum());
+    output_[epoch_][i] = Layer::Logistic(std::inner_product(&hidden_[0],
+        &hidden_[hidden_.size()], &output_layer_[epoch_][i][0], 0.0));
   }
   probs_ = output_[epoch_];
   double sum = 0, min = 0.000001;
