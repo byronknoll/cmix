@@ -12,15 +12,15 @@ Mixer::Mixer(const std::valarray<float>& inputs, const Logistic& logistic,
     weights_(context_size, std::valarray<float>(0.0, input_size)) {}
 
 float Mixer::Mix() {
-  p_ = logistic_.Squash(std::inner_product(&inputs_[0],
-      &inputs_[inputs_.size()], &weights_[context_][0], 0.0));
+  p_ = std::inner_product(&inputs_[0], &inputs_[inputs_.size()],
+      &weights_[context_][0], 0.0);
   return p_;
 }
 
 void Mixer::Perceive(int bit) {
   float decay = 0.9 / pow(0.0000001 * steps_ + 0.8, 0.8);
   decay *= 1.5 - ((1.0 * context_steps_[context_]) / max_steps_);
-  float update = decay * learning_rate_ * (bit - p_);
+  float update = decay * learning_rate_ * (bit - logistic_.Squash(p_));
   ++steps_;
   ++context_steps_[context_];
   if (context_steps_[context_] > max_steps_) {

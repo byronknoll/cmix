@@ -422,15 +422,15 @@ float Predictor::Predict() {
   layers_[0]->SetInput(models_.size() + byte_models_.size(), byte_mixer_p);
   for (unsigned int layer = 1; layer <= 2; ++layer) {
     for (unsigned int i = 0; i < mixers_[layer - 1].size(); ++i) {
-      layers_[layer]->SetInput(i, mixers_[layer - 1][i]->Mix());
+      layers_[layer]->SetStretchedInput(i, mixers_[layer - 1][i]->Mix());
     }
     for (unsigned int i = 0; i < auxiliary_.size(); ++i) {
-      layers_[layer]->SetProcessedInput(mixers_[layer - 1].size() + i,
+      layers_[layer]->SetStretchedInput(mixers_[layer - 1].size() + i,
           layers_[0]->Inputs()[auxiliary_[i]]);
     }
   }
-  float mixer_output = mixers_[2][0]->Mix();
-  float p = logistic_.Stretch(mixer_output);
+  float p = mixers_[2][0]->Mix();
+  float mixer_output = logistic_.Squash(p);
   p = (mixer_output + 3 * sse_[0]->Process(p) + sse_[1]->Process(p) +
       sse_[2]->Process(p) + sse_[3]->Process(p)) / 7;
   return p;
