@@ -18,7 +18,7 @@ class Lstm {
  private:
   std::vector<std::unique_ptr<Layer>> layers_;
   std::vector<unsigned char> input_history_;
-  std::valarray<float> probs_, hidden_, hidden_error_;
+  std::valarray<float> hidden_, hidden_error_;
   std::valarray<std::valarray<std::valarray<float>>> layer_input_,
       output_layer_;
   std::valarray<std::valarray<float>> output_;

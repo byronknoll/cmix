@@ -4,8 +4,8 @@
 
 Lstm::Lstm(unsigned int input_size, unsigned int num_cells,
     unsigned int num_layers, int horizon, float learning_rate) :
-    input_history_(horizon), probs_(1.0 / 256, 256),
-    hidden_(num_cells * num_layers + 1), hidden_error_(num_cells),
+    input_history_(horizon), hidden_(num_cells * num_layers + 1),
+    hidden_error_(num_cells),
     layer_input_(std::valarray<std::valarray<float>>(std::valarray<float>
     (input_size + 257 + num_cells * 2), num_layers), horizon),
     output_layer_(std::valarray<std::valarray<float>>(std::valarray<float>
@@ -87,17 +87,16 @@ std::valarray<float>& Lstm::Predict(unsigned char input) {
     }
   }
   for (unsigned int i = 0; i < 256; ++i) {
-    output_[epoch_][i] = Layer::Logistic(std::inner_product(&hidden_[0],
+    output_[epoch_][i] = exp(std::inner_product(&hidden_[0],
         &hidden_[hidden_.size()], &output_layer_[epoch_][i][0], 0.0));
   }
-  probs_ = output_[epoch_];
-  double sum = 0, min = 0.000001;
+  double sum = 0;
   for (int i = 0; i < 256; ++i) {
-    if (probs_[i] < min) probs_[i] = min;
-    sum += probs_[i];
+    sum += output_[epoch_][i];
   }
-  probs_ /= sum;
+  output_[epoch_] /= sum;
+  int epoch = epoch_;
   ++epoch_;
   if (epoch_ == horizon_) epoch_ = 0;
-  return probs_;
+  return output_[epoch];
 }
