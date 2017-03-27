@@ -24,13 +24,6 @@ Lstm::Lstm(unsigned int input_size, unsigned int num_cells,
     layers_.push_back(std::unique_ptr<Layer>(new Layer(layer_input_[0][i].
         size(), input_size_, num_cells, horizon, learning_rate)));
   }
-  float low = -0.2;
-  float range = 0.4;
-  for (unsigned int i = 0; i < output_layer_[0].size(); ++i) {
-    for (unsigned int j = 0; j < output_layer_[0][i].size(); ++j) {
-      output_layer_[0][i][j] = low + Layer::Rand() * range;
-    }
-  }
 }
 
 void Lstm::SetInput(int index, float val) {
