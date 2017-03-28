@@ -123,7 +123,6 @@ void Predictor::AddBracket() {
 void Predictor::AddPPM() {
   AddByteModel(new PPM(7, manager_.bit_context_, 10000, 11000000));
   AddByteModel(new PPM(5, manager_.bit_context_, 10000, 7000000));
-  AddByteModel(new PPM(3, manager_.bit_context_, 10000, 5000000));
 }
 
 void Predictor::AddPPMD() {
