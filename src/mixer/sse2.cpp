@@ -1,3 +1,6 @@
+// This SSE code was written by Eugene Shelwien.
+// https://encode.ru/threads/2515-mod_ppmd
+
 #include "sse2.h"
 
 #include <math.h>
@@ -5,14 +8,14 @@
 namespace SSE_sh {
 
 typedef unsigned short word;
-typedef unsigned int   uint;
-typedef unsigned char  byte;
+typedef unsigned int uint;
+typedef unsigned char byte;
 
 struct SSEi_updstr {
-  int   P;
-  int   sw;
-  word  *C1;
-  word  *T;
+  int P;
+  int sw;
+  word *C1;
+  word *T;
 };
 
 template<int SSEQuant=7, int SCALElog=15, int InitFlag=0>
@@ -24,11 +27,11 @@ struct SSEi {
   word P[SSEQuant];
 
   void Init( int Wi=0 ) {
-    int i,p1; 
-    // p*(1-mw) + 0.5*mw
+    int i,p1;
+
     int SCw = (SCALE-Wi)/(SSEQuant-1);
-    int INC = Wi/2 + 8192; // *0.5
-    for( i=0,p1=INC; i<SSEQuant; i++,p1+=SCw ) P[i] = p1/*, printf( "%04X ", p1-8192 )*/; //SCw*i + INC;
+    int INC = Wi/2 + 8192;
+    for( i=0,p1=INC; i<SSEQuant; i++,p1+=SCw ) P[i] = p1 ;
   }
 
   int SSE_Pred( int iP, SSEi_updstr& X ) {
@@ -37,9 +40,9 @@ struct SSEi {
 
     X.sw = ((SSEQuant-1)*iP)&mSCALE;
     X.C1 = &P[sseFreq+0];
-    int f  = (((SCALE-X.sw)*X.C1[0]+X.sw*X.C1[1])>>SCALElog) - 8192;
+    int f = (((SCALE-X.sw)*X.C1[0]+X.sw*X.C1[1])>>SCALElog) - 8192;
 
-    if( f<=0     ) f=1;
+    if( f<=0 ) f=1;
     if( f>=SCALE ) f=mSCALE;
 
     X.P = f;
@@ -49,13 +52,13 @@ struct SSEi {
 
   void SSE_Update( byte c, int wr0, SSEi_updstr& X ) {
 
-    X.P = X.P*(SCALE-wr0)>>SCALElog; // X.P *= (1-wr1);
+    X.P = X.P*(SCALE-wr0)>>SCALElog;
     if( c==0 ) X.P+=wr0;
 
     int dC = (X.C1[0]-X.C1[1]);
     int sw_dC= ((X.sw*dC+mSCALE)>>SCALElog);
-    X.C1[0] = X.P + sw_dC       +8192;
-    X.C1[1] = X.P - (dC-sw_dC)  +8192;
+    X.C1[0] = X.P + sw_dC +8192;
+    X.C1[1] = X.P - (dC-sw_dC) +8192;
   }
 
 };
@@ -63,9 +66,9 @@ struct SSEi {
 
 enum {
   SCALElog = 15,
-  SCALE    = 1<<SCALElog,
-  hSCALE   = SCALE/2,
-  mSCALE   = SCALE-1
+  SCALE = 1<<SCALElog,
+  hSCALE = SCALE/2,
+  mSCALE = SCALE-1
 };
 
 double log2( double a ) { return M_LOG2E*log(a); }
@@ -145,18 +148,18 @@ uint WExtrap( int _p1, int C ) {
 }
 
 struct Mixer {
-  int w;  // weights
+  int w;
 
-  void Init( int w0 ) { 
+  void Init( int w0 ) {
     w = w0 + hSCALE;
   }
 
-  int rdiv( int x, int a, int d ) {  
+  int rdiv( int x, int a, int d ) {
     return x>=0 ? (x+a)>>d : -((-x+a)>>d);
   }
 
 
-  int Mixup( int w, int s1, int s0 /*, int wr*/ ) {
+  int Mixup( int w, int s1, int s0 ) {
     int x = s1 + rdiv( (w-hSCALE)*(s0-s1), 1<<(SCALElog-1), SCALElog );
     x = (x>0) ? (x<SCALE) ? x : SCALE-1 : 1;
     return x;
@@ -199,15 +202,15 @@ static const int M_sm6Q = (5+2) * (1);
 static const int M_sm7Q = (5+2) * (1);
 
 
-static const int M_mix1_Volume = 1* 4* (1<<8)* (1<<3)* 79; // 647168
-static const int M_mix2_Volume = 1* 3* (1<<1)* (1<<8)* 256; // 391680
-static const int M_sm6x_Volume = 1* 3* (1<<7)* (1<<8)* 256; // 0
-static const int M_sm7x_Volume = 1* 3* (1<<5)* (1<<8)* 255; // 6266880
+static const int M_mix1_Volume = 1* 4* (1<<8)* (1<<3)* 79;
+static const int M_mix2_Volume = 1* 3* (1<<1)* (1<<8)* 256;
+static const int M_sm6x_Volume = 1* 3* (1<<7)* (1<<8)* 256;
+static const int M_sm7x_Volume = 1* 3* (1<<5)* (1<<8)* 255;
 
 struct M_T {
 
   SSEi_updstr su6,su7;
-  int  sm6x,mix1, sm7x,mix2;
+  int sm6x,mix1, sm7x,mix2;
   uint mix1_s0,mix1_s1,mix1_p, mix1_p1,mix1_p2;
   uint mix2_s0,mix2_s1,mix2_p;
   uint M_j, M_pc, M_ffl;
@@ -217,19 +220,19 @@ struct M_T {
   Mixer x1[M_mix1_Volume];
   SSEi<7> s7[M_sm7x_Volume];
   Mixer x2[M_mix2_Volume];
-  
+
   void M_Init( void ) {
-  
+
     uint i;
-  
+
     for( i=0; i<M_sm6x_Volume; i++ ) s6[i].Init(M_sm6mw);
     for( i=0; i<M_mix1_Volume; i++ ) x1[i].Init(M_x1W0);
-  
+
     for( i=0; i<M_sm7x_Volume; i++ ) s7[i].Init(M_sm7mw);
     for( i=0; i<M_mix2_Volume; i++ ) x2[i].Init(M_x2W0);
-  
+
     M_j=1; M_pc=0; M_ffl=0;
-  
+
   }
   void M_Quit( void ) {
   }
@@ -244,43 +247,43 @@ uint M_Estimate( uint p ) {
 
   sm7x = 0;
   sm7x = sm7x*3 + ((prq>0+(1-1))+(prq>14+(1-1)));
-  sm7x = (sm7x<<5) + ((ffl)&31); // 00011111
-  sm7x = (sm7x<<8) + ((pc)&255); // 11111111
-  sm7x = (sm7x*255) + M_sm7mask0[j]; // 00000001
+  sm7x = (sm7x<<5) + ((ffl)&31);
+  sm7x = (sm7x<<8) + ((pc)&255);
+  sm7x = (sm7x*255) + M_sm7mask0[j];
 
   mix2 = 0;
   mix2 = mix2*3 + ((prq>0+(1-1))+(prq>14+(1-1)));
-  mix2 = (mix2<<1) + ((ffl)&1); // 00000001
-  mix2 = (mix2<<8) + ((pc)&255); // 11111111
-  mix2 = (mix2*256) + (j); // 00000000
+  mix2 = (mix2<<1) + ((ffl)&1);
+  mix2 = (mix2<<8) + ((pc)&255);
+  mix2 = (mix2*256) + (j);
 
   sm6x = 0;
   sm6x = sm6x*3 + ((prq>0+(1-1))+(prq>14+(1-1)));
-  sm6x = (sm6x<<7) + ((ffl)&127); // 01111111
-  sm6x = (sm6x<<8) + ((pc)&255); // 11111111
-  sm6x = (sm6x*256) + (j); // 00000000
+  sm6x = (sm6x<<7) + ((ffl)&127);
+  sm6x = (sm6x<<8) + ((pc)&255);
+  sm6x = (sm6x*256) + (j);
 
   mix1 = 0;
   mix1 = mix1*4 + ((prq>0+(1-1))+(prq>7+(1-1))+(prq>14+(1-1)));
-  mix1 = (mix1<<8) + ((ffl)&255); // 11111111
-  mix1 = (mix1<<3) + (((pc)>>5)&7); // 11100000
-  mix1 = (mix1*79) + M_mx1mask0[j]; // 00001110
+  mix1 = (mix1<<8) + ((ffl)&255);
+  mix1 = (mix1<<3) + (((pc)>>5)&7);
+  mix1 = (mix1*79) + M_mx1mask0[j];
 
   p0 = p;
   p1 = s6[sm6x].SSE_Pred( t_sq[Extrap(t_st[p0],M_f0C)], su6 );
   s0 = t_st[p0]; s0 = Extrap(s0,M_f1C);
   s1 = t_st[p1]; s1 = Extrap(s1,M_f2C);
-  mix1_s0=s0; mix1_s1=s1; 
+  mix1_s0=s0; mix1_s1=s1;
   s2 = x1[mix1].Mixup( x1[mix1].w, mix1_s0, mix1_s1 ); s2 = Extrap(s2,M_sm6C1);
   mix1_p = t_sq[s2];
 
   p2 = s7[sm7x].SSE_Pred( t_sq[Extrap(t_st[p0],M_f3C)], su7 );
   s4 = t_st[p2]; s4 = Extrap(s4,M_f4C);
-  mix2_s0=s2; mix2_s1=s4; 
+  mix2_s0=s2; mix2_s1=s4;
   s5 = x2[mix2].Mixup( x2[mix2].w, mix2_s0, mix2_s1 ); s5 = Extrap(s5,M_sm7C1);
   mix2_p = t_sq[s5];
-  mix2_s0=s2; 
-  mix2_s1=s4; 
+  mix2_s0=s2;
+  mix2_s1=s4;
 
   return mix2_p;
 }
@@ -297,7 +300,7 @@ void M_Update( uint bit ) {
   if( M_j>=256 ) {
     M_ffl= byte(M_ffl*2+(M_pc>=0x40));
     M_pc = byte(M_j);
-    M_j  = 1;
+    M_j = 1;
   }
 }
 };
