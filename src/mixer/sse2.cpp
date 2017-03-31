@@ -196,15 +196,11 @@ static const int M_x1W0 = (7648+1) * (1);
 static const int M_x1wr = (6202+0) * (1);
 static const int M_f3C = (8200+0) * (1);
 static const int M_f4C = (7677+0) * (1);
-static const int M_sm7wrA = (1+0) * (1);
 static const int M_sm7wrB = (127+0) * (1);
 static const int M_sm7mw = (8192+0) * (1);
 static const int M_sm7C1 = (8202+0) * (1);
 static const int M_x2W0 = (2560+1) * (1);
 static const int M_x2wr = (8320+0) * (1);
-static const int M_sm6Q = (5+2) * (1);
-static const int M_sm7Q = (5+2) * (1);
-
 
 static const int M_mix1_Volume = 1* 4* (1<<8)* (1<<3)* 79;
 static const int M_mix2_Volume = 1* 3* (1<<1)* (1<<8)* 256;

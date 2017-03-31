@@ -2,7 +2,7 @@
 #define SSE2_H
 
 namespace SSE_sh {
-  class M_T1;
+  struct M_T1;
 }
 
 class SSE2 {
