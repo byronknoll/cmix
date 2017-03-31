@@ -71,6 +71,10 @@ enum {
   mSCALE = SCALE-1
 };
 
+#ifndef M_LOG2E
+#define M_LOG2E 1.44269504088896340736
+#endif
+
 double log2( double a ) { return M_LOG2E*log(a); }
 
 double exp2( double a ) { return exp( a/M_LOG2E ); }
