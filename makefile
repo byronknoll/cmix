@@ -2,7 +2,7 @@ CC = g++
 CFLAGS = -std=c++11 -Wall -c
 LFLAGS = -std=c++11 -Wall
 
-OBJS = build/preprocessor.o build/encoder.o build/decoder.o build/predictor.o build/logistic.o build/mixer-input.o build/mixer.o build/byte-mixer.o build/byte-model.o build/sse.o build/manager.o build/direct.o build/direct-hash.o build/indirect.o build/nonstationary.o build/run-map.o build/byte-run.o build/match.o build/dmc.o build/ppm.o build/ppmd.o build/bracket.o build/paq8l.o build/paq8hp.o build/bracket-context.o build/context-hash.o build/sparse.o build/lstm.o build/layer.o build/indirect-hash.o build/interval.o build/interval-hash.o build/bit-context.o
+OBJS = build/preprocessor.o build/encoder.o build/decoder.o build/predictor.o build/logistic.o build/mixer-input.o build/mixer.o build/byte-mixer.o build/byte-model.o build/sse.o build/sse2.o build/manager.o build/direct.o build/direct-hash.o build/indirect.o build/nonstationary.o build/run-map.o build/byte-run.o build/match.o build/dmc.o build/ppm.o build/ppmd.o build/bracket.o build/paq8l.o build/paq8hp.o build/bracket-context.o build/context-hash.o build/sparse.o build/lstm.o build/layer.o build/indirect-hash.o build/interval.o build/interval-hash.o build/bit-context.o
 
 all: CFLAGS += -Ofast -march=native -s
 all: LFLAGS += -Ofast -march=native -s
@@ -24,7 +24,7 @@ build/encoder.o: src/coder/encoder.h src/coder/encoder.cpp src/predictor.h
 build/decoder.o: src/coder/decoder.h src/coder/decoder.cpp src/predictor.h
 	$(CC) $(CFLAGS) src/coder/decoder.cpp -o build/decoder.o
 
-build/predictor.o: src/predictor.h src/predictor.cpp src/mixer/mixer-input.h src/mixer/byte-mixer.h src/mixer/mixer.h src/mixer/sse.h src/models/model.h src/models/byte-model.h src/models/direct.h src/models/direct-hash.h src/models/indirect.h src/models/byte-run.h src/models/match.h src/models/dmc.h src/models/bracket.h src/models/ppm.h src/models/ppmd.h src/models/facade.h src/models/paq8l.h src/models/paq8hp.h src/manager.h src/contexts/context-hash.h src/contexts/bracket-context.h src/contexts/sparse.h src/contexts/interval.h src/contexts/interval-hash.h src/contexts/indirect-hash.h src/contexts/bit-context.h src/models/facade.h src/mixer/logistic.h
+build/predictor.o: src/predictor.h src/predictor.cpp src/mixer/mixer-input.h src/mixer/byte-mixer.h src/mixer/mixer.h src/mixer/sse.h src/mixer/sse2.h src/models/model.h src/models/byte-model.h src/models/direct.h src/models/direct-hash.h src/models/indirect.h src/models/byte-run.h src/models/match.h src/models/dmc.h src/models/bracket.h src/models/ppm.h src/models/ppmd.h src/models/facade.h src/models/paq8l.h src/models/paq8hp.h src/manager.h src/contexts/context-hash.h src/contexts/bracket-context.h src/contexts/sparse.h src/contexts/interval.h src/contexts/interval-hash.h src/contexts/indirect-hash.h src/contexts/bit-context.h src/models/facade.h src/mixer/logistic.h
 	$(CC) $(CFLAGS) src/predictor.cpp -o build/predictor.o
 
 build/logistic.o: src/mixer/logistic.h src/mixer/logistic.cpp
@@ -44,6 +44,9 @@ build/mixer.o: src/mixer/mixer.h src/mixer/mixer.cpp src/mixer/logistic.h
 
 build/sse.o: src/mixer/sse.h src/mixer/sse.cpp src/mixer/logistic.h
 	$(CC) $(CFLAGS) src/mixer/sse.cpp -o build/sse.o
+
+build/sse2.o: src/mixer/sse2.h src/mixer/sse2.cpp
+	$(CC) $(CFLAGS) src/mixer/sse2.cpp -o build/sse2.o
 
 build/manager.o: src/manager.h src/manager.cpp src/contexts/context.h src/contexts/bit-context.h src/states/nonstationary.h src/states/run-map.h
 	$(CC) $(CFLAGS) src/manager.cpp -o build/manager.o

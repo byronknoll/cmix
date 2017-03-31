@@ -6,6 +6,7 @@
 #include "mixer/mixer.h"
 #include "mixer/byte-mixer.h"
 #include "mixer/sse.h"
+#include "mixer/sse2.h"
 #include "models/model.h"
 #include "models/byte-model.h"
 #include "manager.h"
@@ -48,6 +49,7 @@ class Predictor {
   std::vector<std::unique_ptr<Model>> models_;
   std::vector<std::unique_ptr<ByteModel>> byte_models_;
   std::vector<std::unique_ptr<SSE>> sse_;
+  SSE2 sse2_;
   std::vector<std::unique_ptr<MixerInput>> layers_;
   std::vector<std::vector<std::unique_ptr<Mixer>>> mixers_;
   std::vector<unsigned int> auxiliary_;

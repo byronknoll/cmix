@@ -432,6 +432,7 @@ float Predictor::Predict() {
   float mixer_output = logistic_.Squash(p);
   p = (mixer_output + 3 * sse_[0]->Process(p) + sse_[1]->Process(p) +
       sse_[2]->Process(p) + sse_[3]->Process(p)) / 7;
+  p = sse2_.Process(p);
   return p;
 }
 
@@ -451,6 +452,7 @@ void Predictor::Perceive(int bit) {
   for (const auto& sse : sse_) {
     sse->Perceive(bit);
   }
+  sse2_.Perceive(bit);
 
   bool byte_update = false;
   if (manager_.bit_context_ >= 128) byte_update = true;
