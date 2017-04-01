@@ -26,8 +26,8 @@ Layer::Layer(unsigned int input_size, unsigned int auxiliary_input_size,
     output_gate_update_(std::valarray<float>(input_size), num_cells),
     learning_rate_(learning_rate), num_cells_(num_cells), epoch_(0),
     horizon_(horizon), input_size_(auxiliary_input_size) {
-  float low = -0.1;
-  float range = 0.2;
+  float low = -0.2;
+  float range = 0.4;
   for (unsigned int i = 0; i < forget_gate_.size(); ++i) {
     for (unsigned int j = 0; j < forget_gate_[i].size(); ++j) {
       forget_gate_[i][j] = low + Rand() * range;
