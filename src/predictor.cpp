@@ -43,7 +43,6 @@ Predictor::Predictor() : manager_(), logistic_(10000, 1000) {
   AddInterval();
 
   AddMixers();
-  AddSSE();
 
   // PrintStats();
 }
@@ -290,17 +289,6 @@ void Predictor::AddInterval() {
   }
 }
 
-void Predictor::AddSSE() {
-  std::vector<std::vector<unsigned int>> model_params = {{0, 8, 2000, 1000},
-      {1, 8, 500, 100}, {2, 4, 500, 100}, {3, 3, 200, 100}};
-  for (const auto& params : model_params) {
-    const Context& context = manager_.AddContext(std::unique_ptr<Context>(
-        new ContextHash(manager_.bit_context_, params[0], params[1])));
-    sse_.push_back(std::unique_ptr<SSE>(new SSE(logistic_, context.GetContext(),
-        manager_.bit_context_, params[2], params[3], context.Size())));
-  }
-}
-
 void Predictor::AddMixers() {
   byte_mixer_.reset(new ByteMixer(256 * byte_models_.size(), 80, 2, 40, 0.05,
       manager_.bit_context_));
@@ -428,11 +416,8 @@ float Predictor::Predict() {
           layers_[0]->Inputs()[auxiliary_[i]]);
     }
   }
-  float p = mixers_[2][0]->Mix();
-  float mixer_output = logistic_.Squash(p);
-  p = (mixer_output + 3 * sse_[0]->Process(p) + sse_[1]->Process(p) +
-      sse_[2]->Process(p) + sse_[3]->Process(p)) / 7;
-  p = sse2_.Process(p);
+  float p = logistic_.Squash(mixers_[2][0]->Mix());
+  p = sse_.Process(p);
   return p;
 }
 
@@ -449,10 +434,7 @@ void Predictor::Perceive(int bit) {
       mixer->Perceive(bit);
     }
   }
-  for (const auto& sse : sse_) {
-    sse->Perceive(bit);
-  }
-  sse2_.Perceive(bit);
+  sse_.Perceive(bit);
 
   bool byte_update = false;
   if (manager_.bit_context_ >= 128) byte_update = true;
