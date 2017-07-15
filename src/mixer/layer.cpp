@@ -5,11 +5,12 @@
 #include <numeric>
 
 Layer::Layer(unsigned int input_size, unsigned int auxiliary_input_size,
-    unsigned int num_cells, int horizon, float learning_rate) :
-    state_(num_cells), hidden_(num_cells), hidden_error_(num_cells),
-    output_gate_error_(num_cells), state_error_(num_cells),
-    input_node_error_(num_cells), input_gate_error_(num_cells),
-    forget_gate_error_(num_cells), stored_error_(num_cells),
+    unsigned int output_size, unsigned int num_cells, int horizon,
+    float learning_rate) : state_(num_cells), hidden_(num_cells),
+    hidden_error_(num_cells), output_gate_error_(num_cells),
+    state_error_(num_cells), input_node_error_(num_cells),
+    input_gate_error_(num_cells), forget_gate_error_(num_cells),
+    stored_error_(num_cells),
     tanh_state_(std::valarray<float>(num_cells), horizon),
     output_gate_state_(std::valarray<float>(num_cells), horizon),
     input_node_state_(std::valarray<float>(num_cells), horizon),
@@ -25,7 +26,8 @@ Layer::Layer(unsigned int input_size, unsigned int auxiliary_input_size,
     input_gate_update_(std::valarray<float>(input_size), num_cells),
     output_gate_update_(std::valarray<float>(input_size), num_cells),
     learning_rate_(learning_rate), num_cells_(num_cells), epoch_(0),
-    horizon_(horizon), input_size_(auxiliary_input_size) {
+    horizon_(horizon), input_size_(auxiliary_input_size),
+    output_size_(output_size) {
   float low = -0.2;
   float range = 0.4;
   for (unsigned int i = 0; i < forget_gate_.size(); ++i) {
@@ -88,8 +90,8 @@ const std::valarray<float>& Layer::BackwardPass(const std::valarray<float>&
       forget_gate_state_[epoch] * (1.0f - forget_gate_state_[epoch]);
 
   hidden_error_ = 0;
-  if (input.size() > 257 + num_cells_ + input_size_) {
-    int offset = 256 + num_cells_ + input_size_;
+  if (input.size() > output_size_ + 1 + num_cells_ + input_size_) {
+    int offset = output_size_ + num_cells_ + input_size_;
     for (unsigned int i = 0; i < input_node_.size(); ++i) {
       for (unsigned int j = offset; j < input.size() - 1; ++j) {
         hidden_error_[j-offset] += input_node_[i][j] * input_node_error_[i];
@@ -104,7 +106,7 @@ const std::valarray<float>& Layer::BackwardPass(const std::valarray<float>&
     state_error_ *= forget_gate_state_[epoch];
     stored_error_ = 0;
     for (unsigned int i = 0; i < input_node_.size(); ++i) {
-      int offset = 256 + input_size_;
+      int offset = output_size_ + input_size_;
       for (unsigned int j = offset; j < offset + num_cells_; ++j) {
         stored_error_[j-offset] += input_node_[i][j] * input_node_error_[i];
         stored_error_[j-offset] += input_gate_[i][j] * input_gate_error_[i];

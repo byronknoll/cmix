@@ -8,7 +8,8 @@
 class Layer {
  public:
   Layer(unsigned int input_size, unsigned int auxiliary_input_size,
-      unsigned int num_cells, int horizon, float learning_rate);
+      unsigned int output_size, unsigned int num_cells, int horizon,
+      float learning_rate);
   const std::valarray<float>& ForwardPass(const std::valarray<float>& input);
   const std::valarray<float>& BackwardPass(const std::valarray<float>& input,
       const std::valarray<float>& hidden_error, int epoch);
@@ -26,7 +27,7 @@ class Layer {
       forget_gate_, input_node_, input_gate_, output_gate_, forget_gate_update_,
       input_node_update_, input_gate_update_, output_gate_update_;
   float learning_rate_;
-  unsigned int num_cells_, epoch_, horizon_, input_size_;
+  unsigned int num_cells_, epoch_, horizon_, input_size_, output_size_;
 };
 
 #endif
