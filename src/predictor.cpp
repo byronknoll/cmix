@@ -279,7 +279,8 @@ void Predictor::AddInterval() {
         (i < 64) + (i < 4) + (i < 61) + (i < 97) +
         (i < 125) + (i < 45) + (i < 48);
   }
-  std::vector<std::vector<unsigned int>> model_params = {{2, 8}, {4, 7}, {8, 3}, {12, 1}, {16, 1}};
+  std::vector<std::vector<unsigned int>> model_params = {{2, 8}, {4, 7}, {8, 3},
+      {12, 1}, {16, 1}};
   float delta = 400;
   for (const auto& params : model_params) {
     const Context& interval = manager_.AddContext(std::unique_ptr<Context>(
@@ -290,7 +291,7 @@ void Predictor::AddInterval() {
 }
 
 void Predictor::AddMixers() {
-  byte_mixer_.reset(new ByteMixer(256 * byte_models_.size(), 80, 2, 40, 0.05,
+  byte_mixer_.reset(new ByteMixer(byte_models_.size(), 100, 2, 40, 0.03,
       manager_.bit_context_));
   auxiliary_.push_back(models_.size() + byte_models_.size());
 
@@ -450,7 +451,7 @@ void Predictor::Perceive(int bit) {
     for (unsigned int i = 0; i < byte_models_.size(); ++i) {
       const std::valarray<float>& p = byte_models_[i]->BytePredict();
       for (unsigned int j = 0; j < 256; ++j) {
-        byte_mixer_->SetInput(i*256 + j, p[j]);
+        byte_mixer_->SetInput(j, p[j]);
       }
     }
     byte_mixer_->ByteUpdate();
