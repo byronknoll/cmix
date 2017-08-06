@@ -8,7 +8,8 @@ class ByteMixer : public ByteModel {
  public:
   ByteMixer(unsigned int num_models, unsigned int num_cells,
       unsigned int num_layers, int horizon, float learning_rate,
-      const unsigned int& bit_context);
+      const unsigned int& bit_context, const std::vector<bool>& vocab,
+      unsigned int vocab_size);
   void SetInput(int index, float val);
   void ByteUpdate();
 
@@ -16,7 +17,9 @@ class ByteMixer : public ByteModel {
   const unsigned int& byte_;
   Lstm lstm_;
   std::vector<float> inputs_;
-  unsigned int num_models_;
+  std::vector<int> byte_map_;
+  std::valarray<float> outputs_;
+  unsigned int num_models_, vocab_size_, offset_;
 };
 
 #endif

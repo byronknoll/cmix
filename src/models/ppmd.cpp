@@ -1323,8 +1323,8 @@ static ppmd_Model ppmd_model;
 #pragma pack()
 }
 
-PPMD::PPMD(int order, int memory, const unsigned int& bit_context) :
-    byte_(bit_context) {
+PPMD::PPMD(int order, int memory, const unsigned int& bit_context,
+    const std::vector<bool>& vocab) : ByteModel(vocab), byte_(bit_context) {
   ppmd_model.Init(order,memory,1,0);
 }
 

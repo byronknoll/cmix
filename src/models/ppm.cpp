@@ -1,7 +1,8 @@
 #include "ppm.h"
 
 PPM::PPM(unsigned int order, const unsigned int& bit_context, float delta,
-    unsigned int max_size) : byte_(bit_context), divisor_(1.0 / delta),
+    unsigned int max_size, const std::vector<bool>& vocab) : ByteModel(vocab),
+    byte_(bit_context), divisor_(1.0 / delta),
     escape_map_(256 * 256, 0), cur_(0), cur_depth_(0), max_order_(order),
     max_size_(max_size) {
   Reset();

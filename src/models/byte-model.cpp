@@ -1,6 +1,7 @@
 #include "byte-model.h"
 
-ByteModel::ByteModel() : top_(255), mid_(0), bot_(0), probs_(1.0 / 256, 256) {}
+ByteModel::ByteModel(const std::vector<bool>& vocab) : top_(255), mid_(0),
+    bot_(0), vocab_(vocab), probs_(1.0 / 256, 256) {}
 
 float ByteModel::Predict() {
   float num = 0, denom = 0;
@@ -28,4 +29,7 @@ void ByteModel::Perceive(int bit) {
 void ByteModel::ByteUpdate() {
   top_ = 255;
   bot_ = 0;
+  for (int i = 0; i < 256; ++i) {
+    if (!vocab_[i]) probs_[i] = 0;
+  }
 }

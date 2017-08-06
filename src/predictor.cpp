@@ -23,7 +23,8 @@
 #include <stdlib.h>
 #include <stdio.h>
 
-Predictor::Predictor() : manager_(), logistic_(10000, 1000) {
+Predictor::Predictor(const std::vector<bool>& vocab) : manager_(),
+    logistic_(10000, 1000), vocab_(vocab) {
   srand(0xDEADBEEF);
 
   AddBracket();
@@ -110,7 +111,7 @@ void Predictor::AddPAQ8L() {
 }
 
 void Predictor::AddBracket() {
-  Add(new Bracket(manager_.bit_context_, 200, 10, 100000));
+  Add(new Bracket(manager_.bit_context_, 200, 10, 100000, vocab_));
   const Context& context = manager_.AddContext(std::unique_ptr<Context>(
       new BracketContext(manager_.bit_context_, 256, 15)));
   Add(new Direct(context.GetContext(), manager_.bit_context_, 30, 0,
@@ -120,12 +121,12 @@ void Predictor::AddBracket() {
 }
 
 void Predictor::AddPPM() {
-  AddByteModel(new PPM(7, manager_.bit_context_, 10000, 11000000));
-  AddByteModel(new PPM(5, manager_.bit_context_, 10000, 7000000));
+  AddByteModel(new PPM(7, manager_.bit_context_, 10000, 11000000, vocab_));
+  AddByteModel(new PPM(5, manager_.bit_context_, 10000, 7000000, vocab_));
 }
 
 void Predictor::AddPPMD() {
-  AddByteModel(new PPMD(16, 1680, manager_.bit_context_));
+  AddByteModel(new PPMD(16, 1680, manager_.bit_context_, vocab_));
 }
 
 void Predictor::AddDMC() {
@@ -291,8 +292,12 @@ void Predictor::AddInterval() {
 }
 
 void Predictor::AddMixers() {
+  unsigned int vocab_size = 0;
+  for (unsigned int i = 0; i < vocab_.size(); ++i) {
+    if (vocab_[i]) ++vocab_size;
+  }
   byte_mixer_.reset(new ByteMixer(byte_models_.size(), 100, 2, 40, 0.03,
-      manager_.bit_context_));
+      manager_.bit_context_, vocab_, vocab_size));
   auxiliary_.push_back(models_.size() + byte_models_.size());
 
   for (int i = 0; i < 3; ++i) {
@@ -419,6 +424,7 @@ float Predictor::Predict() {
   }
   float p = logistic_.Squash(mixers_[2][0]->Mix());
   p = sse_.Process(p);
+  if (byte_mixer_p == 0 || byte_mixer_p == 1) return byte_mixer_p;
   return p;
 }
 

@@ -10,7 +10,7 @@
 class Bracket : public ByteModel {
  public:
   Bracket(const unsigned int& bit_context, int distance_limit, int stack_limit,
-      int stats_limit);
+      int stats_limit, const std::vector<bool>& vocab);
   void ByteUpdate();
 
  private:

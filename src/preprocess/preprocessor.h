@@ -7,7 +7,7 @@
 
 namespace preprocessor {
 
-void pretrain(Predictor* p, FILE* dictionary);
+void pretrain(Predictor* p, const std::vector<bool>& vocab, FILE* dictionary);
 
 void encode(FILE* in, FILE* out, int n, std::string temp_path,
     FILE* dictionary);
