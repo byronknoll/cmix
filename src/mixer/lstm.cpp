@@ -71,7 +71,8 @@ std::valarray<float>& Lstm::Predict(unsigned int input) {
     auto start = begin(hidden_) + i * num_cells_;
     std::copy(start, start + num_cells_, begin(layer_input_[epoch_][i]) +
         output_size_ + input_size_);
-    const auto& hidden = layers_[i]->ForwardPass(layer_input_[epoch_][i]);
+    const auto& hidden = layers_[i]->ForwardPass(layer_input_[epoch_][i],
+        input);
     std::copy(begin(hidden), end(hidden), start);
     if (i < layers_.size() - 1) {
       start = begin(layer_input_[epoch_][i + 1]) + output_size_ + num_cells_ +
@@ -79,12 +80,10 @@ std::valarray<float>& Lstm::Predict(unsigned int input) {
       std::copy(begin(hidden), end(hidden), start);
     }
   }
+  double sum = 0;
   for (unsigned int i = 0; i < output_size_; ++i) {
     output_[epoch_][i] = exp(std::inner_product(&hidden_[0],
         &hidden_[hidden_.size()], &output_layer_[epoch_][i][0], 0.0));
-  }
-  double sum = 0;
-  for (unsigned int i = 0; i < output_size_; ++i) {
     sum += output_[epoch_][i];
   }
   output_[epoch_] /= sum;

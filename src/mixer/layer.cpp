@@ -42,20 +42,24 @@ Layer::Layer(unsigned int input_size, unsigned int auxiliary_input_size,
 }
 
 const std::valarray<float>& Layer::ForwardPass(const std::valarray<float>&
-    input) {
+    input, unsigned int previous_input) {
   last_state_[epoch_] = state_;
   for (unsigned int i = 0; i < state_.size(); ++i) {
-    forget_gate_state_[epoch_][i] = Logistic(std::inner_product(&input[0],
-        &input[input.size()], &forget_gate_[i][0], 0.0));
+    forget_gate_state_[epoch_][i] = Logistic(std::inner_product(
+        &input[output_size_], &input[input.size()],
+        &forget_gate_[i][output_size_], forget_gate_[i][previous_input]));
     state_[i] *= forget_gate_state_[epoch_][i];
-    input_node_state_[epoch_][i] = tanh(std::inner_product(&input[0],
-        &input[input.size()], &input_node_[i][0], 0.0));
-    input_gate_state_[epoch_][i] = Logistic(std::inner_product(&input[0],
-        &input[input.size()], &input_gate_[i][0], 0.0));
+    input_node_state_[epoch_][i] = tanh(std::inner_product(&input[output_size_],
+        &input[input.size()], &input_node_[i][output_size_],
+        input_node_[i][previous_input]));
+    input_gate_state_[epoch_][i] = Logistic(std::inner_product(
+        &input[output_size_], &input[input.size()],
+        &input_gate_[i][output_size_], input_gate_[i][previous_input]));
     state_[i] += input_node_state_[epoch_][i] * input_gate_state_[epoch_][i];
     tanh_state_[epoch_][i] = tanh(state_[i]);
-    output_gate_state_[epoch_][i] = Logistic(std::inner_product(&input[0],
-        &input[input.size()], &output_gate_[i][0], 0.0));
+    output_gate_state_[epoch_][i] = Logistic(std::inner_product(
+        &input[output_size_], &input[input.size()],
+        &output_gate_[i][output_size_], output_gate_[i][previous_input]));
     hidden_[i] = output_gate_state_[epoch_][i] * tanh_state_[epoch_][i];
   }
   ++epoch_;

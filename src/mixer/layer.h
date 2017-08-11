@@ -10,7 +10,8 @@ class Layer {
   Layer(unsigned int input_size, unsigned int auxiliary_input_size,
       unsigned int output_size, unsigned int num_cells, int horizon,
       float learning_rate);
-  const std::valarray<float>& ForwardPass(const std::valarray<float>& input);
+  const std::valarray<float>& ForwardPass(const std::valarray<float>& input,
+      unsigned int previous_input);
   const std::valarray<float>& BackwardPass(const std::valarray<float>& input,
       const std::valarray<float>& hidden_error, int epoch);
   static inline float Rand() {
