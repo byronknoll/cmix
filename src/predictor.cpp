@@ -24,7 +24,7 @@
 #include <stdio.h>
 
 Predictor::Predictor(const std::vector<bool>& vocab) : manager_(),
-    logistic_(10000, 1000), vocab_(vocab) {
+    logistic_(10000), vocab_(vocab) {
   srand(0xDEADBEEF);
 
   AddBracket();
