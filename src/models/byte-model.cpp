@@ -4,12 +4,9 @@ ByteModel::ByteModel(const std::vector<bool>& vocab) : top_(255), mid_(0),
     bot_(0), vocab_(vocab), probs_(1.0 / 256, 256) {}
 
 float ByteModel::Predict() {
-  float num = 0, denom = 0;
   mid_ = bot_ + ((top_ - bot_) / 2);
-  for (int i = bot_; i <= top_; ++i) {
-    denom += probs_[i];
-    if (i > mid_) num += probs_[i];
-  }
+  float num = std::accumulate(&probs_[mid_ + 1], &probs_[top_ + 1], 0.0f);
+  float denom = std::accumulate(&probs_[bot_], &probs_[top_ + 1], 0.0f);
   if (denom == 0) return 0.5;
   return num / denom;
 }

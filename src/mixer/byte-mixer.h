@@ -16,9 +16,8 @@ class ByteMixer : public ByteModel {
  private:
   const unsigned int& byte_;
   Lstm lstm_;
-  std::vector<float> inputs_;
-  std::vector<int> byte_map_;
-  std::valarray<float> outputs_;
+  std::valarray<int> byte_map_;
+  std::valarray<float> inputs_, outputs_;
   unsigned int num_models_, vocab_size_, offset_;
 };
 

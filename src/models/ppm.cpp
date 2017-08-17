@@ -140,11 +140,10 @@ void PPM::ByteUpdate() {
     node = &tables_[node->lower_table];
     --order;
   }
-  double sum = 0, min_value = 0.0000001;
+  ByteModel::ByteUpdate();
+  double sum = 0;
   for (int i = 0; i < 256; ++i) {
-    if (probs_[i] < min_value) probs_[i] = min_value;
     sum += probs_[i];
   }
-  probs_ /= sum;
-  ByteModel::ByteUpdate();
+  if (sum != 0) probs_ /= sum;
 }
