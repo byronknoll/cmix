@@ -6,7 +6,7 @@ ByteModel::ByteModel(const std::vector<bool>& vocab) : top_(255), mid_(0),
 float ByteModel::Predict() {
   mid_ = bot_ + ((top_ - bot_) / 2);
   float num = std::accumulate(&probs_[mid_ + 1], &probs_[top_ + 1], 0.0f);
-  float denom = std::accumulate(&probs_[bot_], &probs_[top_ + 1], 0.0f);
+  float denom = std::accumulate(&probs_[bot_], &probs_[mid_ + 1], num);
   if (denom == 0) return 0.5;
   return num / denom;
 }
