@@ -17,7 +17,7 @@ struct Entry {
 struct Table {
   Table() : entries(0, Entry()) {}
   std::vector<Entry> entries;
-  int lower_table;
+  int lower_table = 0;
   unsigned char escape;
 };
 

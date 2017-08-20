@@ -1,5 +1,7 @@
 #include "byte-model.h"
 
+#include <numeric>
+
 ByteModel::ByteModel(const std::vector<bool>& vocab) : top_(255), mid_(0),
     bot_(0), vocab_(vocab), probs_(1.0 / 256, 256) {}
 

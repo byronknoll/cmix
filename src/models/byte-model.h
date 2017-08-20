@@ -4,6 +4,7 @@
 #include "model.h"
 
 #include <valarray>
+#include <vector>
 
 class ByteModel : public Model {
  public:

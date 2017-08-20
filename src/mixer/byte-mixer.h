@@ -1,6 +1,8 @@
 #ifndef BYTE_MIXER_H
 #define BYTE_MIXER_H
 
+#include <vector>
+
 #include "../models/byte-model.h"
 #include "lstm.h"
 
