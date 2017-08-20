@@ -432,7 +432,7 @@ struct PPM_CONTEXT {
   uint iStats;
   uint iSuffix;
 
-  STATE& oneState() const { return (STATE&) SummFreq; }
+  STATE* oneState() const { return (STATE*)&SummFreq; }
 };
 
 STATE* getStats( PPM_CONTEXT* This ) { return (STATE*)Indx2Ptr(This->iStats); }
@@ -533,8 +533,8 @@ STATE* rescale( PPM_CONTEXT& q, int OrderFall, STATE* FoundState ) {
       tmp.Freq = Min( MAX_FREQ/3, (2*tmp.Freq+EscFreq-1)/EscFreq );
       q.Flags &= 0x18;
       FreeUnits( getStats(&q), a );
-      q.oneState() = tmp;
-      FoundState = &q.oneState();
+      *(q.oneState()) = tmp;
+      FoundState = q.oneState();
       return FoundState;
     }
     q.iStats = Ptr2Indx( ShrinkUnits(getStats(&q),a,(q.NumStats+2)>>1) );
@@ -572,7 +572,7 @@ uint cutOff( PPM_CONTEXT& q, int Order, int MaxOrder ) {
   if( q.NumStats==0 ) {
 
     int flag = 1;
-    p = &q.oneState();
+    p = q.oneState();
     if( (byte*)getSucc(p) >= UnitsStart ) {
       AuxCutOff( p, Order, MaxOrder );
       if( p->iSuccessor || Order<O_BOUND ) flag=0;
@@ -606,7 +606,7 @@ uint cutOff( PPM_CONTEXT& q, int Order, int MaxOrder ) {
       if( i==0 ) {
         q.Flags = (q.Flags & 0x10) + 0x08*(p[0].Symbol>=0x40);
         p[0].Freq = 1+(2*(p[0].Freq-1))/(q.SummFreq-p[0].Freq);
-        q.oneState() = p[0];
+        *(q.oneState()) = p[0];
         FreeUnits( p, tmp );
       } else {
         p = (STATE*)ShrinkUnits( p0, tmp, (i+2)>>1 );
@@ -705,7 +705,7 @@ void RestoreModelRare( void ) {
 
     MaxContext->Flags = (MaxContext->Flags & 0x10) + 0x08*(p->Symbol>=0x40);
     p[0].Freq = (p[0].Freq+1) >> 1;
-    MaxContext->oneState() = p[0];
+    *(MaxContext->oneState()) = p[0];
     MaxContext->NumStats=0;
     FreeUnits( p, 1 );
   }
@@ -754,7 +754,7 @@ PPM_CONTEXT* UpdateModel( PPM_CONTEXT* MinContext ) {
         pc[0].SummFreq += cf;
       }
     } else {
-      p = &(pc[0].oneState());
+      p = pc[0].oneState();
       p[0].Freq += (p[0].Freq<14);
     }
   }
@@ -805,7 +805,7 @@ PPM_CONTEXT* UpdateModel( PPM_CONTEXT* MinContext ) {
 
       p = (STATE*)AllocUnits(1);
       if( !p ) { saved_pc=pc; return 0; };
-      p[0] = pc[0].oneState();
+      p[0] = *(pc[0].oneState());
       pc[0].iStats = Ptr2Indx(p);
       p[0].Freq = (p[0].Freq<=MAX_FREQ/3) ? (2*p[0].Freq-1) : (MAX_FREQ-15);
 
@@ -863,7 +863,7 @@ uint CreateSuccessors( uint Skip, STATE* p, PPM_CONTEXT* pc ) {
       pc[0].SummFreq += tmp;
     } else {
 
-      p = &(pc[0].oneState());
+      p = pc[0].oneState();
       p[0].Freq += (!suff(pc)->NumStats & (p[0].Freq<16));
     }
 
@@ -882,8 +882,8 @@ NO_LOOP:
   ct.NumStats = 0;
   ct.Flags = 0x10*(sym>=0x40);
   sym = *(byte*)Indx2Ptr(iUpBranch);
-  ct.oneState().iSuccessor = Ptr2Indx((byte*)Indx2Ptr(iUpBranch)+1);
-  ct.oneState().Symbol = sym;
+  ct.oneState()->iSuccessor = Ptr2Indx((byte*)Indx2Ptr(iUpBranch)+1);
+  ct.oneState()->Symbol = sym;
   ct.Flags |= 0x08*(sym>=0x40);
 
   if( pc[0].NumStats ) {
@@ -891,9 +891,9 @@ NO_LOOP:
     cf = p[0].Freq - 1;
     s0 = pc[0].SummFreq - pc[0].NumStats - cf;
     cf = 1 + ((2*cf<s0) ? (12*cf>s0) : 2+cf/s0);
-    ct.oneState().Freq = Min<uint>( 7, cf );
+    ct.oneState()->Freq = Min<uint>( 7, cf );
   } else {
-    ct.oneState().Freq = pc[0].oneState().Freq;
+    ct.oneState()->Freq = pc[0].oneState()->Freq;
   }
 
   do {
@@ -930,7 +930,7 @@ uint ReduceOrder( STATE* p, PPM_CONTEXT* pc ) {
       p->Freq += tmp;
       pc->SummFreq += tmp;
     } else {
-      p = &(pc->oneState());
+      p = pc->oneState();
       p->Freq += (p->Freq<11);
     }
 
@@ -960,7 +960,7 @@ word BinSumm[25][64];
 
 template< int ProcMode >
 void processBinSymbol( PPM_CONTEXT& q, int symbol ) {
-  STATE& rs = q.oneState();
+  STATE& rs = *(q.oneState());
   int i = NS2BSIndx[suff(&q)->NumStats] + PrevSuccess + q.Flags + ((RunLength>>26) & 0x20);
   word& bs = BinSumm[QTable[rs.Freq-1]][i];
   BSumm = bs;
@@ -1158,7 +1158,7 @@ void ConvertSQ( void ) {
 }
 
 void processBinSymbol_T( PPM_CONTEXT& q, int ) {
-  STATE& rs = q.oneState();
+  STATE& rs = *(q.oneState());
   int i = NS2BSIndx[suff(&q)->NumStats] + PrevSuccess + q.Flags + ((RunLength>>26) & 0x20);
   word& bs = BinSumm[QTable[rs.Freq-1]][i];
   BSumm = bs;
