@@ -4,12 +4,11 @@
 #include "model.h"
 
 #include <valarray>
-#include <vector>
 
 class ByteModel : public Model {
  public:
   virtual ~ByteModel() {}
-  ByteModel(const std::vector<bool>& vocab);
+  ByteModel();
   const std::valarray<float>& BytePredict();
   float Predict();
   void Perceive(int bit);
@@ -17,7 +16,6 @@ class ByteModel : public Model {
 
  protected:
   int top_, mid_, bot_;
-  const std::vector<bool>& vocab_;
   std::valarray<float> probs_;
 };
 

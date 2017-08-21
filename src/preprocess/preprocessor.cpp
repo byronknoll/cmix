@@ -39,22 +39,21 @@ typedef enum {DEFAULT, JPEG, EXE, TEXT, BMP} Filetype;
 inline int min(int a, int b) {return a<b?a:b;}
 inline int max(int a, int b) {return a<b?b:a;}
 
-void pretrain(Predictor* p, const std::vector<bool>& vocab, FILE* dictionary) {
+void pretrain(Predictor* p, FILE* dictionary) {
   fseek(dictionary, 0L, SEEK_END);
   unsigned long long len = ftell(dictionary);
   fseek(dictionary, 0L, SEEK_SET);
   unsigned long long percent = 1 + (len / 100);
   for (unsigned long long i = 0; i < len; ++i) {
-    unsigned char c = getc(dictionary);
+    char c = getc(dictionary);
     if (c == '\n') c = ' ';
-    if (i % percent == 0) {
-      printf("\rpretraining: %lld%%", i / percent);
-      fflush(stdout);
-    }
-    if (!vocab[c]) continue;
     for (int j = 7; j >= 0; --j) {
       p->Predict();
       p->Perceive((c>>j)&1);
+    }
+    if (i % percent == 0) {
+      printf("\rpretraining: %lld%%", i / percent);
+      fflush(stdout);
     }
   }
   printf("\r                 \r");

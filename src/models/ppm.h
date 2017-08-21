@@ -24,7 +24,7 @@ struct Table {
 class PPM : public ByteModel {
  public:
   PPM(unsigned int order, const unsigned int& bit_context, float delta,
-      unsigned int max_size, const std::vector<bool>& vocab);
+      unsigned int max_size);
   void ByteUpdate();
 
  private:
