@@ -1323,21 +1323,23 @@ static ppmd_Model ppmd_model;
 #pragma pack()
 }
 
-PPMD::PPMD(int order, int memory, const unsigned int& bit_context) :
-    byte_(bit_context) {
+PPMD::PPMD(int order, int memory, const unsigned int& bit_context,
+    const std::vector<bool>& vocab) : ByteModel(vocab), byte_(bit_context) {
   ppmd_model.Init(order,memory,1,0);
 }
 
 void PPMD::ByteUpdate() {
   ppmd_model.ppmd_UpdateByte(byte_);
   ppmd_model.ppmd_PrepareByte();
-  double sum = 0;
   for (int i = 0; i < 256; ++i) {
     probs_[i] = ppmd_model.sqp[i];
     if (probs_[i] < 1) probs_[i] = 1;
+  }
+  ByteModel::ByteUpdate();
+  double sum = 0;
+  for (int i = 0; i < 256; ++i) {
     sum += probs_[i];
   }
-  probs_ /= sum;
-  ByteModel::ByteUpdate();
+  if (sum != 0) probs_ /= sum;
 }
 

@@ -15,7 +15,7 @@
 
 class Predictor {
  public:
-  Predictor();
+  Predictor(const std::vector<bool>& vocab);
   float Predict();
   void Perceive(int bit);
 
@@ -53,6 +53,7 @@ class Predictor {
   Manager manager_;
   Logistic logistic_;
   std::unique_ptr<ByteMixer> byte_mixer_;
+  std::vector<bool> vocab_;
 };
 
 #endif
