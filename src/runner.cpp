@@ -21,7 +21,7 @@ int Help() {
   return -1;
 }
 
-void WriteHeader(unsigned long long length, const std::vector<bool> vocab,
+void WriteHeader(unsigned long long length, const std::vector<bool>& vocab,
     std::ofstream* os) {
   for (int i = 4; i >= 0; --i) {
     char c = length >> (8*i);
