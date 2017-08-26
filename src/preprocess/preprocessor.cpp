@@ -1,4 +1,4 @@
-// This preprocessor is adapted from paq8l and paq8hp12any.
+// This preprocessor is adapted from paq8l, paq8hp12any and paq8px_v101.
 
 #include <vector>
 #include <cstdlib>
@@ -108,11 +108,11 @@ Filetype detect(FILE* in, int n, Filetype type) {
     buf1=buf1<<8|buf0>>24;
     buf0=buf0<<8|c;
 
-    if (!soi && i>=3 && (buf0&0xfffffff0)==0xffd8ffe0) soi=i, app=i+2, sos=sof=0;
+    if (!soi && i>=3 && (buf0&0xffffff00)==0xffd8ff00 && ((buf0&0xFE)==0xC0 || (U8)buf0==0xC4 || ((U8)buf0>=0xDB && (U8)buf0<=0xFE) )) soi=i, app=i+2, sos=sof=0;
     if (soi) {
       if (app==i && (buf0>>24)==0xff &&
-         ((buf0>>16)&0xff)>0xc0 && ((buf0>>16)&0xff)<0xff) app=i+(buf0&0xffff)+2;
-      if (app<i && (buf1&0xff)==0xff && (buf0&0xff0000ff)==0xc0000008) sof=i;
+         ((buf0>>16)&0xff)>0xc1 && ((buf0>>16)&0xff)<0xff) app=i+(buf0&0xffff)+2;
+      if (app<i && (buf1&0xff)==0xff && (buf0&0xfe0000ff)==0xc0000008) sof=i;
       if (sof && sof>soi && i-sof<0x1000 && (buf0&0xffff)==0xffda) {
         sos=i;
         if (type!=JPEG) return fseek(in, start+soi-3, SEEK_SET), JPEG;
