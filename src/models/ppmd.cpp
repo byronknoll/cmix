@@ -1336,10 +1336,6 @@ void PPMD::ByteUpdate() {
     if (probs_[i] < 1) probs_[i] = 1;
   }
   ByteModel::ByteUpdate();
-  double sum = 0;
-  for (int i = 0; i < 256; ++i) {
-    sum += probs_[i];
-  }
-  if (sum != 0) probs_ /= sum;
+  probs_ /= probs_.sum();
 }
 

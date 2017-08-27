@@ -80,13 +80,10 @@ std::valarray<float>& Lstm::Predict(unsigned int input) {
       std::copy(begin(hidden), end(hidden), start);
     }
   }
-  double sum = 0;
   for (unsigned int i = 0; i < output_size_; ++i) {
-    output_[epoch_][i] = exp(std::inner_product(&hidden_[0],
-        &hidden_[hidden_.size()], &output_layer_[epoch_][i][0], 0.0));
-    sum += output_[epoch_][i];
+    output_[epoch_][i] = exp((hidden_ * output_layer_[epoch_][i]).sum());
   }
-  output_[epoch_] /= sum;
+  output_[epoch_] /= output_[epoch_].sum();
   int epoch = epoch_;
   ++epoch_;
   if (epoch_ == horizon_) epoch_ = 0;

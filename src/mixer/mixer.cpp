@@ -12,8 +12,7 @@ Mixer::Mixer(const std::valarray<float>& inputs, const Logistic& logistic,
     weights_(context_size, std::valarray<float>(0.0, input_size)) {}
 
 float Mixer::Mix() {
-  p_ = std::inner_product(&inputs_[0], &inputs_[inputs_.size()],
-      &weights_[context_][0], 0.0);
+  p_ = (inputs_ * weights_[context_]).sum();
   return p_;
 }
 

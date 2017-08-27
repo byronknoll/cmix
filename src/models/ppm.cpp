@@ -141,9 +141,6 @@ void PPM::ByteUpdate() {
     --order;
   }
   ByteModel::ByteUpdate();
-  double sum = 0;
-  for (int i = 0; i < 256; ++i) {
-    sum += probs_[i];
-  }
+  float sum = probs_.sum();
   if (sum != 0) probs_ /= sum;
 }
