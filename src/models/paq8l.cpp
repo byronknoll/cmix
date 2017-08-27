@@ -1392,59 +1392,188 @@ inline U8 LogMeanDiffQt(U8 a, U8 b){
   return (a!=b)?((a>b)<<3)|ilog2((a+b)/max(2,abs(a-b)*2)+1):0;
 }
 
-int bmpModel(Mixer& m) {
-  static int w=0;
-  static int eoi=0;
-  static U32 tiff=0;
+
+void im8bitModel(Mixer& m, int w, int gray = 0) {
   const int SC=0x20000;
   static SmallStationaryContextMap scm1(SC), scm2(SC),
-    scm3(SC), scm4(SC), scm5(SC), scm6(SC), scm7(SC), scm8(SC), scm9(SC*2),
-    scm10(512);
-  static ContextMap cm(MEM()*4, 15+9);
-  static int color = -1;
-  static int stride  = 3;  
-  static int padding, lastPos, x, alpha = 0;  
-
-  if (!bpos && buf(54)=='B' && buf(53)=='M'
-      && i4(44)==54 && i4(40)==40 && i4(24)==0) {
-    w=((i4(36)+3)&(-4))*3;
-    const int height=i4(32);
-    eoi=pos;
-    if (w<0x30000 && height<0x10000) {
-      eoi=pos+w*height;
-    }
-    else
-      eoi=pos;
-  }
-
+    scm3(SC), scm4(SC), scm5(SC), scm6(SC*2),scm7(SC);
+  static ContextMap cm(MEM()*4, 45+12 +5);
+  static int itype=0, id8=1, id9=1;
+  static int ctx, col=0;
+  // Select nearby pixels as context
   if (!bpos) {
-    if (c4==0x49492a00) tiff=pos;
-    if (pos-tiff==4 && c4!=0x08000000) tiff=0;
-    if (tiff && pos-tiff==200) {
-      int dirsize=i2(pos-tiff-4);
-      w=0;
-      int bpp=0, compression=0, width=0, height=0;
-      for (int i=tiff+6; i<pos-12 && --dirsize>0; i+=12) {
-        int tag=i2(pos-i);
-        int tagfmt=i2(pos-i-2);
-        int taglen=i4(pos-i-4);
-        int tagval=i4(pos-i-8);
-        if ((tagfmt==3||tagfmt==4) && taglen==1) {
-          if (tag==256) width=tagval;
-          if (tag==257) height=tagval;
-          if (tag==259) compression=tagval;
-          if (tag==277) bpp=tagval;
-        }
-      }
-      if (width>0 && height>0 && width*height>50 && compression==1
-          && (bpp==1||bpp==3))
-        eoi=tiff+width*height*bpp, w=width*bpp;
-      if (eoi>pos) {}
-      else
-        tiff=w=0;
+    int mean=buf(1)+buf(w-1)+buf(w)+buf(w+1);
+    const int var=(sqrbuf(1)+sqrbuf(w-1)+sqrbuf(w)+sqrbuf(w+1)-mean*mean/4)>>2;
+    mean>>=2;
+    const int logvar=ilog(var);
+    int i=0;
+
+    const int errr=(buf(2)+buf(w+1)-buf(w));
+    if(abs(errr-buf(w-1)+buf(1)-buf(w))>255) id8++; else id9++;
+    if (blpos==0) id8=id9=1,itype=0;    // reset on new block
+    if(blpos%w==0 && blpos>w) itype=(id9/id8)<4; // select model
+
+    if (itype==0) { //faster, for smooth images
+      cm.set(hash(++i,buf(1),0));
+      cm.set(hash(++i,buf(w-1),0));
+      cm.set(hash(++i,buf(w-2),0));
+      cm.set(hash(++i,buf(2),0));
+      cm.set(hash(++i,buf(w*2-1),0));
+      cm.set(hash(++i,buf(w-1)+buf(1)-buf(w),buf(1)));
+      cm.set(hash(++i,buf(w+1),0));
+      cm.set(hash(++i,buf(w*2-2),0));
+      cm.set(hash(++i,2*buf(w-1)-buf(w*2-1),buf(1)));
+      cm.set(hash(++i,2*buf(1)-buf(2),buf(1)));
+      cm.set(hash(++i,(abs(buf(1)-buf(2))+abs(buf(w-1)-buf(w))+abs(buf(w-1)-buf(w-2))),buf(1)));
+      cm.set(hash(++i,(abs(buf(1)-buf(w))+abs(buf(w-1)-buf(w*2-1))+abs(buf(w-2)-buf(w*2-2))),buf(1)));
+      cm.set(hash(++i,abs(errr-buf(w-1)+buf(1)-buf(w)),buf(1)));
+      cm.set(hash(++i,mean,logvar));
+      cm.set(hash(++i,2*buf(1)-buf(2),2*buf(w-1)-buf(w*2-1)));
+      cm.set(hash(++i,(abs(buf(1)-buf(2))+abs(buf(w-1)-buf(w))+abs(buf(w-1)-buf(w-2))), (abs(buf(1)-buf(w))+abs(buf(w-1)-buf(w*2-1))+abs(buf(w-2)-buf(w*2-2)))));
+      cm.set(hash(++i,buf(1)>>2, buf(w)>>2));
+      cm.set(hash(++i,buf(1)>>2, buf(2)>>2));
+      cm.set(hash(++i,buf(w)>>2, buf(w*2)>>2));
+      cm.set(hash(++i,buf(1)>>2, buf(w-1)>>2));
+      cm.set(hash(++i,buf(w)>>2, buf(w+1)>>2));
+      cm.set(hash(++i,buf(w+1)>>2, buf(w+2)>>2));
+      cm.set(hash(++i,(buf(w+1)+buf(w*2+2))>>1));
+      cm.set(hash(++i,(buf(w-1)+buf(w*2-2))>>1));
+      cm.set(hash(++i,2*buf(w-1)-buf(w*2-1),buf(w-1)));
+      cm.set(hash(++i,2*buf(1)-buf(2),buf(w-1)));
+      cm.set(hash(++i,buf(w*2-1),buf(w-2),buf(1)));
+      cm.set(hash(++i,(buf(1)+buf(w))>>1));
+      cm.set(hash(++i,(buf(1)+buf(2))>>1));
+      cm.set(hash(++i,(buf(w)+buf(w*2))>>1));
+      cm.set(hash(++i,(buf(1)+buf(w-1))>>1));
+      cm.set(hash(++i,(buf(w)+buf(w+1))>>1));
+      cm.set(hash(++i,(buf(w+1)+buf(w+2))>>1));
+      cm.set(hash(++i,(buf(w+1)+buf(w*2+2))>>1));
+      cm.set(hash(++i,(buf(w-1)+buf(w*2-2))>>1));
+      cm.set(hash(++i,buf(w*2-2),buf(w-1),buf(1)));
+      cm.set(hash(++i,buf(w+1),buf(w-1),buf(w-2),buf(1)));
+      cm.set(hash(++i,2*buf(1)-buf(2),buf(w-2),buf(w*2-2)));
+      cm.set(hash(++i,buf(2),buf(w+1),buf(w),buf(w-1)));
+      cm.set(hash(++i,buf(w*3), buf(w),buf(1)));
+      cm.set(hash(++i,buf(w)>>2, buf(3)>>2, buf(w-1)>>2));
+      cm.set(hash(++i,buf(3)>>2, buf(w-2)>>2, buf(w*2-2)>>2));
+      cm.set(hash(++i,buf(w)>>2, buf(1)>>2, buf(w-1)>>2));
+      cm.set(hash(++i,buf(w-1)>>2, buf(w)>>2, buf(w+1)>>2));
+      cm.set(hash(++i,buf(1)>>2, buf(w-1)>>2, buf(w*2-1)>>2));
+    } else {
+      i=512;
+      cm.set(hash(++i,buf(1),0));
+      cm.set(hash(++i,buf(2), 0));
+      cm.set(hash(++i,buf(w), 0));
+      cm.set(hash(++i,buf(w+1), 0));
+      cm.set(hash(++i,buf(w-1), 0));
+      cm.set(hash(++i,(buf(2)+buf(w)-buf(w+1)), 0));
+      cm.set(hash(++i,(buf(w)+buf(2)-buf(w+1))>>1, 0));
+      cm.set(hash(++i,(buf(2)+buf(w+1))>>1, 0));
+      cm.set(hash(++i,(buf(w-1)-buf(w)), buf(1)>>1));
+      cm.set(hash(++i,(buf(w)-buf(w+1)), buf(1)>>1));
+      cm.set(hash(++i,(buf(w+1)+buf(2)), buf(1)>>1));
+      cm.set(hash(++i,buf(1)>>2, buf(w)>>2));
+      cm.set(hash(++i,buf(1)>>2, buf(2)>>2));
+      cm.set(hash(++i,buf(w)>>2, buf(w*2)>>2));
+      cm.set(hash(++i,buf(1)>>2, buf(w-1)>>2));
+      cm.set(hash(++i,buf(w)>>2, buf(w+1)>>2));
+      cm.set(hash(++i,buf(w+1)>>2, buf(w+2)>>2));
+      cm.set(hash(++i,buf(w+1)>>2, buf(w*2+2)>>2));
+      cm.set(hash(++i,buf(w-1)>>2, buf(w*2-2)>>2));
+      cm.set(hash(++i,(buf(1)+buf(w))>>1));
+      cm.set(hash(++i,(buf(1)+buf(2))>>1));
+      cm.set(hash(++i,(buf(w)+buf(w*2))>>1));
+      cm.set(hash(++i,(buf(1)+buf(w-1))>>1));
+      cm.set(hash(++i,(buf(w)+buf(w+1))>>1));
+      cm.set(hash(++i,(buf(w+1)+buf(w+2))>>1));
+      cm.set(hash(++i,(buf(w+1)+buf(w*2+2))>>1));
+      cm.set(hash(++i,(buf(w-1)+buf(w*2-2))>>1));
+      cm.set(hash(++i,buf(w)>>2, buf(1)>>2, buf(w-1)>>2));
+      cm.set(hash(++i,buf(w-1)>>2, buf(w)>>2, buf(w+1)>>2));
+      cm.set(hash(++i,buf(1)>>2, buf(w-1)>>2, buf(w*2-1)>>2));
+      cm.set(hash(++i,(buf(3)+buf(w))>>1, buf(1)>>2, buf(2)>>2));
+      cm.set(hash(++i,(buf(2)+buf(1))>>1,(buf(w)+buf(w*2))>>1,buf(w-1)>>2));
+      cm.set(hash(++i,(buf(2)+buf(1))>>2,(buf(w-1)+buf(w))>>2));
+      cm.set(hash(++i,(buf(2)+buf(1))>>1,(buf(w)+buf(w*2))>>1));
+      cm.set(hash(++i,(buf(2)+buf(1))>>1,(buf(w-1)+buf(w*2-2))>>1));
+      cm.set(hash(++i,(buf(2)+buf(1))>>1,(buf(w+1)+buf(w*2+2))>>1));
+      cm.set(hash(++i,(buf(w)+buf(w*2))>>1,(buf(w-1)+buf(w*2+2))>>1));
+      cm.set(hash(++i,(buf(w-1)+buf(w))>>1,(buf(w)+buf(w+1))>>1));
+      cm.set(hash(++i,(buf(1)+buf(w-1))>>1,(buf(w)+buf(w*2))>>1));
+      cm.set(hash(++i,(buf(1)+buf(w-1))>>2,(buf(w)+buf(w+1))>>2));
+      cm.set(hash(++i,(((buf(1)-buf(w-1))>>1)+buf(w))>>2));
+      cm.set(hash(++i,(((buf(w-1)-buf(w))>>1)+buf(1))>>2));
+      cm.set(hash(++i,(-buf(1)+buf(w-1)+buf(w))>>2));
+      cm.set(hash(++i,(buf(1)*2-buf(2))>>1));
+      cm.set(hash(++i,mean,logvar));
+      cm.set(hash(++i,(buf(w)*2-buf(w*2))>>1));
+      cm.set(hash(++i,(buf(1)+buf(w)-buf(w+1))>>1));
+      cm.set(hash(++i,(buf(4)+buf(3))>>2,(buf(w-1)+buf(w))>>2));
+      cm.set(hash(++i,(buf(4)+buf(3))>>1,(buf(w)+buf(w*2))>>1));
+      cm.set(hash(++i,(buf(4)+buf(3))>>1,(buf(w-1)+buf(w*2-2))>>1));
+      cm.set(hash(++i,(buf(4)+buf(3))>>1,(buf(w+1)+buf(w*2+2))>>1));
+      cm.set(hash(++i,(buf(4)+buf(1))>>2,(buf(w-3)+buf(w))>>2));
+      cm.set(hash(++i,(buf(4)+buf(1))>>1,(buf(w)+buf(w*2))>>1));
+      cm.set(hash(++i,(buf(4)+buf(1))>>1,(buf(w-3)+buf(w*2-3))>>1));
+      cm.set(hash(++i,(buf(4)+buf(1))>>1,(buf(w+3)+buf(w*2+3))>>1));
+      cm.set(hash(++i,buf(w)>>2, buf(3)>>2, buf(w-1)>>2));
+      cm.set(hash(++i,buf(3)>>2, buf(w-2)>>2, buf(w*2-2)>>2));
     }
+
+    int WWW=buf(3), WW=buf(2), W=buf(1), NW=buf(w+1), N=buf(w), NE=buf(w-1), NEE=buf(w-2), NNW=buf(w*2+1), NN=buf(w*2), NNE=buf(w*2-1), NNN=buf(w*3);
+
+    if (gray){
+      ctx = min(0x1F,(blpos%w)/max(1,w/32))|( ( ((abs(W-N)*16>W+N)<<1)|(abs(N-NW)>8) )<<5 )|((W+N)&0x180);
+
+      cm.set(hash( ++i, (N+1)>>1, LogMeanDiffQt(N,Clip(NN*2-NNN)) ));
+      cm.set(hash( ++i, (W+1)>>1, LogMeanDiffQt(W,Clip(WW*2-WWW)) ));
+      cm.set(hash( ++i, Clamp4(W+N-NW,W,NW,N,NE), LogMeanDiffQt(Clip(N+NE-NNE), Clip(N+NW-NNW))));
+      cm.set(hash( ++i, (NNN+N+4)/8, Clip(N*3-NN*3+NNN)>>1 ));
+      cm.set(hash( ++i, (WWW+W+4)/8, Clip(W*3-WW*3+WWW)>>1 ));
+    }
+    else{
+      ctx = min(0x1F,(blpos%w)/max(1,w/32));
+
+      cm.set(hash( ++i, W, NEE ));
+      cm.set(hash( ++i, WW, NN ));
+      cm.set(hash( ++i, W, WWW ));
+      cm.set(hash( ++i, N, NNN ));
+      cm.set(hash( ++i, NNW, NN ));
+    }
+
+    scm1.set((buf(1)+buf(w))>>1);
+    scm2.set((buf(1)+buf(w)-buf(w+1))>>1);
+    scm3.set((buf(1)*2-buf(2))>>1);
+    scm4.set((buf(w)*2-buf(w*2))>>1);
+    scm5.set((buf(1)+buf(w)-buf(w-1))>>1);
+    scm6.set(mean>>1|(logvar<<1&0x180));
   }
-  if (pos>eoi) return w=0;
+
+  // Predict next bit
+  scm1.mix(m);
+  scm2.mix(m);
+  scm3.mix(m);
+  scm4.mix(m);
+  scm5.mix(m);
+  scm6.mix(m);
+  scm7.mix(m); // Amazingly but improves compression!
+  cm.mix(m);
+  if (++col>=8) col=0; // reset after every 24 columns?
+  m.set( (gray)?ctx:ctx|((bpos>4)<<8), 512 );
+  m.set(col, 8);
+  m.set((buf(w)+buf(1))>>4, 32);
+  m.set(c0, 256);  
+}
+
+void im24bitModel(Mixer& m, int w, int color, int alpha) {
+  const int SC=0x20000;
+  static SmallStationaryContextMap scm1(SC), scm2(SC),
+    scm3(SC), scm4(SC), scm5(SC), scm6(SC), scm7(SC), scm8(SC), scm9(SC*2), scm10(512);
+  static ContextMap cm(MEM()*4, 15+9);
+  static int stride  = 3;
+  static int ctx, padding, lastPos, x = 0;
+
+  // Select nearby pixels as context
   if (!bpos) {
     if ((color < 0) || (pos-lastPos != 1)){
       stride = 3+alpha;
@@ -1457,14 +1586,15 @@ int bmpModel(Mixer& m) {
       color*=(++color)<stride;
     else
       color=(padding)*(stride+1);
-    
+
     int mean=buf(stride)+buf(w-stride)+buf(w)+buf(w+stride);
     const int var=(sqrbuf(stride)+sqrbuf(w-stride)+sqrbuf(w)+sqrbuf(w+stride)-mean*mean/4)>>2;
     mean>>=2;
     const int logvar=ilog(var);
     int i=color<<5;
-    
+
     int WWW=buf(3*stride), WW=buf(2*stride), W=buf(stride), NW=buf(w+stride), N=buf(w), NE=buf(w-stride),  NEE=buf(w-2*stride), NNW=buf(w*2+stride), NN=buf(w*2), NNE=buf(w*2-stride), NNEE=buf((w-stride)*2), NNN=buf(w*3);
+    ctx = (min(color,stride)<<9)|((abs(W-N)>8)<<8)|((W>N)<<7)|((W>NW)<<6)|((abs(N-NW)>8)<<5)|((N>NW)<<4)|((abs(N-NE)>8)<<3)|((N>NE)<<2)|((W>WW)<<1)|(N>NN);
     cm.set(hash( (N+1)>>1, LogMeanDiffQt(N,Clip(NN*2-NNN)) ));
     cm.set(hash( (W+1)>>1, LogMeanDiffQt(W,Clip(WW*2-WWW)) ));
     cm.set(hash( Clamp4(W+N-NW,W,NW,N,NE), LogMeanDiffQt(Clip(N+NE-NNE), Clip(N+NW-NNW))));
@@ -1474,7 +1604,7 @@ int bmpModel(Mixer& m) {
     cm.set(hash(++i, Clip((-buf(4*stride)+5*WWW-10*WW+10*W+Clamp4(NE*4-NNE*6+buf(w*3-stride)*4-buf(w*4-stride),N,NE,buf(w-2*stride),buf(w-3*stride)))/5)/4 ));
     cm.set( Clip(NEE+N-NNEE) );
     cm.set( Clip(NN+W-NNW) );
-    
+
     cm.set(hash(++i, buf(stride)));
     cm.set(hash(++i, buf(stride), buf(1)));
     cm.set(hash(++i, buf(stride), buf(1), buf(2)));
@@ -1483,23 +1613,25 @@ int bmpModel(Mixer& m) {
     cm.set(hash(++i, buf(w), buf(1), buf(2)));
     cm.set(hash(++i, (buf(stride)+buf(w))>>3, buf(1)>>4, buf(2)>>4));
     cm.set(hash(++i, buf(1), buf(2)));
-    cm.set(hash(++i, buf(stride), buf(1)-buf(4)));
-    cm.set(hash(++i, buf(stride)+buf(1)-buf(4)));
+    cm.set(hash(++i, buf(stride), buf(1)-buf(stride+1)));
+    cm.set(hash(++i, buf(stride)+buf(1)-buf(stride+1)));
     cm.set(hash(++i, buf(w), buf(1)-buf(w+1)));
     cm.set(hash(++i, buf(w)+buf(1)-buf(w+1)));
     cm.set(hash(++i, buf(w*stride-stride), buf(w*stride-2*stride)));
-    cm.set(hash(++i, buf(w*stride+stride), buf(w*stride+2*stride)));
+    cm.set(hash(++i, buf(w*stride+stride), buf(w*stride+2*stride)));    
     cm.set(hash(++i, mean, logvar>>4));
     scm1.set(buf(stride)+buf(w)-buf(w+stride));
     scm2.set(buf(stride)+buf(w-stride)-buf(w));
-    scm3.set(buf(stride)*2-buf(2*stride));
+    scm3.set(buf(stride)*2-buf(stride*2));
     scm4.set(buf(w)*2-buf(w*2));
-    scm5.set(buf(w+stride)*2-buf(w*2+2*stride));
-    scm6.set(buf(w-stride)*2-buf(w*2-2*stride));
+    scm5.set(buf(w+stride)*2-buf(w*2+stride*2));
+    scm6.set(buf(w-stride)*2-buf(w*2-stride*2));
     scm7.set(buf(w-stride)+buf(1)-buf(w-2));
     scm8.set(buf(w)+buf(w-stride)-buf(w*2-stride));
     scm9.set(mean>>1|(logvar<<1&0x180));
   }
+
+  // Predict next bit
   scm1.mix(m);
   scm2.mix(m);
   scm3.mix(m);
@@ -1511,6 +1643,84 @@ int bmpModel(Mixer& m) {
   scm9.mix(m);
   scm10.mix(m);
   cm.mix(m);
+  static int col=0;
+  if (++col>=stride*8) col=0;
+  m.set( ctx, 2048 );
+  m.set(col, stride*8);
+  m.set((buf(1+(alpha && !color))>>4)*stride+(x%stride), stride*16);
+  m.set(c0, 256);  
+}
+
+int imgModel(Mixer& m) {
+  static int w=0, bpp=0;
+  static int eoi=0;
+  static U32 bmp=0, bmpof=0, bmpw=0, bmph=0, bmpbpp=0, bmpplt=0, hdrless=0;
+  static U32 tiff=0;
+  static int color = -1, alpha = 0;
+
+  if (!bpos){
+    if(pos>eoi && !bmp && (
+      (buf(54)=='B' && buf(53)=='M' && ((bmpof=i4(44))&0xFFFFFBFF)==0x36 && i4(40)==0x28) ||
+      (hdrless=(i4(40)==0x28))
+    )){
+      bmpw = i4(36);
+      bmph = abs((int)i4(32));
+      bmpbpp = i2(26);
+      bmpplt = i4(4);
+      alpha = (bmpbpp==32);
+            
+      bmp = (i4(24)==0) && (i2(28)==1) && (bmpbpp==8 || bmpbpp==24 || bmpbpp==32) && bmpw<30000 && bmph<10000 && ((bmpw*bmph*bmpbpp)>>3)>512 && (!bmpplt || ((U32)(1<<bmpbpp))>=bmpplt);
+      if (bmp){        
+        bpp = bmpbpp;      
+        bmpof = (hdrless)? ((bpp<24)?((bmpplt)?bmpplt*4:4<<bpp):0) :bmpof-54;
+      }
+    }
+    else
+      bmpof-=(bmpof>0);
+    if (!bmpof && bmp && pos>eoi){    
+        w = (bmpw*(bpp>>3)+3)&(-4);    
+        eoi = pos+w*bmph;
+    }
+  }
+
+  if (!bpos) {
+    if (c4==0x49492a00) tiff=pos;
+    if (pos-tiff==4 && c4!=0x08000000) tiff=0;
+    if (tiff && pos-tiff==200) {
+      int dirsize=i2(pos-tiff-4);
+      w=0;
+      int nSamples=0, compression=0, width=0, height=0;
+      for (int i=tiff+6; i<pos-12 && --dirsize>0; i+=12) {
+        int tag=i2(pos-i);
+        int tagfmt=i2(pos-i-2);
+        int taglen=i4(pos-i-4);
+        int tagval=i4(pos-i-8);
+        if ((tagfmt==3||tagfmt==4) && taglen==1) {
+          if (tag==256) width=tagval;
+          if (tag==257) height=tagval;
+          if (tag==259) compression=tagval;
+          if (tag==277) nSamples=tagval;
+        }
+      }
+      if (width>0 && height>0 && width*height>50 && compression==1
+          && (nSamples==1||nSamples==3))
+        bpp=nSamples<<3, w=width*nSamples, eoi=tiff+w*height;
+      if (eoi>pos) {}
+      else
+        tiff=w=0;
+    }
+  }
+  if (pos>eoi) return w=0;
+  
+  if (w){
+    if (bpp==8)
+      im8bitModel(m, w);
+    else
+      im24bitModel(m, w, color, alpha);
+  }
+  if (!bpos && pos>=eoi)
+    bmp=tiff=alpha=0, color=-1;
+  
   return w;
 }
 
@@ -2208,7 +2418,7 @@ int jpegModel(Mixer& m) {
 
   // Predict next bit
   m1.add(128);
-  assert(hbcount<=2);  
+  jassert(hbcount<=2);  
   int p;
  switch(hbcount)
   {
@@ -3577,18 +3787,12 @@ int contextModel2() {
 
   int isjpeg=jpegModel(m);
   int ismatch=ilog(matchModel(m));
-  int isbmp=bmpModel(m);
+  int isimg=imgModel(m);
 
   if (isjpeg) {
     return m.p();
   }
-  else if (isbmp>0) {
-    static int col=0;
-    if (++col>=24) col=0;
-    m.set(2, 8);
-    m.set(col, 24);
-    m.set((buf(isbmp)+buf(3))>>4, 32);
-    m.set(c0, 256);
+  else if (isimg>0) {
     return m.p();
   }
 
