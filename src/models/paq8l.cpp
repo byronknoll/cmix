@@ -465,8 +465,8 @@ void train(short *t, short *w, int n, int err) {
 }
 #endif
 
-#define NUM_INPUTS 1249
-#define NUM_SETS 11
+#define NUM_INPUTS 1261
+#define NUM_SETS 12
 
 std::vector<float> model_predictions(NUM_INPUTS+NUM_SETS, 0.5);
 unsigned int prediction_index = 0;
@@ -1111,39 +1111,44 @@ void recordModel(Mixer& m, ModelStats *Stats = NULL) {
   if (!bpos) {
     int w=c4&0xffff, c=w&255, d=w>>8;
 #if 1
-    int r=pos-cpos1[c];
-    if (r>1 && r==cpos1[c]-cpos2[c]
-        && r==cpos2[c]-cpos3[c] && (r>32 || r==cpos3[c]-cpos4[c])
-        && (r>10 || ((c==buf(r*5+1)) && c==buf(r*6+1)))) {
-      if (r==rlen[1]) ++rcount[0];
-      else if (r==rlen[2]) ++rcount[1];
-      else if (rcount[0]>rcount[1]) rlen[2]=r, rcount[1]=1;
-      else rlen[1]=r, rcount[0]=1;
+    if (Stats && (*Stats).Record && ((*Stats).Record>>16)!=rlen[0]){
+      rlen[0] = (*Stats).Record>>16;
+      rcount[0]=rcount[1]=0;
     }
+    else{
+      int r=pos-cpos1[c];
+      if (r>1 && r==cpos1[c]-cpos2[c]
+          && r==cpos2[c]-cpos3[c] && (r>32 || r==cpos3[c]-cpos4[c])
+          && (r>10 || ((c==buf(r*5+1)) && c==buf(r*6+1)))) {
+        if (r==rlen[1]) ++rcount[0];
+        else if (r==rlen[2]) ++rcount[1];
+        else if (rcount[0]>rcount[1]) rlen[2]=r, rcount[1]=1;
+        else rlen[1]=r, rcount[0]=1;
+      }
 
-    for (int i=0; i < 2; i++) {
-      if (rcount[i] > max(0,12-(int)ilog2(rlen[i+1]))){
-        if (rlen[0] != rlen[i+1]){
-          if ( (rlen[i+1] > rlen[0]) && (rlen[i+1] % rlen[0] == 0) ){
+      for (int i=0; i < 2; i++) {
+        if (rcount[i] > max(0,12-(int)ilog2(rlen[i+1]))){
+          if (rlen[0] != rlen[i+1]){
+            if ( (rlen[i+1] > rlen[0]) && (rlen[i+1] % rlen[0] == 0) ){
 
-            if ((rlen[0] > 32) && (rlen[i+1] == rlen[0]*2)){
-              rcount[0]>>=1;
-              rcount[1]>>=1;
-              continue;
+              if ((rlen[0] > 32) && (rlen[i+1] == rlen[0]*2)){
+                rcount[0]>>=1;
+                rcount[1]>>=1;
+                continue;
+              }
             }
+            rlen[0] = rlen[i+1];
+            rcount[i] = 0;
           }
-          rlen[0] = rlen[i+1];
-          rcount[i] = 0;
+          else
+
+            rcount[i]>>=2;
+
+          if (rlen[i+1]<<4 > rlen[1+(i^1)])
+            rcount[i^1] = 0;
         }
-        else
-
-          rcount[i]>>=2;
-
-        if (rlen[i+1]<<4 > rlen[1+(i^1)])
-          rcount[i^1] = 0;
       }
     }
-
 #endif
     cm.set(c<<8| (min(255, pos-cpos1[c])/4) );
     cm.set(w<<9| llog(pos-wpos1[w])>>2);
@@ -1362,6 +1367,44 @@ inline U8 LogMeanDiffQt(U8 a, U8 b){
   return (a!=b)?((a>b)<<3)|ilog2((a+b)/max(2,abs(a-b)*2)+1):0;
 }
 
+void im1bitModel(Mixer& m, int w) {
+  static U32 r0, r1, r2, r3;  // last 4 rows, bit 8 is over current pixel
+  static Array<U8> t(0x23000);  // model: cxt -> state
+  const int N=11;  // number of contexts
+  static int cxt[N];  // contexts
+  static StateMap sm[N];
+
+  // update the model
+  int i;
+  for (i=0; i<N; ++i)
+    t[cxt[i]]=nex(t[cxt[i]],y);
+
+  // update the contexts (pixels surrounding the predicted one)
+  r0+=r0+y;
+  r1+=r1+((buf(w-1)>>(7-bpos))&1);
+  r2+=r2+((buf(w+w-1)>>(7-bpos))&1);
+  r3+=r3+((buf(w+w+w-1)>>(7-bpos))&1);
+  cxt[0]=(r0&0x7)|(r1>>4&0x38)|(r2>>3&0xc0);
+  cxt[1]=0x100+((r0&1)|(r1>>4&0x3e)|(r2>>2&0x40)|(r3>>1&0x80));
+  cxt[2]=0x200+((r0&1)|(r1>>4&0x1d)|(r2>>1&0x60)|(r3&0xC0));
+  cxt[3]=0x300+(y|((r0<<1)&4)|((r1>>1)&0xF0)|((r2>>3)&0xA));
+  cxt[4]=0x400+((r0>>4&0x2AC)|(r1&0xA4)|(r2&0x349)|(!(r3&0x14D)));
+  cxt[5]=0x800+(y|((r1>>4)&0xE)|((r2>>1)&0x70)|((r3<<2)&0x380));
+  cxt[6]=0xC00+(((r1&0x30)^(r3&0x0c0c))|(r0&3));
+  cxt[7]=0x1000+((!(r0&0x444))|(r1&0xC0C)|(r2&0xAE3)|(r3&0x51C));
+  cxt[8]=0x2000+((r0&7)|((r1>>1)&0x3F8)|((r2<<5)&0xC00));
+  cxt[9]=0x3000+((r0&0x3f)^(r1&0x3ffe)^(r2<<2&0x7f00)^(r3<<5&0xf800));
+  cxt[10]=0x13000+((r0&0x3e)^(r1&0x0c0c)^(r2&0xc800));
+
+  // predict
+  for (i=0; i<N; ++i) m.add(stretch(sm[i].p(t[cxt[i]])));
+
+  m.set( (r0&7)|((r1&0x3E)>>2)|((r2&0x1C0)<<2), 2048);
+  m.set( y|((r1&0x1C0)>>5)|((r2&0x1C0)>>2)|((r3&0x1C0)<<1), 1024);
+  m.set( ((r1>>5)&0xFE)|y, 256);
+  m.set( (r0&0x3)|((r1&0xF80)>>5), 128 );  
+}
+
 void im8bitModel(Mixer& m, int w, int gray = 0) {
   const int SC=0x20000;
   static SmallStationaryContextMap scm1(SC), scm2(SC),
@@ -1533,12 +1576,12 @@ void im8bitModel(Mixer& m, int w, int gray = 0) {
   m.set(c0, 256);
 }
 
-void im24bitModel(Mixer& m, int w, int color, int alpha) {
+void im24bitModel(Mixer& m, int w, int alpha) {
   const int SC=0x20000;
   static SmallStationaryContextMap scm1(SC), scm2(SC),
     scm3(SC), scm4(SC), scm5(SC), scm6(SC), scm7(SC), scm8(SC), scm9(SC*2), scm10(512);
   static ContextMap cm(MEM()*4, 15+9);
-  static int stride = 3;
+  static int color = -1, stride = 3;
   static int ctx, padding, lastPos, x = 0;
 
   if (!bpos) {
@@ -1617,35 +1660,81 @@ void im24bitModel(Mixer& m, int w, int color, int alpha) {
   m.set(c0, 256);
 }
 
-int imgModel(Mixer& m) {
+int imgModel(Mixer& m, ModelStats *Stats = NULL) {
   static int w=0, bpp=0;
   static int eoi=0;
-  static U32 bmp=0, bmpof=0, bmpw=0, bmph=0, bmpbpp=0, bmpplt=0, hdrless=0;
+  static U32 bmp=0, bmpof=0, bmpw=0, bmph=0, bmpbpp=0, bmps=0, bmpplt=0, hdrless=0, bitmask=0;
   static U32 tiff=0;
-  static int color = -1, alpha = 0;
-
+  static int alpha=0, gray=0, pltorder=0;
+ 
   if (!bpos){
-    if(pos>eoi && !bmp && (
-      (buf(54)=='B' && buf(53)=='M' && ((bmpof=i4(44))&0xFFFFFBFF)==0x36 && i4(40)==0x28) ||
+    if(pos>=(eoi+40) && !bmp && (
+      (buf(54)=='B' && buf(53)=='M' && ((bmpof=i4(44))&0xFFFFFBF7)==0x36 && i4(40)==0x28) ||
       (hdrless=(i4(40)==0x28))
     )){
       bmpw = i4(36);
       bmph = abs((int)i4(32));
       bmpbpp = i2(26);
+      bmps = i4(20);
       bmpplt = i4(4);
       alpha = (bmpbpp==32);
-
-      bmp = (i4(24)==0) && (i2(28)==1) && (bmpbpp==8 || bmpbpp==24 || bmpbpp==32) && bmpw<30000 && bmph<10000 && ((bmpw*bmph*bmpbpp)>>3)>512 && (!bmpplt || ((U32)(1<<bmpbpp))>=bmpplt);
-      if (bmp){
-        bpp = bmpbpp;
+            
+      bmp = (i4(24)==0) && (i2(28)==1) && (bmpbpp==1 || bmpbpp==8 || bmpbpp==24 || bmpbpp==32) && bmpw<30000 && bmph<10000 && (!bmpplt || ((U32)(1<<bmpbpp))>=bmpplt);
+      if (bmp){        
+        bpp = bmpbpp;      
         bmpof = (hdrless)? ((bpp<24)?((bmpplt)?bmpplt*4:4<<bpp):0) :bmpof-54;
+        gray = (bmpbpp==8)?0x300:0;
+        // possible icon/cursor?        
+        // these have a 1bpp AND mask
+        if (hdrless && (bmpw*2==bmph) && bpp>1 &&
+           (
+            (bmps>0 && bmps==( (bmpw*bmph*(bpp+1))>>4 )) ||
+            ((!bmps || bmps<((bmpw*bmph*bpp)>>3)) && (
+              (bmpw==8)   || (bmpw==10) || (bmpw==14) || (bmpw==16) || (bmpw==20) ||
+              (bmpw==22)  || (bmpw==24) || (bmpw==32) || (bmpw==40) || (bmpw==48) ||
+              (bmpw==60)  || (bmpw==64) || (bmpw==72) || (bmpw==80) || (bmpw==96) ||
+              (bmpw==128) || (bmpw==256)
+            ))
+          )
+        )
+          bmph = bitmask = bmpw;
       }
     }
-    else
+    else{
       bmpof-=(bmpof>0);
-    if (!bmpof && bmp && pos>eoi){
-        w = (bmpw*(bpp>>3)+3)&(-4);
-        eoi = pos+w*bmph;
+      // process color palette entries
+      if (!w && gray && (bmpof&3)==0){
+          for (int i=0; (i<4) && gray; i++){
+            U8 B=buf(4-i);
+            if (gray>>9){
+              gray=0x100|B;
+              pltorder=1-2*(B>0);
+              if (Stats)
+                (*Stats).Record = ((*Stats).Record&0xFFFF)|(4<<16);
+              continue;
+            }
+            if (!i){
+              // load first component of this entry
+              gray = (gray&(((int)B-(gray&0xFF)==pltorder)<<8)); 
+              gray|=(gray)?B:0;
+            }
+            else if (i==3)
+              gray&=((!B || (B==0xFF))*0x1FF); // alpha/attribute component must be zero or 0xFF
+            else
+              gray&=((B==(gray&0xFF))<<9)-1;
+          }
+      }
+    }
+
+    if (!bmpof && (bmp>0 || bitmask>0) && pos>=eoi){    
+      if (!bmp && bitmask){
+        bmp=bpp=1;
+        bmpw=bitmask;
+        bitmask=0;
+      }
+      w = (bpp>1)?(bmpw*(bpp>>3)+3)&(-4):(((bmpw-1)>>5)+1)*4;
+      eoi = w*bmph;
+      eoi = (eoi>64)?eoi+pos:(bmp=w=0);
     }
   }
 
@@ -1677,16 +1766,17 @@ int imgModel(Mixer& m) {
     }
   }
   if (pos>eoi) return w=0;
-
+  
   if (w){
-    if (bpp==8)
-      im8bitModel(m, w);
-    else
-      im24bitModel(m, w, color, alpha);
+    switch (bpp){
+      case 1 : im1bitModel(m, w); break;      
+      case 8 : im8bitModel(m, w, gray); break;
+      default: im24bitModel(m, w, alpha);
+    }
   }
-  if (!bpos && pos>=eoi)
-    bmp=tiff=alpha=0, color=-1;
-
+  if (bpos==7 && (pos+1)==eoi)
+      bmp=gray=tiff=alpha=0;
+  
   return w;
 }
 
@@ -2984,13 +3074,13 @@ U32 execxt(int i, int x=0) {
 }
 
 bool exeModel(Mixer& m, bool Forced = false, ModelStats *Stats = NULL) {
-  const int N1=8, N2=9;
+  const int N1=9, N2=10;
   static ContextMap cm(MEM()*2, N1+N2);
   static OpCache Cache;
   static U32 StateBH[256];
   static ExeState pState = Start, State = Start;
   static Instruction Op;
-  static U32 TotalOps = 0, OpMask = 0, OpCategMask = 0, Context = 0;
+  static U32 TotalOps = 0, OpMask = 0, OpCategMask = 0, Context = 0, BrkPoint = 0, BrkCtx = 0;
   static bool Valid = false;
   if (!bpos) {
     pState = State;
@@ -3040,6 +3130,7 @@ bool exeModel(Mixer& m, bool Forced = false, ModelStats *Stats = NULL) {
               Op.Data = Op.Prefix;
               Op.Category = TypeOp1[Op.Code];
               Op.Decoding = true;
+              BrkCtx = hash(1+(BrkPoint = 0), Op.Prefix, OpCategMask&CategoryMask);
               break;
             }
           }
@@ -3052,6 +3143,7 @@ bool exeModel(Mixer& m, bool Forced = false, ModelStats *Stats = NULL) {
             else{
               Op.Data = Op.Prefix;
               Op.Category = TypeOp1[Op.Code];
+              BrkCtx = hash(1+(BrkPoint = 1), Op.Prefix, OpCategMask&CategoryMask);
               break;
             }
           }
@@ -3063,13 +3155,14 @@ bool exeModel(Mixer& m, bool Forced = false, ModelStats *Stats = NULL) {
           State = Pref_MultiByte_Op;
         else
           ReadFlags(Op, State);
-
+        BrkCtx = hash(1+(BrkPoint = 2), State, Op.Code, (OpCategMask&CategoryMask), OpN(Cache,1)&((ModRM_mod|ModRM_reg|ModRM_rm)<<ModRMShift));
         break;
       }
       case Pref_Op_Size : {
         Op.Code = B;
         ApplyCodeAndSetFlag(Op, OperandSizeOverride);
         ReadFlags(Op, State);
+        BrkCtx = hash(1+(BrkPoint = 3), State);
         break;
       }
       case Pref_MultiByte_Op : {
@@ -3086,10 +3179,12 @@ bool exeModel(Mixer& m, bool Forced = false, ModelStats *Stats = NULL) {
           Op.Category = TypeOp2[Op.Code];
           CheckFlags(Op, State);
         }
+        BrkCtx = hash(1+(BrkPoint = 4), State);
         break;
       }
       case ParseFlags : {
         ProcessFlags(Op, State);
+        BrkCtx = hash(1+(BrkPoint = 5), State);
         break;
       }
       case ExtraFlags : case ReadModRM : {
@@ -3104,18 +3199,22 @@ bool exeModel(Mixer& m, bool Forced = false, ModelStats *Stats = NULL) {
           if (Op.Flags==fERR){
             memset(&Op, 0, sizeof(Instruction));
             State = Error;
+            BrkCtx = hash(1+(BrkPoint = 6), State);
             break;
           }
           ProcessFlags(Op, State);
+          BrkCtx = hash(1+(BrkPoint = 7), State);
           break;
         }
 
         if ((Op.ModRM & ModRM_rm)==4 && Op.ModRM<ModRM_mod){
           State = ReadSIB;
+          BrkCtx = hash(1+(BrkPoint = 8), State);
           break;
         }
 
         ProcessModRM(Op, State);
+        BrkCtx = hash(1+(BrkPoint = 9), State, Op.Code );
         break;
       }
       case Read_OP3_38 : case Read_OP3_3A : {
@@ -3130,12 +3229,14 @@ bool exeModel(Mixer& m, bool Forced = false, ModelStats *Stats = NULL) {
           Op.Category = TypeOp3_3A[Op.Code];
         }
         CheckFlags(Op, State);
+        BrkCtx = hash(1+(BrkPoint = 10), State);
         break;
       }
       case ReadSIB : {
         Op.SIB = B;
         Op.Data|=((Op.SIB & SIB_scale)<<SIBScaleShift);
         ProcessModRM(Op, State);
+        BrkCtx = hash(1+(BrkPoint = 11), State, Op.SIB&SIB_scale);
         break;
       }
       case Read8 : case Read16 : case Read32 : {
@@ -3144,10 +3245,12 @@ bool exeModel(Mixer& m, bool Forced = false, ModelStats *Stats = NULL) {
           Op.imm8 = false;
           State = Start;
         }
+        BrkCtx = hash(1+(BrkPoint = 12), State, Op.Flags&fMODE, Op.BytesRead, ((Op.BytesRead>1)?(buf(Op.BytesRead)<<8):0)|((Op.BytesRead)?B:0) );
         break;
       }
       case Read8_ModRM : {
         ProcessMode(Op, State);
+        BrkCtx = hash(1+(BrkPoint = 13), State);
         break;
       }
       case Read16_f : {
@@ -3155,6 +3258,7 @@ bool exeModel(Mixer& m, bool Forced = false, ModelStats *Stats = NULL) {
           Op.BytesRead = 0;
           ProcessFlags2(Op, State);
         }
+        BrkCtx = hash(1+(BrkPoint = 14), State);
         break;
       }
       case Read32_ModRM : {
@@ -3163,6 +3267,7 @@ bool exeModel(Mixer& m, bool Forced = false, ModelStats *Stats = NULL) {
           Op.BytesRead = 0;
           ProcessMode(Op, State);
         }
+        BrkCtx = hash(1+(BrkPoint = 15), State);
         break;
       }
     }
@@ -3178,6 +3283,8 @@ bool exeModel(Mixer& m, bool Forced = false, ModelStats *Stats = NULL) {
         j=(i<4)?i+1:5+(i-4)*(2+(i>6));
         cm.set(hash(execxt(j, buf(1)*(j>6)), ((1<<N1)|mask)*(count0*N1/2>=i), (0x08|(blpos&0x07))*(i<4)));
       }
+
+      cm.set(BrkCtx);
 
       mask = PrefixMask|(0xF8<<CodeShift)|MultiByteOpcode|Prefix38|Prefix3A;
       cm.set(hash(OpN(Cache, 1)&(mask|RegDWordDisplacement|AddressMode), State+16*Op.BytesRead, Op.Data&mask, Op.REX, Op.Category));
@@ -3229,6 +3336,7 @@ bool exeModel(Mixer& m, bool Forced = false, ModelStats *Stats = NULL) {
 
   m.set(Context*4+(s>>4), 1024);
   m.set(State*64+bpos*8+(Op.BytesRead>0)*4+(s>>4), 1024);
+  m.set( (BrkCtx&0x1FF)|((s&0x20)<<4), 1024 );
 
   if (Stats)
     (*Stats).x86_64 = Valid|(Context<<1)|(s<<9);
@@ -3621,7 +3729,7 @@ U32 last_prediction = 2048;
 int contextModel2() {
   static ContextMap cm(MEM()*31, 9);
   static RunContextMap rcm7(MEM()), rcm9(MEM()), rcm10(MEM());
-  static Mixer m(NUM_INPUTS, 10800+1024*3, NUM_SETS, 32);
+  static Mixer m(NUM_INPUTS, 10800+1024*4, NUM_SETS, 32);
   static U32 cxt[16];
   static Filetype filetype=EXE;
   static ModelStats stats;
@@ -3631,7 +3739,7 @@ int contextModel2() {
 
   int isjpeg=jpegModel(m);
   int ismatch=ilog(matchModel(m));
-  int isimg=imgModel(m);
+  int isimg=imgModel(m, &stats);
 
   if (isjpeg) {
     return m.p();
