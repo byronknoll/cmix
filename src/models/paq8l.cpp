@@ -1007,8 +1007,8 @@ void wordModel(Mixer& m) {
     cm.set(hash(530,mask&0xff,col));
     cm.set(hash(531,mask,buf(2),buf(3)));
     cm.set(hash(532,mask&0x1ff,f4&0x00fff0));
-    
-    cm.set(hash(h, llog(wordGap), mask&0x1FF, 
+
+    cm.set(hash(h, llog(wordGap), mask&0x1FF,
         ((wordlen1 > 3)<<6)|
         ((wordlen > 0)<<5)|
         ((spafdo == wordlen + 2)<<4)|
@@ -1030,7 +1030,7 @@ void nestModel(Mixer& m)
   if (bpos==0) {
     int c=c4&255, matched=1, vv;
     w*=((vc&7)>0 && (vc&7)<3);
-    if (c&0x80) w = w*11*32 + c;    
+    if (c&0x80) w = w*11*32 + c;
     const int lc = (c >= 'A' && c <= 'Z'?c+'a'-'A':c);
     if (lc == 'a' || lc == 'e' || lc == 'i' || lc == 'o' || lc == 'u'){ vv = 1; w = w*997*8 + (lc/4-22); } else
     if (lc >= 'a' && lc <= 'z'){ vv = 2; w = w*271*32 + lc-97; } else
@@ -1077,7 +1077,7 @@ void nestModel(Mixer& m)
       default: matched = 0;
     }
     if (c4==0x266C743B) uc=min(7,uc+1);
-    else if (c4==0x2667743B) uc-=(uc>0);    
+    else if (c4==0x2667743B) uc-=(uc>0);
     if (matched) bc = 0; else bc += 1;
     if (bc > 300) bc = ic = pc = qc = uc = 0;
 
@@ -1168,11 +1168,11 @@ void recordModel(Mixer& m, ModelStats *Stats = NULL) {
     co.set(buf(1)<<17|buf(2)<<9|llog(pos-wpos1[w])>>2);
     co.set(buf(1)<<8|buf(rlen[0]));
 
-    col=pos%rlen[0];    
+    col=pos%rlen[0];
     cp.set(rlen[0]|buf(rlen[0])<<10|col<<18);
     cp.set(rlen[0]|buf(1)<<10|col<<18);
     cp.set(col|rlen[0]<<12);
-    
+
     /*
     Consider record structures that include fixed-length strings.
     These usually contain the text followed by either spaces or 0's,
@@ -1200,24 +1200,24 @@ void recordModel(Mixer& m, ModelStats *Stats = NULL) {
 
     int last4 = (buf(rlen[0]*4)<<24)|(buf(rlen[0]*3)<<16)|(buf(rlen[0]*2)<<8)|buf(rlen[0]);
     cp.set( (last4&0xFF)|((last4&0xF000)>>4)|((last4&0xE00000)>>9)|((last4&0xE0000000)>>14)|((col/max(1,rlen[0]/16))<<18) );
-    cp.set( (last4&0xF8F8)|(col<<16) );   
+    cp.set( (last4&0xF8F8)|(col<<16) );
 
     cpos4[c]=cpos3[c];
     cpos3[c]=cpos2[c];
     cpos2[c]=cpos1[c];
     cpos1[c]=pos;
     wpos1[w]=pos;
-    
+
     mxCtx = (rlen[0]>128)?(min(0x7F,col/max(1,rlen[0]/128))):col;
   }
   cm.mix(m);
   cn.mix(m);
   co.mix(m);
   cp.mix(m);
-  
+
   m.set( (rlen[0]>2)*( (bpos<<7)|mxCtx ), 1024 );
   if (Stats)
-    (*Stats).Record = (min(0xFFFF,rlen[0])<<16)|min(0xFFFF,col);  
+    (*Stats).Record = (min(0xFFFF,rlen[0])<<16)|min(0xFFFF,col);
 }
 
 void recordModel1(Mixer& m) {
@@ -1392,7 +1392,6 @@ inline U8 LogMeanDiffQt(U8 a, U8 b){
   return (a!=b)?((a>b)<<3)|ilog2((a+b)/max(2,abs(a-b)*2)+1):0;
 }
 
-
 void im8bitModel(Mixer& m, int w, int gray = 0) {
   const int SC=0x20000;
   static SmallStationaryContextMap scm1(SC), scm2(SC),
@@ -1562,7 +1561,7 @@ void im8bitModel(Mixer& m, int w, int gray = 0) {
   m.set( (gray)?ctx:ctx|((bpos>4)<<8), 512 );
   m.set(col, 8);
   m.set((buf(w)+buf(1))>>4, 32);
-  m.set(c0, 256);  
+  m.set(c0, 256);
 }
 
 void im24bitModel(Mixer& m, int w, int color, int alpha) {
@@ -1618,7 +1617,7 @@ void im24bitModel(Mixer& m, int w, int color, int alpha) {
     cm.set(hash(++i, buf(w), buf(1)-buf(w+1)));
     cm.set(hash(++i, buf(w)+buf(1)-buf(w+1)));
     cm.set(hash(++i, buf(w*stride-stride), buf(w*stride-2*stride)));
-    cm.set(hash(++i, buf(w*stride+stride), buf(w*stride+2*stride)));    
+    cm.set(hash(++i, buf(w*stride+stride), buf(w*stride+2*stride)));
     cm.set(hash(++i, mean, logvar>>4));
     scm1.set(buf(stride)+buf(w)-buf(w+stride));
     scm2.set(buf(stride)+buf(w-stride)-buf(w));
@@ -1648,7 +1647,7 @@ void im24bitModel(Mixer& m, int w, int color, int alpha) {
   m.set( ctx, 2048 );
   m.set(col, stride*8);
   m.set((buf(1+(alpha && !color))>>4)*stride+(x%stride), stride*16);
-  m.set(c0, 256);  
+  m.set(c0, 256);
 }
 
 int imgModel(Mixer& m) {
@@ -1668,17 +1667,17 @@ int imgModel(Mixer& m) {
       bmpbpp = i2(26);
       bmpplt = i4(4);
       alpha = (bmpbpp==32);
-            
+
       bmp = (i4(24)==0) && (i2(28)==1) && (bmpbpp==8 || bmpbpp==24 || bmpbpp==32) && bmpw<30000 && bmph<10000 && ((bmpw*bmph*bmpbpp)>>3)>512 && (!bmpplt || ((U32)(1<<bmpbpp))>=bmpplt);
-      if (bmp){        
-        bpp = bmpbpp;      
+      if (bmp){
+        bpp = bmpbpp;
         bmpof = (hdrless)? ((bpp<24)?((bmpplt)?bmpplt*4:4<<bpp):0) :bmpof-54;
       }
     }
     else
       bmpof-=(bmpof>0);
-    if (!bmpof && bmp && pos>eoi){    
-        w = (bmpw*(bpp>>3)+3)&(-4);    
+    if (!bmpof && bmp && pos>eoi){
+        w = (bmpw*(bpp>>3)+3)&(-4);
         eoi = pos+w*bmph;
     }
   }
@@ -1711,7 +1710,7 @@ int imgModel(Mixer& m) {
     }
   }
   if (pos>eoi) return w=0;
-  
+
   if (w){
     if (bpp==8)
       im8bitModel(m, w);
@@ -1720,7 +1719,7 @@ int imgModel(Mixer& m) {
   }
   if (!bpos && pos>=eoi)
     bmp=tiff=alpha=0, color=-1;
-  
+
   return w;
 }
 
@@ -1953,7 +1952,7 @@ int jpegModel(Mixer& m) {
     // FF 00 is interpreted as FF (to distinguish from RSTx, DNL, EOI).
 
     // Detect JPEG (SOI followed by a valid marker)
-    if (!images[idx].jpeg && buf(4)==FF && buf(3)==SOI && buf(2)==FF && ((buf(1)&0xFE)==0xC0 || buf(1)==0xC4 || (buf(1)>=0xDB && buf(1)<=0xFE)) ){      
+    if (!images[idx].jpeg && buf(4)==FF && buf(3)==SOI && buf(2)==FF && ((buf(1)&0xFE)==0xC0 || buf(1)==0xC4 || (buf(1)>=0xDB && buf(1)<=0xFE)) ){
       images[idx].jpeg=1;
       images[idx].offset = pos-4;
       images[idx].sos=images[idx].sof=images[idx].htsize=images[idx].data=0, images[idx].app=(buf(1)>>4==0xE)*2;
@@ -2139,7 +2138,7 @@ int jpegModel(Mixer& m) {
       row=column=0;
 
       // we can have more blocks than components then we have subsampling
-      int x=0, y=0; 
+      int x=0, y=0;
       for (j = 0; j<(mcusize>>6); j++) {
         int i = color[j];
         int w = SamplingFactors[i]>>4, h = SamplingFactors[i]&0xf;
@@ -2151,7 +2150,6 @@ int jpegModel(Mixer& m) {
       }
     }
   }
-
 
   // Decode Huffman
   {
@@ -2324,7 +2322,7 @@ int jpegModel(Mixer& m) {
             if (cnt2>0) prev2/=cnt2;
             prev_coef=(prev1<0?-1:+1)*ilog(11*abs(prev1)+1)+(cnt1<<20);
             prev_coef2=(prev2<0?-1:+1)*ilog(11*abs(prev2)+1);
-           
+
             if (column==0 && blockW[acomp]>64*acomp) run_pred[1]=run_pred[2], run_pred[0]=0, adv_pred[1]=adv_pred[2], adv_pred[0]=0;
             if (row==0 && blockN[acomp]>64*acomp) run_pred[1]=run_pred[0], run_pred[2]=0, adv_pred[1]=adv_pred[0], adv_pred[2]=0;
           } // !!!!
@@ -2339,14 +2337,14 @@ int jpegModel(Mixer& m) {
   if (buf(1+(!bpos))==FF) {
     m.add(128);
     m.set(0, 9);
-    m.set(0, 1025); 
+    m.set(0, 1025);
     m.set(buf(1), 1024);
     return 1;
   }
   if (rstlen>0 && rstlen==column+row*width-rstpos && mcupos==0 && (int)huffcode==(1<<huffbits)-1) {
     m.add(4095);
     m.set(0, 9);
-    m.set(0, 1025); 
+    m.set(0, 1025);
     m.set(buf(1), 1024);
     return 1;
   }
@@ -2362,7 +2360,6 @@ int jpegModel(Mixer& m) {
   static StateMap sm[N];
   static Mixer m1(N+1, 2050, 3);
   static APM a1(0x8000), a2(0x20000);
-
 
   // Update model
   if (cp[N-1]) {
@@ -2418,7 +2415,7 @@ int jpegModel(Mixer& m) {
 
   // Predict next bit
   m1.add(128);
-  jassert(hbcount<=2);  
+  jassert(hbcount<=2);
   int p;
  switch(hbcount)
   {
@@ -2426,7 +2423,7 @@ int jpegModel(Mixer& m) {
    case 1: { int hc=1+(huffcode&1)*3; for (int i=0; i<N; ++i){ cp[i]+=hc, m1.add(p=stretch(sm[i].p(*cp[i]))); m.add(p>>2); }} break;
    default: { int hc=1+(huffcode&1); for (int i=0; i<N; ++i){ cp[i]+=hc, m1.add(p=stretch(sm[i].p(*cp[i]))); m.add(p>>2); }} break;
   }
-  
+
   m1.set(firstcol, 2);
   m1.set(coef+256*min(3,huffbits), 1024);
   m1.set((hc&0x1FE)*2+min(3,ilog2(zu+zv)), 1024);
@@ -2442,7 +2439,7 @@ int jpegModel(Mixer& m) {
   m.set(1 + (zu+zv<5)+(huffbits>8)*2+firstcol*4, 9);
   m.set(1 + (hc&0xFF) + 256*min(3,(zu+zv)/3), 1025);
   m.set(coef+256*min(3,huffbits/2), 1024);
-  return 1; 
+  return 1;
 }
 
 //////////////////////////// exeModel /////////////////////////
@@ -3148,17 +3145,17 @@ bool exeModel(Mixer& m, bool Forced = false, ModelStats *Stats = NULL) {
           if (!IsInvalidX64Op(B) && !IsValidX64Prefix(B)){
             Op.REX = Op.Code;
             Op.Code = B;
-            Op.Data = PrefixREX|(Op.Code<<CodeShift)|(Op.Data&PrefixMask); 
+            Op.Data = PrefixREX|(Op.Code<<CodeShift)|(Op.Data&PrefixMask);
             Skip = true;
           }
         }
-        
-        Op.ModRM = Op.SIB = Op.REX = Op.Flags = Op.BytesRead = 0;       
+
+        Op.ModRM = Op.SIB = Op.REX = Op.Flags = Op.BytesRead = 0;
         if (!Skip){
           Op.Code = B;
           // possible REX prefix?
           Op.MustCheckREX = ((Op.Code&0xF0)==0x40) && (!(Op.Decoding && ((Op.Data&PrefixMask)==1)));
-          
+
           // check prefixes
           Op.Prefix = (Op.Code==ES_OVERRIDE || Op.Code==CS_OVERRIDE || Op.Code==SS_OVERRIDE || Op.Code==DS_OVERRIDE) + //invalid in x64
                       (Op.Code==FS_OVERRIDE)*2 +
@@ -3173,7 +3170,7 @@ bool exeModel(Mixer& m, bool Forced = false, ModelStats *Stats = NULL) {
             OpMask = (OpMask<<1)|(State!=Error);
             OpCategMask = (OpCategMask<<CategoryShift)|(Op.Category);
             Op.Size = 0;
-            
+
             Cache.Op[ Cache.Index&(CacheSize-1) ] = Op.Data;
             Cache.Index++;
 
@@ -3217,7 +3214,7 @@ bool exeModel(Mixer& m, bool Forced = false, ModelStats *Stats = NULL) {
         break;
       }
       case Pref_MultiByte_Op : {
-        Op.Code = B;        
+        Op.Code = B;
         Op.Data|=MultiByteOpcode;
 
         if (Op.Code==0x38)
@@ -3325,14 +3322,14 @@ bool exeModel(Mixer& m, bool Forced = false, ModelStats *Stats = NULL) {
 
       mask = PrefixMask|(0xF8<<CodeShift)|MultiByteOpcode|Prefix38|Prefix3A;
       cm.set(hash(OpN(Cache, 1)&(mask|RegDWordDisplacement|AddressMode), State+16*Op.BytesRead, Op.Data&mask, Op.REX, Op.Category));
-      
+
       mask = 0x04|(0xFE<<CodeShift)|MultiByteOpcode|Prefix38|Prefix3A|((ModRM_mod|ModRM_reg)<<ModRMShift);
       cm.set(hash(
         OpN(Cache, 1)&mask, OpN(Cache, 2)&mask, OpN(Cache, 3)&mask,
         Context+256*((Op.ModRM & ModRM_mod)==ModRM_mod),
         Op.Data&((mask|PrefixREX)^(ModRM_mod<<ModRMShift))
       ));
-      
+
       mask = 0x04|CodeMask;
       cm.set(hash(OpN(Cache, 1)&mask, OpN(Cache, 2)&mask, OpN(Cache, 3)&mask, OpN(Cache, 4)&mask, (Op.Data&mask)|(State<<11)|(Op.BytesRead<<15)));
 
@@ -3488,7 +3485,7 @@ void dmcModel(Mixer& m) {
 /*
   XML Model.
   Attempts to parse the tag structure and detect specific content types.
-  
+
   Changelog:
   (17/08/2017) v96: Initial release by Márcio Pais
   (17/08/2017) v97: Bug fixes (thank you Mauro Vezzosi) and improvements.
@@ -3510,7 +3507,7 @@ struct XMLTag {
   struct XMLAttributes {
     XMLAttribute Items[4];
     U32 Index;
-  } Attributes;    
+  } Attributes;
 };
 
 struct XMLTagCache {
@@ -3582,7 +3579,7 @@ enum XMLState {
 \
   if (c4==0x4953424E && buf(5)==0x20) \
     (*Content).Type |= ISBN; \
-} 
+}
 
 void XMLModel(Mixer& m, ModelStats *Stats = NULL){
   static ContextMap cm(MEM()/4, 4);
@@ -3621,7 +3618,7 @@ void XMLModel(Mixer& m, ModelStats *Stats = NULL){
         }
         if ((*Tag).Level>1)
           DetectContent();
-        
+
         cm.set(hash(pState, State, ((*pTag).Level+1)*IndentStep - WhiteSpaceRun));
         break;
       }
@@ -3663,7 +3660,7 @@ void XMLModel(Mixer& m, ModelStats *Stats = NULL){
           State = ReadCDATA;
           (*Tag).Level = max(0,(*Tag).Level-1);
         }
-        
+
         int i = 1;
         do{
           pTag = &Cache.Tags[ (Cache.Index-i)&(CacheSize-1) ];
@@ -3767,8 +3764,6 @@ void XMLModel(Mixer& m, ModelStats *Stats = NULL){
   if (Stats)
     (*Stats).XML = (s<<3)|State;
 }
-
-
 
 typedef enum {DEFAULT, JPEG, EXE, TEXT} Filetype;
 
