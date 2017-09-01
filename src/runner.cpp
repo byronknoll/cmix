@@ -9,6 +9,10 @@
 #include "coder/decoder.h"
 #include "predictor.h"
 
+namespace {
+  const int kMinVocabFileSize = 10000;
+}
+
 int Help() {
   printf("cmix version 13\n");
   printf("With preprocessing:\n");
@@ -27,6 +31,7 @@ void WriteHeader(unsigned long long length, const std::vector<bool>& vocab,
     char c = length >> (8*i);
     os->put(c);
   }
+  if (length < kMinVocabFileSize) return;
   for (int i = 0; i < 32; ++i) {
     unsigned char c = 0;
     for (int j = 0; j < 8; ++j) {
@@ -36,10 +41,9 @@ void WriteHeader(unsigned long long length, const std::vector<bool>& vocab,
   }
 }
 
-void WriteHeader(unsigned long long length, FILE* out) {
+void WriteStorageHeader(FILE* out) {
   for (int i = 4; i >= 0; --i) {
-    char c = length >> (8*i);
-    putc(c, out);
+    putc(0, out);
   }
 }
 
@@ -51,6 +55,10 @@ void ReadHeader(std::ifstream* is, unsigned long long* length,
     *length += (unsigned char)(is->get());
   }
   if (*length == 0) return;
+  if (*length < kMinVocabFileSize) {
+    std::fill(vocab->begin(), vocab->end(), true);
+    return;
+  }
   for (int i = 0; i < 32; ++i) {
     unsigned char c = is->get();
     for (int j = 0; j < 8; ++j) {
@@ -112,7 +120,7 @@ bool Store(const std::string& input_path, const std::string& temp_path,
   fseek(data_in, 0L, SEEK_END);
   *input_bytes = ftell(data_in);
   fseek(data_in, 0L, SEEK_SET);
-  WriteHeader(0, data_out);
+  WriteStorageHeader(data_out);
   preprocessor::encode(data_in, data_out, *input_bytes, temp_path, dictionary);
   fseek(data_out, 0L, SEEK_END);
   *output_bytes = ftell(data_out);
@@ -156,8 +164,12 @@ bool RunCompression(bool enable_preprocess, const std::string& input_path,
   temp_in.seekg(0, std::ios::beg);
 
   std::vector<bool> vocab(256, false);
-  ExtractVocab(temp_bytes, &temp_in, &vocab);
-  temp_in.seekg(0, std::ios::beg);
+  if (temp_bytes < kMinVocabFileSize) {
+    std::fill(vocab.begin(), vocab.end(), true);
+  } else {
+    ExtractVocab(temp_bytes, &temp_in, &vocab);
+    temp_in.seekg(0, std::ios::beg);
+  }
   Predictor p(vocab);
 
   if (enable_preprocess) {
