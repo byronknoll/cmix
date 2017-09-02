@@ -101,6 +101,9 @@ Filetype detect(FILE* in, int n, Filetype type) {
   if (deth >1) return fseek(in, start+deth, SEEK_SET),deth=0,BMP;
   else if (deth ==-1) return fseek(in, start, SEEK_SET),deth=0,BMP;
   else if (detd) return fseek(in, start+detd, SEEK_SET),detd=0,DEFAULT;
+  // For TGA detection
+  uint64_t tga=0;
+  int tgaid=0, tgaw=0, tgah=0;
 
   for (int i=0; i<n; ++i) {
     int c=getc(in);
@@ -190,6 +193,19 @@ Filetype detect(FILE* in, int n, Filetype type) {
           }
         }
         bmp=0;
+      }
+    }
+    // detect .tga image
+    if ((buf1&0xFFFFFF)==0x000200 && buf0==0x00000000) tga=i, tgaid=buf1>>24;
+    if (tga){
+      if ((i-tga)==8){
+        tgaw = bswap(buf0)&0xffff;
+        tgah = bswap(buf0)>>16;
+        tga*=(!buf1 && tgaw && tgaw<0x4000 && tgah && tgah<0x4000);
+      }
+      else if ((i-tga)==10){
+        if (tga && (buf0&0xFFDF)==0x1800)
+          return deth=18+tgaid,detd=tgaw*tgah*3,bmp_info=tgaw*3,fseek(in, start+(tga-7), SEEK_SET),tga=0,DEFAULT;
       }
     }
   }
