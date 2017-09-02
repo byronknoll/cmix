@@ -1745,7 +1745,7 @@ void im24bitModel(Mixer& m, int w, int alpha) {
   const int SC=0x20000;
   static SmallStationaryContextMap scm1(SC), scm2(SC),
     scm3(SC), scm4(SC), scm5(SC), scm6(SC), scm7(SC), scm8(SC), scm9(SC*2), scm10(512);
-  static ContextMap cm(MEM()*4, 15+9);
+  static ContextMap cm(MEM()*4, 15+11);
   static int color = -1, stride = 3;
   static int ctx, padding, lastPos, x = 0;
 
@@ -1763,13 +1763,14 @@ void im24bitModel(Mixer& m, int w, int alpha) {
     else
       color=(padding)*(stride+1);
 
-    int mean=buf(stride)+buf(w-stride)+buf(w)+buf(w+stride);
-    const int var=(sqrbuf(stride)+sqrbuf(w-stride)+sqrbuf(w)+sqrbuf(w+stride)-mean*mean/4)>>2;
-    mean>>=2;
-    const int logvar=ilog(var);
     int i=color<<5;
 
-    int WWW=buf(3*stride), WW=buf(2*stride), W=buf(stride), NW=buf(w+stride), N=buf(w), NE=buf(w-stride),  NEE=buf(w-2*stride), NNW=buf(w*2+stride), NN=buf(w*2), NNE=buf(w*2-stride), NNEE=buf((w-stride)*2), NNN=buf(w*3);
+    int WWW=buf(3*stride), WW=buf(2*stride), W=buf(stride), NWW=buf(w+2*stride), NW=buf(w+stride), N=buf(w), NE=buf(w-stride), NEE=buf(w-2*stride), NNWW=buf((w+stride)*2), NNW=buf(w*2+stride), NN=buf(w*2), NNE=buf(w*2-stride), NNEE=buf((w-stride)*2), NNN=buf(w*3);
+    int mean=W+NW+N+NE;
+    const int var=(W*W+NW*NW+N*N+NE*NE-mean*mean/4)>>2;
+    mean>>=2;
+    const int logvar=ilog(var);
+
     ctx = (min(color,stride)<<9)|((abs(W-N)>8)<<8)|((W>N)<<7)|((W>NW)<<6)|((abs(N-NW)>8)<<5)|((N>NW)<<4)|((abs(N-NE)>8)<<3)|((N>NE)<<2)|((W>WW)<<1)|(N>NN);
     cm.set(hash( (N+1)>>1, LogMeanDiffQt(N,Clip(NN*2-NNN)) ));
     cm.set(hash( (W+1)>>1, LogMeanDiffQt(W,Clip(WW*2-WWW)) ));
@@ -1780,30 +1781,33 @@ void im24bitModel(Mixer& m, int w, int alpha) {
     cm.set(hash(++i, Clip((-buf(4*stride)+5*WWW-10*WW+10*W+Clamp4(NE*4-NNE*6+buf(w*3-stride)*4-buf(w*4-stride),N,NE,buf(w-2*stride),buf(w-3*stride)))/5)/4 ));
     cm.set( Clip(NEE+N-NNEE) );
     cm.set( Clip(NN+W-NNW) );
+    cm.set(hash(++i, buf(1)));
+    cm.set(hash(++i, buf(2)));
+    
 
-    cm.set(hash(++i, buf(stride)));
-    cm.set(hash(++i, buf(stride), buf(1)));
-    cm.set(hash(++i, buf(stride), buf(1), buf(2)));
-    cm.set(hash(++i, buf(w)));
-    cm.set(hash(++i, buf(w), buf(1)));
-    cm.set(hash(++i, buf(w), buf(1), buf(2)));
-    cm.set(hash(++i, (buf(stride)+buf(w))>>3, buf(1)>>4, buf(2)>>4));
+    cm.set(hash(++i, W));
+    cm.set(hash(++i, W, buf(1)));
+    cm.set(hash(++i, W, buf(1), buf(2)));
+    cm.set(hash(++i, N));
+    cm.set(hash(++i, N, buf(1)));
+    cm.set(hash(++i, N, buf(1), buf(2)));
+    cm.set(hash(++i, (W+N)>>3, buf(1)>>4, buf(2)>>4));
     cm.set(hash(++i, buf(1), buf(2)));
-    cm.set(hash(++i, buf(stride), buf(1)-buf(stride+1)));
-    cm.set(hash(++i, buf(stride)+buf(1)-buf(stride+1)));
-    cm.set(hash(++i, buf(w), buf(1)-buf(w+1)));
-    cm.set(hash(++i, buf(w)+buf(1)-buf(w+1)));
-    cm.set(hash(++i, buf(w*stride-stride), buf(w*stride-2*stride)));
-    cm.set(hash(++i, buf(w*stride+stride), buf(w*stride+2*stride)));
+    cm.set(hash(++i, W, buf(1)-buf(stride+1)));
+    cm.set(hash(++i, W+buf(1)-buf(stride+1)));
+    cm.set(hash(++i, N, buf(1)-buf(w+1)));
+    cm.set(hash(++i, N+buf(1)-buf(w+1)));
+    cm.set(hash(++i, buf(w*3-stride), buf(w*3-2*stride)));
+    cm.set(hash(++i, buf(w*3+stride), buf(w*3+2*stride)));
     cm.set(hash(++i, mean, logvar>>4));
-    scm1.set(buf(stride)+buf(w)-buf(w+stride));
-    scm2.set(buf(stride)+buf(w-stride)-buf(w));
-    scm3.set(buf(stride)*2-buf(stride*2));
-    scm4.set(buf(w)*2-buf(w*2));
-    scm5.set(buf(w+stride)*2-buf(w*2+stride*2));
-    scm6.set(buf(w-stride)*2-buf(w*2-stride*2));
-    scm7.set(buf(w-stride)+buf(1)-buf(w-2));
-    scm8.set(buf(w)+buf(w-stride)-buf(w*2-stride));
+    scm1.set(W+N-NW);
+    scm2.set(W+NE-N);
+    scm3.set(W*2-WW);
+    scm4.set(N*2-NN);
+    scm5.set(NW*2-NNWW);
+    scm6.set(NE*2-NNEE);
+    scm7.set(NE+buf(1)-buf(w-stride+1));
+    scm8.set(N+NE-NNE);
     scm9.set(mean>>1|(logvar<<1&0x180));
   }
 
