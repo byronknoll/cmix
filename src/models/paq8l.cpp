@@ -1176,7 +1176,8 @@ void recordModel(Mixer& m, ModelStats *Stats = NULL) {
   if (!bpos) {
     int w=c4&0xffff, c=w&255, d=w>>8;
 #if 1
-    if (Stats && (*Stats).Record && ((*Stats).Record>>16)!=rlen[0]){
+    if (Stats && (*Stats).Record &&
+          ((*Stats).Record>>16) != (unsigned int)rlen[0]) {
       rlen[0] = (*Stats).Record>>16;
       rcount[0]=rcount[1]=0;
     }
@@ -1765,7 +1766,7 @@ void im24bitModel(Mixer& m, int w, int alpha) {
 
     int i=color<<5;
 
-    int WWW=buf(3*stride), WW=buf(2*stride), W=buf(stride), NWW=buf(w+2*stride), NW=buf(w+stride), N=buf(w), NE=buf(w-stride), NEE=buf(w-2*stride), NNWW=buf((w+stride)*2), NNW=buf(w*2+stride), NN=buf(w*2), NNE=buf(w*2-stride), NNEE=buf((w-stride)*2), NNN=buf(w*3);
+    int WWW=buf(3*stride), WW=buf(2*stride), W=buf(stride), NW=buf(w+stride), N=buf(w), NE=buf(w-stride), NEE=buf(w-2*stride), NNWW=buf((w+stride)*2), NNW=buf(w*2+stride), NN=buf(w*2), NNE=buf(w*2-stride), NNEE=buf((w-stride)*2), NNN=buf(w*3);
     int mean=W+NW+N+NE;
     const int var=(W*W+NW*NW+N*N+NE*NE-mean*mean/4)>>2;
     mean>>=2;
@@ -2208,7 +2209,7 @@ int audioModel(Mixer& m, ModelStats *Stats = NULL) {
   static WAVAudio WAV;
   
   if (!bpos){
-    if (pos>=(eoi+4) && !WAV.Header && m4(4)==0x52494646){
+    if (pos>=(int)(eoi+4) && !WAV.Header && m4(4)==0x52494646){
       WAV.Header = pos;
       WAV.Chunk = 0;
       length = 0;
@@ -2221,23 +2222,23 @@ int audioModel(Mixer& m, ModelStats *Stats = NULL) {
       }
       else if (p==8)
         WAV.Header*=(m4(4)==0x57415645); // "WAVE"
-      else if (p==(16+length) && (m4(8)!=0x666d7420 || i4(4)!=16)){ // "fmt ", chunk size=16. should be first chunk in the file, but sometimes it's not
+      else if (p==(int)(16+length) && (m4(8)!=0x666d7420 || i4(4)!=16)){ // "fmt ", chunk size=16. should be first chunk in the file, but sometimes it's not
         length = ((i4(4)+1)&(-2)) + 8; // word aligned
         WAV.Header*=!(m4(8)==0x666d7420 && i4(4)!=16); // was "fmt " chunk, but not 16bytes
       }
-      else if (p==20+length){ // check for uncompressed audio ( 0100 xx xx ) and channels ( xx xx 0? 00 )
+      else if (p==(int)(20+length)){ // check for uncompressed audio ( 0100 xx xx ) and channels ( xx xx 0? 00 )
         WAV.Channels = buf(2);
         WAV.Header*=((WAV.Channels==1 || WAV.Channels==2) && (m4(4)&0xFFFFFCFF)==0x01000000);
       }
-      else if (p==32+length){
+      else if (p==(int)(32+length)){
         WAV.BitsPerSample = buf(2);
         WAV.Header*=((WAV.BitsPerSample==8 || WAV.BitsPerSample==16) && (m2(2)&0xE7FF)==0);
       }
-      else if (p==(40+length+WAV.Chunk) && m4(8)!=0x64617461){ // skip other chunks if not "data"
+      else if (p==(int)(40+length+WAV.Chunk) && m4(8)!=0x64617461){ // skip other chunks if not "data"
         WAV.Chunk+=((i4(4)+1)&(-2)) + 8; // size of this chunk (word aligned), plus 8 bytes for next chunk id and chunk size
         WAV.Header*=(WAV.Chunk<=0xFFFFF);
       }
-      else if (p==(40+length+WAV.Chunk)){
+      else if (p==(int)(40+length+WAV.Chunk)){
         WAV.Data = (i4(4)+1)&(-2);
         if (WAV.Data && (WAV.Data%(WAV.Channels*(WAV.BitsPerSample/8)))==0){
           info = (WAV.Channels + WAV.BitsPerSample/4-3) +1;
@@ -2248,13 +2249,13 @@ int audioModel(Mixer& m, ModelStats *Stats = NULL) {
     }
   }
   
-  if (pos>eoi)
+  if (pos>(int)eoi)
     return info=0;
   
   if (info)
     wavModel(m, info-1, Stats);
   
-  if (bpos==7 && (pos+1)==eoi)
+  if (bpos==7 && (pos+1)==(int)eoi)
     memset(&WAV, 0, sizeof(WAVAudio));
   
   return info;
