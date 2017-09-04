@@ -1746,7 +1746,7 @@ void im24bitModel(Mixer& m, int w, int alpha) {
   const int SC=0x20000;
   static SmallStationaryContextMap scm1(SC), scm2(SC),
     scm3(SC), scm4(SC), scm5(SC), scm6(SC), scm7(SC), scm8(SC), scm9(SC*2), scm10(512);
-  static ContextMap cm(MEM()*4, 15+11);
+  static ContextMap cm(MEM()*4, 15+18);
   static int color = -1, stride = 3;
   static int ctx, padding, lastPos, x = 0;
 
@@ -1772,7 +1772,7 @@ void im24bitModel(Mixer& m, int w, int alpha) {
     mean>>=2;
     const int logvar=ilog(var);
 
-    ctx = (min(color,stride)<<9)|((abs(W-N)>8)<<8)|((W>N)<<7)|((W>NW)<<6)|((abs(N-NW)>8)<<5)|((N>NW)<<4)|((abs(N-NE)>8)<<3)|((N>NE)<<2)|((W>WW)<<1)|(N>NN);
+    ctx = (min(color,stride-1)<<9)|((abs(W-N)>8)<<8)|((W>N)<<7)|((W>NW)<<6)|((abs(N-NW)>8)<<5)|((N>NW)<<4)|((abs(N-NE)>8)<<3)|((N>NE)<<2)|((W>WW)<<1)|(N>NN);
     cm.set(hash( (N+1)>>1, LogMeanDiffQt(N,Clip(NN*2-NNN)) ));
     cm.set(hash( (W+1)>>1, LogMeanDiffQt(W,Clip(WW*2-WWW)) ));
     cm.set(hash( Clamp4(W+N-NW,W,NW,N,NE), LogMeanDiffQt(Clip(N+NE-NNE), Clip(N+NW-NNW))));
@@ -1784,7 +1784,13 @@ void im24bitModel(Mixer& m, int w, int alpha) {
     cm.set( Clip(NN+W-NNW) );
     cm.set(hash(++i, buf(1)));
     cm.set(hash(++i, buf(2)));
-    
+    cm.set(hash(++i, Clip(W+N-NW)/2, Clip(W+buf(1)-buf(stride+1))/2 ));
+    cm.set(hash(Clip(N*2-NN)/2, LogMeanDiffQt(N,Clip(NN*2-NNN))));
+    cm.set(hash(Clip(W*2-WW)/2, LogMeanDiffQt(W,Clip(WW*2-WWW))));
+    cm.set( Clamp4(N*3-NN*3+NNN,W,NW,N,NE)/2 );
+    cm.set( Clamp4(W*3-WW*3+WWW,W,N,NE,NEE)/2 );
+    cm.set(hash(++i, LogMeanDiffQt(W,buf(stride+1)), Clamp4((buf(1)*W)/max(1,buf(stride+1)),W,N,NE,NEE) ));
+    cm.set(hash(++i, Clamp4(N+buf(2)-buf(w+2),W,NW,N,NE) ));
 
     cm.set(hash(++i, W));
     cm.set(hash(++i, W, buf(1)));
@@ -1828,7 +1834,7 @@ void im24bitModel(Mixer& m, int w, int alpha) {
   if (++col>=stride*8) col=0;
   m.set( ctx, 2048 );
   m.set(col, stride*8);
-  m.set((buf(1+(alpha && !color))>>4)*stride+(x%stride), stride*16);
+  m.set(x%stride, stride);
   m.set(c0, 256);
 }
 
@@ -2191,7 +2197,7 @@ void wavModel(Mixer& m, int info, ModelStats *Stats = NULL) {
   cm.mix(m);
   if (Stats)
     (*Stats).Record = (w<<16)|((*Stats).Record&0xFFFF);
-  recordModel(m);
+  recordModel(m, Stats);
   if (++col>=w*8) col=0;
   m.set( ch+4*ilog2(col&(bits-1)), 4*8 );
   m.set(col%bits<8, 2);
