@@ -2243,7 +2243,6 @@ int audioModel(Mixer& m, ModelStats *Stats = NULL) {
         if (WAV.Data && (WAV.Data%(WAV.Channels*(WAV.BitsPerSample/8)))==0){
           info = (WAV.Channels + WAV.BitsPerSample/4-3) +1;
           eoi = pos + WAV.Data;
-          printf("\b\b\b\b\b\b\b\b\b\b\b\b\b\b\bAudio data at offset %d, %d channels, %d bps, %d bytes\n",pos,WAV.Channels,WAV.BitsPerSample,WAV.Data); fflush(stdout);
         }
       }
     }
