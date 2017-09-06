@@ -34,8 +34,6 @@ typedef unsigned char  U8;
 typedef unsigned short U16;
 typedef unsigned int   U32;
 
-typedef enum {DEFAULT, JPEG, EXE, TEXT, BMP} Filetype;
-
 inline int min(int a, int b) {return a<b?a:b;}
 inline int max(int a, int b) {return a<b?b:a;}
 
@@ -452,6 +450,11 @@ void encode(FILE* in, FILE* out, int n, string temp_path, FILE* dictionary) {
     type=nextType;
     begin=end;
   }
+}
+
+void no_preprocess(FILE* in, FILE* out, int n) {
+  fprintf(out, "%c%c%c%c%c", DEFAULT, n>>24, n>>16, n>>8, n);
+  encode_default(in, out, n);
 }
 
 int decode2(FILE* in, string temp_path, FILE* dictionary) {

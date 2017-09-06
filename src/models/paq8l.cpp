@@ -4326,8 +4326,6 @@ void XMLModel(Mixer& m, ModelStats *Stats = NULL){
     (*Stats).XML = (s<<3)|State;
 }
 
-typedef enum {DEFAULT, JPEG, EXE, TEXT} Filetype;
-
 U32 last_prediction = 2048;
 
 int contextModel2() {
@@ -4335,7 +4333,6 @@ int contextModel2() {
   static RunContextMap rcm7(MEM()), rcm9(MEM()), rcm10(MEM());
   static Mixer m(NUM_INPUTS, 10800+1024*4, NUM_SETS, 32);
   static U32 cxt[16];
-  static Filetype filetype=EXE;
   static ModelStats stats;
 
   m.update();
@@ -4385,7 +4382,7 @@ int contextModel2() {
     indirectModel(m);
     dmcModel(m);
     XMLModel(m, &stats);
-    exeModel(m, filetype==EXE, &stats);
+    exeModel(m, true, &stats);
   }
 
   order = order-5;
