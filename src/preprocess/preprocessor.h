@@ -5,9 +5,11 @@
 
 #include <stdio.h>
 
-namespace preprocessor {
+typedef enum {DEFAULT, HDR, JPEG, EXE, TEXT, IMAGE1, IMAGE4, IMAGE8, IMAGE8GRAY, IMAGE24, IMAGE32} Filetype;
 
-typedef enum {DEFAULT, JPEG, EXE, TEXT, BMP} Filetype;
+inline bool hasInfo(Filetype ft) { return ft==IMAGE1 || ft==IMAGE4 || ft==IMAGE8 || ft==IMAGE8GRAY || ft==IMAGE24 || ft==IMAGE32; }
+
+namespace preprocessor {
 
 void pretrain(Predictor* p, const std::vector<bool>& vocab, FILE* dictionary);
 
