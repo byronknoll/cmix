@@ -1,4 +1,4 @@
-// This code is a hybrid of paq8l, paq8pxd_11 (released by Kaido Orav) and paq8px_v101 (released by Jan Ondrus and Márcio Pais).
+// This code is a hybrid of paq8l, paq8pxd_11 (released by Kaido Orav) and paq8px (v101 and up, released by Jan Ondrus and Márcio Pais).
 
 /*
     Copyright (C) 2006 Matt Mahoney, Serge Osnach, Alexander Ratushnyak,
@@ -19,6 +19,7 @@
 */
 
 #include "paq8l.h"
+#include "../preprocess/preprocessor.h"
 
 #include <stdio.h>
 #include <stdlib.h>
@@ -1742,13 +1743,13 @@ void im8bitModel(Mixer& m, int w, int gray = 0) {
   m.set(c0, 256);
 }
 
-void im24bitModel(Mixer& m, int w, int alpha) {
+void im24bitModel(Mixer& m, int w, int alpha=0) {
   const int SC=0x20000;
   static SmallStationaryContextMap scm1(SC), scm2(SC),
     scm3(SC), scm4(SC), scm5(SC), scm6(SC), scm7(SC), scm8(SC), scm9(SC*2), scm10(512);
-  static ContextMap cm(MEM()*4, 15+18);
+  static ContextMap cm(MEM()*4, 15+21);
   static int color = -1, stride = 3;
-  static int ctx, padding, lastPos, x = 0;
+  static int ctx, padding, lastPos, x = 0, columns=0;
 
   // Select nearby pixels as context
   if (!bpos) {
@@ -1756,6 +1757,7 @@ void im24bitModel(Mixer& m, int w, int alpha) {
       stride = 3+alpha;
       padding = w%stride;
       x = 0;
+      columns = max(1,w/max(1,ilog2(w)*3));
     }
     lastPos = pos;
     x*=(++x)<w;
@@ -1764,33 +1766,36 @@ void im24bitModel(Mixer& m, int w, int alpha) {
     else
       color=(padding)*(stride+1);
 
-    int i=color<<5;
+    int i=color<<5, column=x/columns;
 
-    int WWW=buf(3*stride), WW=buf(2*stride), W=buf(stride), NW=buf(w+stride), N=buf(w), NE=buf(w-stride), NEE=buf(w-2*stride), NNWW=buf((w+stride)*2), NNW=buf(w*2+stride), NN=buf(w*2), NNE=buf(w*2-stride), NNEE=buf((w-stride)*2), NNN=buf(w*3);
+    int WWW=buf(3*stride), WW=buf(2*stride), W=buf(stride), NWW=buf(w+2*stride), NW=buf(w+stride), N=buf(w), NE=buf(w-stride), NEE=buf(w-2*stride), NNWW=buf((w+stride)*2), NNW=buf(w*2+stride), NN=buf(w*2), NNE=buf(w*2-stride), NNEE=buf((w-stride)*2), NNN=buf(w*3);
     int mean=W+NW+N+NE;
     const int var=(W*W+NW*NW+N*N+NE*NE-mean*mean/4)>>2;
     mean>>=2;
     const int logvar=ilog(var);
 
     ctx = (min(color,stride-1)<<9)|((abs(W-N)>8)<<8)|((W>N)<<7)|((W>NW)<<6)|((abs(N-NW)>8)<<5)|((N>NW)<<4)|((abs(N-NE)>8)<<3)|((N>NE)<<2)|((W>WW)<<1)|(N>NN);
-    cm.set(hash( (N+1)>>1, LogMeanDiffQt(N,Clip(NN*2-NNN)) ));
-    cm.set(hash( (W+1)>>1, LogMeanDiffQt(W,Clip(WW*2-WWW)) ));
-    cm.set(hash( Clamp4(W+N-NW,W,NW,N,NE), LogMeanDiffQt(Clip(N+NE-NNE), Clip(N+NW-NNW))));
-    cm.set(hash( (NNN+N+4)/8, Clip(N*3-NN*3+NNN)>>1 ));
-    cm.set(hash( (WWW+W+4)/8, Clip(W*3-WW*3+WWW)>>1 ));
-    cm.set(hash(++i, (W+Clip(NE*3-NNE*3+buf(w*3-stride)))/4 ));
-    cm.set(hash(++i, Clip((-buf(4*stride)+5*WWW-10*WW+10*W+Clamp4(NE*4-NNE*6+buf(w*3-stride)*4-buf(w*4-stride),N,NE,buf(w-2*stride),buf(w-3*stride)))/5)/4 ));
-    cm.set( Clip(NEE+N-NNEE) );
-    cm.set( Clip(NN+W-NNW) );
+    cm.set(hash((N+1)>>1, LogMeanDiffQt(N,Clip(NN*2-NNN))));
+    cm.set(hash((W+1)>>1, LogMeanDiffQt(W,Clip(WW*2-WWW))));
+    cm.set(hash(Clamp4(W+N-NW,W,NW,N,NE), LogMeanDiffQt(Clip(N+NE-NNE), Clip(N+NW-NNW))));
+    cm.set(hash((NNN+N+4)/8, Clip(N*3-NN*3+NNN)>>1 ));
+    cm.set(hash((WWW+W+4)/8, Clip(W*3-WW*3+WWW)>>1 ));
+    cm.set(hash(++i, (W+Clip(NE*3-NNE*3+buf(w*3-stride)))/4, LogMeanDiffQt(N,(NW+NE)/2)));
+    cm.set(hash(++i, Clip((-buf(4*stride)+5*WWW-10*WW+10*W+Clamp4(NE*4-NNE*6+buf(w*3-stride)*4-buf(w*4-stride),N,NE,buf(w-2*stride),buf(w-3*stride)))/5)/4));
+    cm.set(hash(Clip(NEE+N-NNEE), LogMeanDiffQt(W,Clip(NW+NE-NNE))));
+    cm.set(hash(Clip(NN+W-NNW), LogMeanDiffQt(W,Clip(NNW+WW-NNWW))));
     cm.set(hash(++i, buf(1)));
     cm.set(hash(++i, buf(2)));
-    cm.set(hash(++i, Clip(W+N-NW)/2, Clip(W+buf(1)-buf(stride+1))/2 ));
+    cm.set(hash(++i, Clip(W+N-NW)/2, Clip(W+buf(1)-buf(stride+1))/2));
     cm.set(hash(Clip(N*2-NN)/2, LogMeanDiffQt(N,Clip(NN*2-NNN))));
     cm.set(hash(Clip(W*2-WW)/2, LogMeanDiffQt(W,Clip(WW*2-WWW))));
-    cm.set( Clamp4(N*3-NN*3+NNN,W,NW,N,NE)/2 );
-    cm.set( Clamp4(W*3-WW*3+WWW,W,N,NE,NEE)/2 );
-    cm.set(hash(++i, LogMeanDiffQt(W,buf(stride+1)), Clamp4((buf(1)*W)/max(1,buf(stride+1)),W,N,NE,NEE) ));
-    cm.set(hash(++i, Clamp4(N+buf(2)-buf(w+2),W,NW,N,NE) ));
+    cm.set(Clamp4(N*3-NN*3+NNN,W,NW,N,NE)/2);
+    cm.set(Clamp4(W*3-WW*3+WWW,W,N,NE,NEE)/2);
+    cm.set(hash(++i, LogMeanDiffQt(W,buf(stride+1)), Clamp4((buf(1)*W)/max(1,buf(stride+1)),W,N,NE,NEE)));
+    cm.set(hash(++i, Clamp4(N+buf(2)-buf(w+2),W,NW,N,NE)));
+    cm.set(hash(++i, Clip(W+N-NW), column));
+    cm.set(hash(++i, Clip(N*2-NN), LogMeanDiffQt(W,Clip(NW*2-NNW))));
+    cm.set(hash(++i, Clip(W*2-WW), LogMeanDiffQt(N,Clip(NW*2-NWW))));
 
     cm.set(hash(++i, W));
     cm.set(hash(++i, W, buf(1)));
@@ -1874,7 +1879,6 @@ int imgModel(Mixer& m, ModelStats *Stats = NULL) {
   static int eoi=0;
   static BMPImage BMP;
   static TGAImage TGA;
-  static U32 tiff=0;
   static int alpha=0, gray=0, pltorder=0;
 
   if (!bpos){
@@ -1972,34 +1976,6 @@ int imgModel(Mixer& m, ModelStats *Stats = NULL) {
       }
     }
   }
-
-  if (!bpos) {
-    if (c4==0x49492a00) tiff=pos;
-    if (pos-tiff==4 && c4!=0x08000000) tiff=0;
-    if (tiff && pos-tiff==200) {
-      int dirsize=i2(pos-tiff-4);
-      w=0;
-      int nSamples=0, compression=0, width=0, height=0;
-      for (int i=tiff+6; i<pos-12 && --dirsize>0; i+=12) {
-        int tag=i2(pos-i);
-        int tagfmt=i2(pos-i-2);
-        int taglen=i4(pos-i-4);
-        int tagval=i4(pos-i-8);
-        if ((tagfmt==3||tagfmt==4) && taglen==1) {
-          if (tag==256) width=tagval;
-          if (tag==257) height=tagval;
-          if (tag==259) compression=tagval;
-          if (tag==277) nSamples=tagval;
-        }
-      }
-      if (width>0 && height>0 && width*height>50 && compression==1
-          && (nSamples==1||nSamples==3))
-        bpp=nSamples<<3, w=width*nSamples, eoi=tiff+w*height;
-      if (eoi>pos) {}
-      else
-        tiff=w=0;
-    }
-  }
   if (pos>eoi) return w=0;
   if (w){
     switch (bpp){
@@ -2011,7 +1987,7 @@ int imgModel(Mixer& m, ModelStats *Stats = NULL) {
   }
   if (bpos==7 && (pos+1)==eoi){
     memset(&TGA, 0, sizeof(TGAImage));
-    BMP.Header=gray=tiff=alpha=0;
+    BMP.Header=gray=alpha=0;
   }
 
   return w;
@@ -2060,7 +2036,7 @@ inline int X2(int i) {
 void wavModel(Mixer& m, int info, ModelStats *Stats = NULL) {
   static int pr[3][2], n[2], counter[2];
   static double F[49][49][2],L[49][49];
-  static int blpos=0, lastPos=0;
+  static int rpos=0, lastPos=0;
   int j,k,l,i=0;
   long double sum;
   const double a=0.996,a2=1/a;
@@ -2071,11 +2047,11 @@ void wavModel(Mixer& m, int info, ModelStats *Stats = NULL) {
   static int z1, z2, z3, z4, z5, z6, z7;
 
   if (!bpos){
-    blpos=(pos==lastPos+1)?blpos+1:0;
+    rpos=(pos==lastPos+1)?rpos+1:0;
     lastPos = pos;
   }
-
-  if (!bpos && !blpos) {
+  
+  if (!bpos && !rpos) {
     bits=((info%4)/2)*8+8;
     channels=info%2+1;
     col=0;
@@ -2090,8 +2066,8 @@ void wavModel(Mixer& m, int info, ModelStats *Stats = NULL) {
     }
   }
   // Select previous samples and predicted sample as context
-  if (!bpos && blpos>=w) {
-    ch=blpos%w;
+  if (!bpos && rpos>=w) {
+    ch=rpos%w;
     const int msb=ch%(bits>>3);
     const int chn=ch/(bits>>3);
     if (!msb) {
@@ -2256,7 +2232,7 @@ int audioModel(Mixer& m, ModelStats *Stats = NULL) {
   
   if (pos>(int)eoi)
     return info=0;
-  
+
   if (info)
     wavModel(m, info-1, Stats);
   
@@ -4333,25 +4309,41 @@ int contextModel2() {
   static RunContextMap rcm7(MEM()), rcm9(MEM()), rcm10(MEM());
   static Mixer m(NUM_INPUTS, 10800+1024*4, NUM_SETS, 32);
   static U32 cxt[16];
+  static Filetype ft2,filetype=DEFAULT;
+  static int size=0;  // bytes remaining in block
+  static int info=0;  // image width or audio type
   static ModelStats stats;
+
+  // Parse filetype and size
+  if (bpos==0) {
+    --size;
+    ++blpos;
+    if (size==-1) ft2=(Filetype)buf(1);
+		if (size==-5 && !hasInfo(ft2)) {
+			size=buf(4)<<24|buf(3)<<16|buf(2)<<8|buf(1);
+      blpos=0;
+    }
+    if (size==-9) {
+			size=buf(8)<<24|buf(7)<<16|buf(6)<<8|buf(5);
+      info=buf(4)<<24|buf(3)<<16|buf(2)<<8|buf(1);
+      blpos=0;
+    }
+    if (!blpos) filetype=ft2;
+    if (size==0) filetype=DEFAULT;
+  }
 
   m.update();
   m.add(64);
 
-  int isjpeg=jpegModel(m);
   int ismatch=ilog(matchModel(m));
-  int isimg=imgModel(m, &stats);
-  int isaudio=audioModel(m, &stats);
-
-  if (isjpeg) {
+  if (filetype==IMAGE1) im1bitModel(m, info);
+  if (filetype==IMAGE4) return im4bitModel(m, info), m.p();
+  if (filetype==IMAGE8) return im8bitModel(m, info), m.p();
+  if (filetype==IMAGE8GRAY) return im8bitModel(m, info, 1), m.p();
+  if (filetype==IMAGE24) return im24bitModel(m, info), m.p();
+  if (filetype==IMAGE32) return im24bitModel(m, info, 1), m.p();
+  if ((filetype!=EXE && jpegModel(m)) || (size>0 && imgModel(m, &stats)) || audioModel(m, &stats))
     return m.p();
-  }
-  else if (isimg>0) {
-    return m.p();
-  }
-  else if (isaudio){
-    return m.p();
-  }
 
   if (bpos==0) {
     for (int i=15; i>0; --i)
@@ -4424,25 +4416,24 @@ void Predictor::update() {
 
   c0+=c0+y;
   if (c0>=256) {
-    ++blpos;
      buf[pos++]=c0;
- c0-=256;
- c4=(c4<<8)+c0;
-        int i=WRT_mpw[c0>>4];
-  w4=w4*4+i;
-  if (b2==3) i=2;
-  w5=w5*4+i;
-  b3=b2;
-        b2=c0;
+     c0-=256;
+     c4=(c4<<8)+c0;
+     int i=WRT_mpw[c0>>4];
+     w4=w4*4+i;
+     if (b2==3) i=2;
+     w5=w5*4+i;
+     b3=b2;
+     b2=c0;
      x4=x4*256+c0,x5=(x5<<8)+c0;
      if(c0=='.' || c0=='!' || c0=='?' || c0=='/'|| c0==')') {
-   w5=(w5<<8)|0x3ff,f4=(f4&0xfffffff0)+2,x5=(x5<<8)+c0,x4=x4*256+c0;
-            if(c0!='!') w4|=12, tt=(tt&0xfffffff8)+1,b3='.';
-  }
-  if (c0==32) --c0;
-  tt=tt*8+WRT_mtt[c0>>4];
-  f4=f4*16+(c0>>4);
- c0=1;
+       w5=(w5<<8)|0x3ff,f4=(f4&0xfffffff0)+2,x5=(x5<<8)+c0,x4=x4*256+c0;
+       if(c0!='!') w4|=12, tt=(tt&0xfffffff8)+1,b3='.';
+     }
+     if (c0==32) --c0;
+     tt=tt*8+WRT_mtt[c0>>4];
+     f4=f4*16+(c0>>4);
+     c0=1;
   }
   bpos=(bpos+1)&7;
 
@@ -4455,9 +4446,9 @@ void Predictor::update() {
   int pr3=a3.p(pr0, c0^(hash(buf(1), buf(2), buf(3))&0xffff));
   pr0=(pr0+pr1+pr2+pr3+2)>>2;
 
-      pr1=a4.p(pr, c0+256*buf(1));
-      pr2=a5.p(pr, c0^(hash(buf(1), buf(2))&0xffff));
-      pr3=a6.p(pr, c0^(hash(buf(1), buf(2), buf(3))&0xffff));
+  pr1=a4.p(pr, c0+256*buf(1));
+  pr2=a5.p(pr, c0^(hash(buf(1), buf(2))&0xffff));
+  pr3=a6.p(pr, c0^(hash(buf(1), buf(2), buf(3))&0xffff));
   pr=(pr+pr1+pr2+pr3+2)>>2;
 
   pr=(pr+pr0+1)>>1;
