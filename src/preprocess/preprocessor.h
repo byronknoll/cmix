@@ -7,7 +7,7 @@
 
 typedef enum {DEFAULT, HDR, JPEG, EXE, TEXT, IMAGE1, IMAGE4, IMAGE8, IMAGE8GRAY, IMAGE24, IMAGE32} Filetype;
 
-inline bool hasInfo(Filetype ft) { return ft==IMAGE1 || ft==IMAGE4 || ft==IMAGE8 || ft==IMAGE8GRAY || ft==IMAGE24 || ft==IMAGE32; }
+inline bool hasInfo(Filetype ft) { return ft==TEXT || ft==IMAGE1 || ft==IMAGE4 || ft==IMAGE8 || ft==IMAGE8GRAY || ft==IMAGE24 || ft==IMAGE32; }
 
 namespace preprocessor {
 
