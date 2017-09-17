@@ -767,7 +767,9 @@ public:
     *cp = (Prediction<<10)|Count;
     B+=(y && B>1);
     cp=&Data[Context+B];
-    m.add(stretch((((*cp)>>10)+512)>>10)/2);
+    Prediction = (((*cp)>>10)+512)>>10;
+    m.add(stretch(Prediction)/4);
+    m.add((Prediction-2048)/4);
     bCount<<=1; B<<=1;
     if (bCount==Mask){
       bCount=1;
@@ -1621,9 +1623,9 @@ void im4bitModel(Mixer& m, int w) {
 }
 
 void im8bitModel(Mixer& m, int w, int gray = 0) {
-  const int nMaps = 14;
+  const int nMaps = 15;
   static ContextMap cm(MEM()*4, 43);
-  static StationaryMap Map[nMaps] = { {12,8}, {8,8}, {8,8}, {8,8}, {8,8}, {8,8}, {8,8}, {8,8}, {8,8}, {8,8}, {8,8}, {8,8}, {8,8}, {0,8} };
+  static StationaryMap Map[nMaps] = { {12,8}, {8,8}, {8,8}, {8,8}, {8,8}, {8,8}, {8,8}, {8,8}, {8,8}, {8,8}, {8,8}, {8,8}, {8,8}, {8,8}, {0,8} };
   static U8 WWW, WW, W, NWW, NW, N, NE, NEE, NNWW, NNW, NN, NNE, NNEE, NNN; //pixel neighborhood
   static U8 res;
   static int ctx, lastPos=0, col=0, x=0, columns=0, column=0;
@@ -1728,6 +1730,7 @@ void im8bitModel(Mixer& m, int w, int gray = 0) {
       Map[10].set(Clip(N*3-NN*3+NNN));
       Map[11].set(Clip(W*3-WW*3+WWW));
       Map[12].set((W+Clip(NE*3-NNE*3+buf(w*3-1)))/2);
+      Map[13].set((W+Clip(NEE*3-buf(w*2-3)*3+buf(w*3-4)))/2);
 
       ctx = min(0x1F,x/max(1,w/min(32,columns)))|( ( ((abs(W-N)*16>W+N)<<1)|(abs(N-NW)>8) )<<5 )|((W+N)&0x180);
       res = Clamp4(W+N-NW,W,NW,N,NE);
@@ -1751,11 +1754,11 @@ void im8bitModel(Mixer& m, int w, int gray = 0) {
 
 void im24bitModel(Mixer& m, int w, int alpha=0) {
   const int SC=0x20000;
-  const int nMaps = 10;
+  const int nMaps = 14;
   static SmallStationaryContextMap scm1(SC), scm2(SC),
     scm3(SC), scm4(SC), scm5(SC), scm6(SC), scm7(SC), scm8(SC), scm9(SC*2), scm10(512);
   static ContextMap cm(MEM()*4, 15+23);
-  static StationaryMap Map[nMaps] = { {12,8}, {12,8}, {12,8}, {8,8}, {8,8}, {8,8}, {8,8}, {8,8}, {8,8}, {0,8} };
+  static StationaryMap Map[nMaps] = { {12,8}, {12,8}, {12,8}, {12,8}, {10,8}, {8,8}, {8,8}, {8,8}, {8,8}, {8,8}, {8,8}, {8,8}, {8,8}, {0,8} };
   static U8 WWW, WW, W, NWW, NW, N, NE, NEE, NNWW, NNW, NN, NNE, NNEE, NNN; //pixel neighborhood
   static int color = -1, stride = 3;
   static int ctx, padding, lastPos, x = 0, column=0, columns=0;
@@ -1837,12 +1840,16 @@ void im24bitModel(Mixer& m, int w, int alpha=0) {
     Map[0].set( ((U8)Clip(W+N-NW))|(LogMeanDiffQt(Clip(N+NE-NNE),Clip(N+NW-NNW))<<8) );
     Map[1].set( ((U8)Clip(N*2-NN))|(LogMeanDiffQt(W,Clip(NW*2-NNW))<<8) );
     Map[2].set( ((U8)Clip(W*2-WW))|(LogMeanDiffQt(N,Clip(NW*2-NWW))<<8) );
-    Map[3].set((W+Clamp4(NE*3-NNE*3+buf(w*3-stride),W,N,NE,NEE))/2);
-    Map[4].set( Clip((-buf(4*stride)+5*WWW-10*WW+10*W+Clamp4(NE*4-NNE*6+buf(w*3-stride)*4-buf(w*4-stride),N,NE,buf(w-2*stride),buf(w-3*stride)))/5));
-    Map[5].set(Clip(W+N-NW));
-    Map[6].set(buf(1));
-    Map[7].set((W+NEE)/2);
-    Map[8].set(Clip(N*3-NN*3+NNN));
+    Map[3].set( ((U8)Clip(W+N-NW))|(LogMeanDiffQt(buf(1),Clip(buf(stride+1)+buf(w+1)-buf(w+stride+1)))<<8) );
+    Map[4].set( (min(color,stride-1)<<8)|Clip(N+buf(1)-buf(w+1)) );
+    Map[5].set( Clip((-buf(4*stride)+5*WWW-10*WW+10*W+Clamp4(NE*4-NNE*6+buf(w*3-stride)*4-buf(w*4-stride),N,NE,buf(w-2*stride),buf(w-3*stride)))/5));
+    Map[6].set((W+Clamp4(NE*3-NNE*3+buf(w*3-stride),W,N,NE,NEE))/2);
+    Map[7].set(Clip(W+N-NW));
+    Map[8].set(buf(1));
+    Map[9].set((W+NEE)/2);
+    Map[10].set(Clip(N*3-NN*3+NNN));
+    Map[11].set(Clip(N+NW-NNW));
+    Map[12].set(Clip(N+NE-NNE));
   }
 
   // Predict next bit
@@ -2963,23 +2970,23 @@ int jpegModel(Mixer& m) {
   int p;
  switch(hbcount)
   {
-   case 0: for (int i=0; i<N; ++i){ cp[i]=t[cxt[i]]+1, m1.add(p=stretch(sm[i].p(*cp[i]))); m.add(p>>2);} break;
-   case 1: { int hc=1+(huffcode&1)*3; for (int i=0; i<N; ++i){ cp[i]+=hc, m1.add(p=stretch(sm[i].p(*cp[i]))); m.add(p>>2); }} break;
-   default: { int hc=1+(huffcode&1); for (int i=0; i<N; ++i){ cp[i]+=hc, m1.add(p=stretch(sm[i].p(*cp[i]))); m.add(p>>2); }} break;
+   case 0: for (int i=0; i<N; ++i){ cp[i]=t[cxt[i]]+1, m1.add(p=stretch(sm[i].p(*cp[i]))); m.add(p);} break;
+   case 1: { int hc=1+(huffcode&1)*3; for (int i=0; i<N; ++i){ cp[i]+=hc, m1.add(p=stretch(sm[i].p(*cp[i]))); m.add(p); }} break;
+   default: { int hc=1+(huffcode&1); for (int i=0; i<N; ++i){ cp[i]+=hc, m1.add(p=stretch(sm[i].p(*cp[i]))); m.add(p); }} break;
   }
 
   m1.set(firstcol, 2);
   m1.set(coef+256*min(3,huffbits), 1024);
   m1.set((hc&0x1FE)*2+min(3,ilog2(zu+zv)), 1024);
   int pr=m1.p();
-  m.add(stretch(pr)>>2);
-  m.add((pr>>4)-(255-((pr>>4))));
+  m.add(stretch(pr));
+  m.add(pr-2048);
   pr=a1.p(pr, (hc&511)|(((adv_pred[1]/16)&63)<<9), 1023);
-  m.add(stretch(pr)>>2);
-  m.add((pr>>4)-(255-((pr>>4))));
+  m.add(stretch(pr));
+  m.add(pr-2048);
   pr=a2.p(pr, (hc&511)|(coef<<9), 1023);
-  m.add(stretch(pr)>>2);
-  m.add((pr>>4)-(255-((pr>>4))));
+  m.add(stretch(pr));
+  m.add(pr-2048);
   m.set(1 + (zu+zv<5)+(huffbits>8)*2+firstcol*4, 9);
   m.set(1 + (hc&0xFF) + 256*min(3,(zu+zv)/3), 1025);
   m.set(coef+256*min(3,huffbits/2), 1024);
@@ -2998,6 +3005,7 @@ int jpegModel(Mixer& m) {
   Changelog:
   (18/08/2017) v98: Initial release by Márcio Pais
   (19/08/2017) v99: Bug fixes, tables for instruction categorization, other small improvements
+  (29/08/2017) v102: Added variable context dependent on parsing break point
 */
 
 // formats
