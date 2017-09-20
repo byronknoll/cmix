@@ -49,7 +49,11 @@ bool IsAscii(int byte) {
 +    (((x) & 0x0000ff00) <<  8) | \
 +    (((x) & 0x000000ff) << 24))
 
-int bmp_info;
+#define IMG_DET_NOHDR(type,start_pos,width,height) return detd=(width)*(height),info=(width),fseek(in, start+(start_pos), SEEK_SET),(type)
+
+#define IMG_DET(type,start_pos,header_len,width,height) return dett=(type),deth=(header_len),detd=(width)*(height),info=(width),fseek(in, start+(start_pos), SEEK_SET),HDR
+
+int info;
 
 Filetype detect(FILE* in, int n, Filetype type) {
   U32 buf1=0, buf0=0;
@@ -73,9 +77,9 @@ Filetype detect(FILE* in, int n, Filetype type) {
   // For BMP detection
   uint64_t bmp=0;
   int imgbpp=0,bmpx=0,bmpy=0,bmpof=0;
-  static int deth=0,detd=0;
-  if (deth >1) return fseek(in, start+deth, SEEK_SET),deth=0,BMP;
-  else if (deth ==-1) return fseek(in, start, SEEK_SET),deth=0,BMP;
+  static int deth=0,detd=0;  // detected header/data size in bytes
+  static Filetype dett;  // detected block type
+  if (deth) return fseek(in, start+deth, SEEK_SET),deth=0,dett;
   else if (detd) return fseek(in, start+detd, SEEK_SET),detd=0,DEFAULT;
   // For TGA detection
   uint64_t tga=0;
@@ -165,7 +169,7 @@ Filetype detect(FILE* in, int n, Filetype type) {
         if (imgbpp!=0 && buf0==0 && bmpx>1) {
           if (imgbpp==24) {
             int width = ((bmpx*3)+3)&-4;
-            return deth=int(bmpof),detd=int(width*bmpy),bmp_info=int(width),fseek(in, start+(bmp-1), SEEK_SET),DEFAULT;
+            IMG_DET(IMAGE24, (bmp-1), bmpof, width, bmpy);
           }
         }
         bmp=0;
@@ -181,8 +185,49 @@ Filetype detect(FILE* in, int n, Filetype type) {
       }
       else if ((i-tga)==10){
         if (tga && (buf0&0xFFDF)==0x1800)
-          return deth=18+tgaid,detd=tgaw*tgah*3,bmp_info=tgaw*3,fseek(in, start+(tga-7), SEEK_SET),tga=0,DEFAULT;
+          IMG_DET(IMAGE24, (tga-7), 18+tgaid, tgaw*3, tgah);
       }
+    }
+    
+    // Detect .tiff image
+    if (buf1==0x49492a00 && n>i+(int)bswap(buf0)) {
+      long savedpos=ftell(in);
+      fseek(in, start+i+bswap(buf0)-7, SEEK_SET);
+
+      // read directory
+      int dirsize=getc(in);
+      int tifx=0,tify=0,tifz=0,tifzb=0,tifc=0,tifofs=0,tifofval=0,b[12];
+      if (getc(in)==0) {
+        for (int i=0; i<dirsize; i++) {
+          for (int j=0; j<12; j++) b[j]=getc(in);
+          if (b[11]==EOF) break;
+          int tag=b[0]+(b[1]<<8);
+          int tagfmt=b[2]+(b[3]<<8);
+          int taglen=b[4]+(b[5]<<8)+(b[6]<<16)+(b[7]<<24);
+          int tagval=b[8]+(b[9]<<8)+(b[10]<<16)+(b[11]<<24);
+          if (tagfmt==3||tagfmt==4) {
+            if (tag==256) tifx=tagval;
+            else if (tag==257) tify=tagval;
+            else if (tag==258) tifzb=taglen==1?tagval:8; // bits per component
+            else if (tag==259) tifc=tagval; // 1 = no compression
+            else if (tag==273 && tagfmt==4) tifofs=tagval,tifofval=(taglen<=1);
+            else if (tag==277) tifz=tagval; // components per pixel
+          }
+        }
+      }
+      if (tifx && tify && tifzb && (tifz==1 || tifz==3) && (tifc==1) && (tifofs && tifofs+i<n)) {
+        if (!tifofval) {
+          fseek(in, start+i+tifofs-7, SEEK_SET);
+          for (int j=0; j<4; j++) b[j]=getc(in);
+          tifofs=b[0]+(b[1]<<8)+(b[2]<<16)+(b[3]<<24);
+        }
+        if (tifofs && tifofs<(1<<18) && tifofs+i<n) {
+          if (tifz==1 && tifzb==1) IMG_DET_NOHDR(IMAGE1,(i-7)+tifofs,((tifx-1)>>3)+1,tify);
+          else if (tifz==1 && tifzb==8) IMG_DET_NOHDR(IMAGE8, (i-7)+tifofs, tifx, tify);
+          else if (tifz==3 && tifzb==8) IMG_DET_NOHDR(IMAGE24, (i-7)+tifofs, tifx*3, tify);
+        }
+      }
+      fseek(in, savedpos, SEEK_SET);
     }
   }
   return type;
@@ -218,13 +263,14 @@ void encode_bmp(FILE* in, FILE* out, int len, int width) {
   }
 }
 
-int decode_bmp(FILE *in) {
+int decode_bmp(FILE *in, int &reset) {
   static int width = 0;
-  if (width == 0) {
+  if (width == 0 || reset) {
     width=getc(in)<<24;
     width|=getc(in)<<16;
     width|=getc(in)<<8;
     width|=getc(in);
+    reset=0;
   }
 
   static int r,g,b;
@@ -426,7 +472,7 @@ void encode(FILE* in, FILE* out, int n, string temp_path, FILE* dictionary) {
   double text_fraction = text_bytes;
   text_fraction /= n;
   if (text_fraction > 0.95) {
-    fprintf(out, "%c%c%c%c%c", TEXT, n>>24, n>>16, n>>8, n);    
+    fprintf(out, "%c%c%c%c%c", TEXT, n>>24, n>>16, n>>8, n);
     encode_text(in, out, n, temp_path, dictionary);
     return;
   }
@@ -439,11 +485,15 @@ void encode(FILE* in, FILE* out, int n, string temp_path, FILE* dictionary) {
     if (len>0) {
       fprintf(out, "%c%c%c%c%c", type, len>>24, len>>16, len>>8, len);
       switch(type) {
-        case JPEG: encode_jpeg(in, out, len); break;
-        case BMP:  encode_bmp(in, out, len, bmp_info); break;
-        case EXE:  encode_exe(in, out, len, begin); break;
-        case TEXT: encode_text(in, out, len, temp_path, dictionary); break;
-        default:   encode_default(in, out, len); break;
+        case JPEG:    encode_jpeg(in, out, len); break;
+        case IMAGE24: encode_bmp(in, out, len, info); break;
+        case EXE:     encode_exe(in, out, len, begin); break;
+        case TEXT:    encode_text(in, out, len, temp_path, dictionary); break;
+        default: {
+          if (hasInfo(type))
+            fprintf(out, "%c%c%c%c", info>>24, info>>16, info>>8, info); // write info
+          encode_default(in, out, len); break;
+        }
       }
     }
     n-=len;
@@ -459,10 +509,11 @@ void no_preprocess(FILE* in, FILE* out, int n) {
 
 int decode2(FILE* in, string temp_path, FILE* dictionary) {
   static Filetype type=DEFAULT;
-  static int len=0;
+  static int len=0, reset=0;
   while (len==0) {
     int c = getc(in);
     if (c == EOF) return -1;
+    reset=1;
     type=(Filetype)c;
     len=getc(in)<<24;
     len|=getc(in)<<16;
@@ -473,11 +524,17 @@ int decode2(FILE* in, string temp_path, FILE* dictionary) {
   }
   --len;
   switch (type) {
-    case JPEG: return decode_jpeg(in);
-    case BMP:  return decode_bmp(in);
-    case EXE:  return decode_exe(in);
-    case TEXT: return decode_text(in, dictionary);
-    default:   return decode_default(in);
+    case JPEG:    return decode_jpeg(in);
+    case IMAGE24: return decode_bmp(in, reset);
+    case EXE:     return decode_exe(in);
+    case TEXT:    return decode_text(in, dictionary);
+    default: {
+      if (reset && hasInfo(type)){
+        for (int i=info=0;i<4;i++) info=(info<<8)|getc(in); //read info
+        reset=0;
+      }
+      return decode_default(in);
+    }
   }
 }
 
