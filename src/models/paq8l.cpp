@@ -756,7 +756,7 @@ public:
     Context = (ctx*Mask)&(Data.size()-Mask);
   }
   void Reset( int Rate = 0 ){
-    for (int i=0; i<Data.size(); ++i)
+    for (unsigned int i=0; i<Data.size(); ++i)
       Data[i]=(0x7FF<<20)|min(0x3FF,Rate);
   }
   void mix(Mixer& m) {
@@ -1627,7 +1627,6 @@ void im8bitModel(Mixer& m, int w, int gray = 0) {
   static ContextMap cm(MEM()*4, 43);
   static StationaryMap Map[nMaps] = { {12,8}, {8,8}, {8,8}, {8,8}, {8,8}, {8,8}, {8,8}, {8,8}, {8,8}, {8,8}, {8,8}, {8,8}, {8,8}, {8,8}, {0,8} };
   static U8 WWW, WW, W, NWW, NW, N, NE, NEE, NNWW, NNW, NN, NNE, NNEE, NNN; //pixel neighborhood
-  static U8 res;
   static int ctx, lastPos=0, col=0, x=0, columns=0, column=0;
   // Select nearby pixels as context
   if (!bpos) {
@@ -1688,7 +1687,6 @@ void im8bitModel(Mixer& m, int w, int gray = 0) {
       cm.set(++i);
 
       ctx = min(0x1F,(x-1)/min(0x20,columns));
-      res = W;
     }
     else{
       cm.set(hash(++i, N));
@@ -1733,7 +1731,6 @@ void im8bitModel(Mixer& m, int w, int gray = 0) {
       Map[13].set((W+Clip(NEE*3-buf(w*2-3)*3+buf(w*3-4)))/2);
 
       ctx = min(0x1F,x/max(1,w/min(32,columns)))|( ( ((abs(W-N)*16>W+N)<<1)|(abs(N-NW)>8) )<<5 )|((W+N)&0x180);
-      res = Clamp4(W+N-NW,W,NW,N,NE);
     }
   }
   
