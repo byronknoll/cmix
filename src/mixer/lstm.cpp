@@ -48,8 +48,8 @@ std::valarray<float>& Lstm::Perceive(unsigned int input) {
             hidden_error_[j] += output_layer_[epoch][i][j + offset] * error;
           }
         }
-        hidden_error_ = layers_[layer]->BackwardPass(layer_input_[epoch][layer],
-            hidden_error_, epoch);
+        layers_[layer]->BackwardPass(layer_input_[epoch][layer], epoch, layer,
+            &hidden_error_);
       }
     }
   }
@@ -71,13 +71,12 @@ std::valarray<float>& Lstm::Predict(unsigned int input) {
     auto start = begin(hidden_) + i * num_cells_;
     std::copy(start, start + num_cells_, begin(layer_input_[epoch_][i]) +
         output_size_ + input_size_);
-    const auto& hidden = layers_[i]->ForwardPass(layer_input_[epoch_][i],
-        input);
-    std::copy(begin(hidden), end(hidden), start);
+    layers_[i]->ForwardPass(layer_input_[epoch_][i], input, &hidden_,
+        i * num_cells_);
     if (i < layers_.size() - 1) {
-      start = begin(layer_input_[epoch_][i + 1]) + output_size_ + num_cells_ +
-          input_size_;
-      std::copy(begin(hidden), end(hidden), start);
+      auto start2 = begin(layer_input_[epoch_][i + 1]) + output_size_ +
+          num_cells_ + input_size_;
+      std::copy(start, start + num_cells_, start2);
     }
   }
   for (unsigned int i = 0; i < output_size_; ++i) {
