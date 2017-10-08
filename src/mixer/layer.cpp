@@ -29,7 +29,7 @@ Layer::Layer(unsigned int input_size, unsigned int auxiliary_input_size,
     output_size_(output_size) {
   float low = -0.2;
   float range = 0.4;
-  for (unsigned int i = 0; i < forget_gate_.size(); ++i) {
+  for (unsigned int i = 0; i < num_cells_; ++i) {
     for (unsigned int j = 0; j < forget_gate_[i].size(); ++j) {
       forget_gate_[i][j] = low + Rand() * range;
       input_node_[i][j] = low + Rand() * range;
@@ -40,38 +40,38 @@ Layer::Layer(unsigned int input_size, unsigned int auxiliary_input_size,
   }
 }
 
-void Layer::ForwardPass(const std::valarray<float>& input, unsigned int
-    previous_input, std::valarray<float>* hidden, int hidden_start) {
+void Layer::ForwardPass(const std::valarray<float>& input, int input_symbol,
+    std::valarray<float>* hidden, int hidden_start) {
   last_state_[epoch_] = state_;
-  for (unsigned int i = 0; i < state_.size(); ++i) {
+  for (unsigned int i = 0; i < num_cells_; ++i) {
     forget_gate_state_[epoch_][i] = Logistic(std::inner_product(
-        &input[output_size_], &input[input.size()],
-        &forget_gate_[i][output_size_], forget_gate_[i][previous_input]));
-    state_[i] *= forget_gate_state_[epoch_][i];
-    input_node_state_[epoch_][i] = tanh(std::inner_product(&input[output_size_],
+        &input[0], &input[input.size()],
+        &forget_gate_[i][output_size_], forget_gate_[i][input_symbol]));
+    input_node_state_[epoch_][i] = tanh(std::inner_product(&input[0],
         &input[input.size()], &input_node_[i][output_size_],
-        input_node_[i][previous_input]));
+        input_node_[i][input_symbol]));
     input_gate_state_[epoch_][i] = Logistic(std::inner_product(
-        &input[output_size_], &input[input.size()],
-        &input_gate_[i][output_size_], input_gate_[i][previous_input]));
-    state_[i] += input_node_state_[epoch_][i] * input_gate_state_[epoch_][i];
-    tanh_state_[epoch_][i] = tanh(state_[i]);
+        &input[0], &input[input.size()],
+        &input_gate_[i][output_size_], input_gate_[i][input_symbol]));
     output_gate_state_[epoch_][i] = Logistic(std::inner_product(
-        &input[output_size_], &input[input.size()],
-        &output_gate_[i][output_size_], output_gate_[i][previous_input]));
-    (*hidden)[i + hidden_start] = output_gate_state_[epoch_][i] *
-        tanh_state_[epoch_][i];
+        &input[0], &input[input.size()],
+        &output_gate_[i][output_size_], output_gate_[i][input_symbol]));
   }
+  state_ *= forget_gate_state_[epoch_];
+  state_ += input_node_state_[epoch_] * input_gate_state_[epoch_];
+  tanh_state_[epoch_] = tanh(state_);
+  std::slice slice = std::slice(hidden_start, num_cells_, 1);
+  (*hidden)[slice] = output_gate_state_[epoch_] * tanh_state_[epoch_];
   ++epoch_;
   if (epoch_ == horizon_) epoch_ = 0;
 }
 
 void Layer::BackwardPass(const std::valarray<float>&input, int epoch,
-    int layer, std::valarray<float>* hidden_error) {
+    int layer, int input_symbol, std::valarray<float>* hidden_error) {
   if (epoch == (int)horizon_ - 1) {
     stored_error_ = *hidden_error;
     state_error_ = 0;
-    for (unsigned int i = 0; i < input_node_.size(); ++i) {
+    for (unsigned int i = 0; i < num_cells_; ++i) {
       forget_gate_update_[i] = 0;
       input_node_update_[i] = 0;
       input_gate_update_[i] = 0;
@@ -95,8 +95,8 @@ void Layer::BackwardPass(const std::valarray<float>&input, int epoch,
   *hidden_error = 0;
   if (layer > 0) {
     int offset = output_size_ + num_cells_ + input_size_;
-    for (unsigned int i = 0; i < input_node_.size(); ++i) {
-      for (unsigned int j = offset; j < input.size() - 1; ++j) {
+    for (unsigned int i = 0; i < num_cells_; ++i) {
+      for (unsigned int j = offset; j < offset + num_cells_; ++j) {
         (*hidden_error)[j-offset] += input_node_[i][j] * input_node_error_[i];
         (*hidden_error)[j-offset] += input_gate_[i][j] * input_gate_error_[i];
         (*hidden_error)[j-offset] += forget_gate_[i][j] * forget_gate_error_[i];
@@ -108,8 +108,8 @@ void Layer::BackwardPass(const std::valarray<float>&input, int epoch,
   if (epoch > 0) {
     state_error_ *= forget_gate_state_[epoch];
     stored_error_ = 0;
-    for (unsigned int i = 0; i < input_node_.size(); ++i) {
-      int offset = output_size_ + input_size_;
+    int offset = output_size_ + input_size_;
+    for (unsigned int i = 0; i < num_cells_; ++i) {
       for (unsigned int j = offset; j < offset + num_cells_; ++j) {
         stored_error_[j-offset] += input_node_[i][j] * input_node_error_[i];
         stored_error_[j-offset] += input_gate_[i][j] * input_gate_error_[i];
@@ -119,14 +119,27 @@ void Layer::BackwardPass(const std::valarray<float>&input, int epoch,
     }
   }
 
-  for (unsigned int i = 0; i < input_node_.size(); ++i) {
-    forget_gate_update_[i] += (learning_rate_ * forget_gate_error_[i]) * input;
-    input_node_update_[i] += (learning_rate_ * input_node_error_[i]) * input;
-    input_gate_update_[i] += (learning_rate_ * input_gate_error_[i]) * input;
-    output_gate_update_[i] += (learning_rate_ * output_gate_error_[i]) * input;
+  std::slice slice = std::slice(output_size_, input.size(), 1);
+  for (unsigned int i = 0; i < num_cells_; ++i) {
+    forget_gate_update_[i][slice] += (learning_rate_ * forget_gate_error_[i]) *
+        input;
+    input_node_update_[i][slice] += (learning_rate_ * input_node_error_[i]) *
+        input;
+    input_gate_update_[i][slice] += (learning_rate_ * input_gate_error_[i]) *
+        input;
+    output_gate_update_[i][slice] += (learning_rate_ * output_gate_error_[i]) *
+        input;
+    forget_gate_update_[i][input_symbol] += learning_rate_ *
+        forget_gate_error_[i];
+    input_node_update_[i][input_symbol] += learning_rate_ *
+        input_node_error_[i];
+    input_gate_update_[i][input_symbol] += learning_rate_ *
+        input_gate_error_[i];
+    output_gate_update_[i][input_symbol] += learning_rate_ *
+        output_gate_error_[i];
   }
   if (epoch == 0) {
-    for (unsigned int i = 0; i < input_node_.size(); ++i) {
+    for (unsigned int i = 0; i < num_cells_; ++i) {
         forget_gate_[i] += forget_gate_update_[i];
         input_node_[i] += input_node_update_[i];
         input_gate_[i] += input_gate_update_[i];
