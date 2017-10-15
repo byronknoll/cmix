@@ -66,6 +66,13 @@ void Layer::ForwardPass(const std::valarray<float>& input, int input_symbol,
   if (epoch_ == horizon_) epoch_ = 0;
 }
 
+void ClipGradients(std::valarray<float>* arr) {
+  for (unsigned int i = 0; i < arr->size(); ++i) {
+    if ((*arr)[i] < -10) (*arr)[i] = -10;
+    else if ((*arr)[i] > 10) (*arr)[i] = 10;
+  }
+}
+
 void Layer::BackwardPass(const std::valarray<float>&input, int epoch,
     int layer, int input_symbol, std::valarray<float>* hidden_error) {
   if (epoch == (int)horizon_ - 1) {
@@ -118,6 +125,10 @@ void Layer::BackwardPass(const std::valarray<float>&input, int epoch,
       }
     }
   }
+
+  ClipGradients(&state_error_);
+  ClipGradients(&stored_error_);
+  ClipGradients(hidden_error);
 
   std::slice slice = std::slice(output_size_, input.size(), 1);
   for (unsigned int i = 0; i < num_cells_; ++i) {
