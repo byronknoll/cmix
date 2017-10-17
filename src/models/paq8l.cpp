@@ -470,7 +470,7 @@ void train(short *t, short *w, int n, int err) {
 }
 #endif
 
-#define NUM_INPUTS 1273
+#define NUM_INPUTS 1277
 #define NUM_SETS 12
 
 std::vector<float> model_predictions(NUM_INPUTS+NUM_SETS, 0.5);
@@ -1216,6 +1216,17 @@ void nestModel(Mixer& m)
   cm.mix(m);
 }
 
+inline U8 Clip(int Px){
+  return min(0xFF,max(0,Px));
+}
+inline U8 Clamp4( int Px, U8 n1, U8 n2, U8 n3, U8 n4){
+  return min( max(n1,max(n2,max(n3,n4))), max( min(n1,min(n2,min(n3,n4))), Px ));
+}
+
+inline U8 LogMeanDiffQt(U8 a, U8 b){
+  return (a!=b)?((a>b)<<3)|ilog2((a+b)/max(2,abs(a-b)*2)+1):0;
+}
+
 #define SPACE 0x20
 
 void recordModel(Mixer& m, ModelStats *Stats = NULL) {
@@ -1226,6 +1237,8 @@ void recordModel(Mixer& m, ModelStats *Stats = NULL) {
   static U8 padding = 0; // detected padding byte
   static int prevTransition = 0, col = 0, mxCtx = 0; // position of the last padding transition
   static ContextMap cm(32768, 3), cn(32768/2, 3), co(32768*2, 3), cp(MEM(), 6);
+  static StationaryMap Map8b(8,8), Map10b(10,8);
+  static bool MayBeImg24b = false;
 
   if (!bpos) {
     int w=c4&0xffff, c=w&255, d=w>>8;
@@ -1250,7 +1263,12 @@ void recordModel(Mixer& m, ModelStats *Stats = NULL) {
       for (int i=0; i < 2; i++) {
         if (rcount[i] > max(0,12-(int)ilog2(rlen[i+1]))){
           if (rlen[0] != rlen[i+1]){
-            if ( (rlen[i+1] > rlen[0]) && (rlen[i+1] % rlen[0] == 0) ){
+            if (MayBeImg24b && rlen[i+1]==3){
+              rcount[0]>>=1;
+              rcount[1]>>=1;
+              continue;
+            }
+            else if ( (rlen[i+1] > rlen[0]) && (rlen[i+1] % rlen[0] == 0) ){
               // maybe we found a multiple of the real record size..?
               // in that case, it is probably an immediate multiple (2x).
               // that is probably more likely the bigger the length, so
@@ -1263,6 +1281,7 @@ void recordModel(Mixer& m, ModelStats *Stats = NULL) {
             }
             rlen[0] = rlen[i+1];
             rcount[i] = 0;
+            MayBeImg24b = (rlen[0]>30 && (rlen[0]%3)==0);
           }
           else
             // we found the same length again, that's positive reinforcement that
@@ -1327,6 +1346,9 @@ void recordModel(Mixer& m, ModelStats *Stats = NULL) {
     cp.set( (last4&0xFF)|((last4&0xF000)>>4)|((last4&0xE00000)>>9)|((last4&0xE0000000)>>14)|((col/max(1,rlen[0]/16))<<18) );
     cp.set( (last4&0xF8F8)|(col<<16) );
 
+    Map8b.set( Clip(c+buf(rlen[0])-buf(rlen[0]+1)) );
+    Map10b.set( MayBeImg24b?Clip(((U8)c4>>16)+c-(c4>>24))|((col%3)<<8):Clip(c*2-d)|0x300);
+
     cpos4[c]=cpos3[c];
     cpos3[c]=cpos2[c];
     cpos2[c]=cpos1[c];
@@ -1339,6 +1361,8 @@ void recordModel(Mixer& m, ModelStats *Stats = NULL) {
   cn.mix(m);
   co.mix(m);
   cp.mix(m);
+  Map8b.mix(m);
+  Map10b.mix(m);
 
   m.set( (rlen[0]>2)*( (bpos<<7)|mxCtx ), 1024 );
   if (Stats)
@@ -1514,17 +1538,6 @@ inline int sqrbuf(int i) {
   return buf(i)*buf(i);
 }
 
-inline U8 Clip(int Px){
-  return min(0xFF,max(0,Px));
-}
-inline U8 Clamp4( int Px, U8 n1, U8 n2, U8 n3, U8 n4){
-  return min( max(n1,max(n2,max(n3,n4))), max( min(n1,min(n2,min(n3,n4))), Px ));
-}
-
-inline U8 LogMeanDiffQt(U8 a, U8 b){
-  return (a!=b)?((a>b)<<3)|ilog2((a+b)/max(2,abs(a-b)*2)+1):0;
-}
-
 void im1bitModel(Mixer& m, int w) {
   static U32 r0, r1, r2, r3;  // last 4 rows, bit 8 is over current pixel
   static Array<U8> t(0x23000);  // model: cxt -> state
@@ -1626,7 +1639,7 @@ void im4bitModel(Mixer& m, int w) {
 
 void im8bitModel(Mixer& m, int w, int gray = 0) {
   const int nMaps = 15;
-  static ContextMap cm(MEM()*4, 43);
+  static ContextMap cm(MEM()*4, 45);
   static StationaryMap Map[nMaps] = { {12,8}, {8,8}, {8,8}, {8,8}, {8,8}, {8,8}, {8,8}, {8,8}, {8,8}, {8,8}, {8,8}, {8,8}, {8,8}, {8,8}, {0,8} };
   static U8 WWW, WW, W, NWW, NW, N, NE, NEE, NNWW, NNW, NN, NNE, NNEE, NNN; //pixel neighborhood
   static int ctx, lastPos=0, col=0, x=0, columns=0, column=0;
@@ -1677,9 +1690,11 @@ void im8bitModel(Mixer& m, int w, int gray = 0) {
       cm.set(hash(++i, N, NNN));
       cm.set(hash(++i, W, WWW));
       cm.set(hash(++i, WW, NEE));
+      cm.set(hash(++i, WW, NN));
       cm.set(hash(++i, W, buf(w-3)));
       cm.set(hash(++i, W, buf(w-4)));
       cm.set(hash(++i, W, hash(N,NW)&0x7FF));
+      cm.set(hash(++i, N, hash(NN,NNN)&0x7FF));
       cm.set(hash(++i, W, hash(NW,N,NE)&0x7FF));
       cm.set(hash(++i, N, hash(NE,NN,NNE)&0x7FF));
       cm.set(hash(++i, N, hash(NW,NNW,NN)&0x7FF));
@@ -1753,11 +1768,11 @@ void im8bitModel(Mixer& m, int w, int gray = 0) {
 
 void im24bitModel(Mixer& m, int w, int alpha=0) {
   const int SC=0x20000;
-  const int nMaps = 20+1;
+  const int nMaps = 22+1;
   static SmallStationaryContextMap scm1(SC), scm2(SC),
     scm3(SC), scm4(SC), scm5(SC), scm6(SC), scm7(SC), scm8(SC), scm9(SC*2), scm10(512);
   static ContextMap cm(MEM()*4, 15+27);
-  static StationaryMap Map[nMaps] = { {12,8}, {12,8}, {12,8}, {12,8}, {10,8}, {8,8}, {8,8}, {8,8}, {8,8}, {8,8}, {8,8}, {8,8}, {8,8}, {8,8}, {8,8}, {8,8}, {8,8}, {8,8}, {8,8}, {8,8}, {0,8} };
+  static StationaryMap Map[nMaps] = { {12,8}, {12,8}, {12,8}, {12,8}, {10,8}, {8,8}, {8,8}, {8,8}, {8,8}, {8,8}, {8,8}, {8,8}, {8,8}, {8,8}, {8,8}, {8,8}, {8,8}, {8,8}, {8,8}, {8,8}, {8,8}, {8,8}, {0,8} };
   static U8 WWW, WW, W, NWW, NW, N, NE, NEE, NNWW, NNW, NN, NNE, NNEE, NNN; //pixel neighborhood
   static int color = -1, stride = 3;
   static int ctx, padding, lastPos, x = 0, column=0, columns=0;
@@ -1854,12 +1869,14 @@ void im24bitModel(Mixer& m, int w, int alpha=0) {
     Map[11].set( Clip(W+N-NW+buf(2)-Clip(buf(stride+2)+buf(w+2)-buf(w+stride+2))) );
     Map[12].set( Clip(N*2-NN + buf(1) - Clip(buf(w+1)*2-buf(w*2+1))) );
     Map[13].set( Clip(W*2-WW + buf(1) - Clip(buf(stride+1)*2-buf(stride*2+1))) );
-    Map[14].set(Clip(W+N-NW));
-    Map[15].set(buf(1));
-    Map[16].set((W+NEE)/2);
-    Map[17].set(Clip(N*3-NN*3+NNN));
-    Map[18].set(Clip(N+NW-NNW));
-    Map[19].set(Clip(N+NE-NNE));
+    Map[14].set( Clip(N+NN-NNN));
+    Map[15].set( Clip(W+WW-WWW));
+    Map[16].set(Clip(W+N-NW));
+    Map[17].set(buf(1));
+    Map[18].set((W+NEE)/2);
+    Map[19].set(Clip(N*3-NN*3+NNN));
+    Map[20].set(Clip(N+NW-NNW));
+    Map[21].set(Clip(N+NE-NNE));
   }
 
   // Predict next bit
