@@ -81,7 +81,7 @@ build/ppm.o: src/models/ppm.h src/models/ppm.cpp src/models/byte-model.h
 build/ppmd.o: src/models/ppmd.h src/models/ppmd.cpp src/models/byte-model.h
 	$(CC) $(CFLAGS) src/models/ppmd.cpp -o build/ppmd.o
 
-build/paq8l.o: src/models/paq8l.h src/models/paq8l.cpp src/models/model.h
+build/paq8l.o: src/models/paq8l.h src/models/paq8l.cpp src/models/model.h src/preprocess/preprocessor.h
 	$(CC) $(CFLAGS) src/models/paq8l.cpp -o build/paq8l.o
 
 build/paq8hp.o: src/models/paq8hp.h src/models/paq8hp.cpp src/models/model.h

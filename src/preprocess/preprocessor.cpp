@@ -449,7 +449,7 @@ int decode_text(FILE* in, FILE* dictionary) {
   return wrt_decoder->WRT_decode_char(wrt_temp, NULL, 0, dictionary);
 }
 
-void encode(FILE* in, FILE* out, int n, string temp_path, FILE* dictionary) {
+void Encode(FILE* in, FILE* out, int n, string temp_path, FILE* dictionary) {
   Filetype type=DEFAULT;
   long begin=ftell(in);
 
@@ -490,7 +490,7 @@ void encode(FILE* in, FILE* out, int n, string temp_path, FILE* dictionary) {
         case EXE:     encode_exe(in, out, len, begin); break;
         case TEXT:    encode_text(in, out, len, temp_path, dictionary); break;
         default: {
-          if (hasInfo(type))
+          if (HasInfo(type))
             fprintf(out, "%c%c%c%c", info>>24, info>>16, info>>8, info); // write info
           encode_default(in, out, len); break;
         }
@@ -502,7 +502,7 @@ void encode(FILE* in, FILE* out, int n, string temp_path, FILE* dictionary) {
   }
 }
 
-void no_preprocess(FILE* in, FILE* out, int n) {
+void NoPreprocess(FILE* in, FILE* out, int n) {
   fprintf(out, "%c%c%c%c%c", DEFAULT, n>>24, n>>16, n>>8, n);
   encode_default(in, out, n);
 }
@@ -529,7 +529,7 @@ int decode2(FILE* in, string temp_path, FILE* dictionary) {
     case EXE:     return decode_exe(in);
     case TEXT:    return decode_text(in, dictionary);
     default: {
-      if (reset && hasInfo(type)){
+      if (reset && HasInfo(type)){
         for (int i=info=0;i<4;i++) info=(info<<8)|getc(in); //read info
         reset=0;
       }
@@ -538,7 +538,7 @@ int decode2(FILE* in, string temp_path, FILE* dictionary) {
   }
 }
 
-void decode(FILE* in, FILE* out, string temp_path, FILE* dictionary) {
+void Decode(FILE* in, FILE* out, string temp_path, FILE* dictionary) {
   string path = temp_path + "2";
   while (true) {
     int result = decode2(in, path, dictionary);

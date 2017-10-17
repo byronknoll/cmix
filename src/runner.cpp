@@ -121,7 +121,7 @@ bool Store(const std::string& input_path, const std::string& temp_path,
   *input_bytes = ftell(data_in);
   fseek(data_in, 0L, SEEK_SET);
   WriteStorageHeader(data_out);
-  preprocessor::encode(data_in, data_out, *input_bytes, temp_path, dictionary);
+  preprocessor::Encode(data_in, data_out, *input_bytes, temp_path, dictionary);
   fseek(data_out, 0L, SEEK_END);
   *output_bytes = ftell(data_out);
   fclose(data_in);
@@ -143,10 +143,10 @@ bool RunCompression(bool enable_preprocess, const std::string& input_path,
   fseek(data_in, 0L, SEEK_SET);
 
   if (enable_preprocess) {
-    preprocessor::encode(data_in, temp_out, *input_bytes, temp_path,
+    preprocessor::Encode(data_in, temp_out, *input_bytes, temp_path,
         dictionary);
   } else {
-    preprocessor::no_preprocess(data_in, temp_out, *input_bytes);
+    preprocessor::NoPreprocess(data_in, temp_out, *input_bytes);
   }
   fclose(data_in);
   fclose(temp_out);
@@ -199,7 +199,7 @@ bool RunDecompression(bool enable_preprocess, const std::string& input_path,
     FILE* data_out = fopen(output_path.c_str(), "wb");
     if (!data_out) return false;
     fseek(in, 5L, SEEK_SET);
-    preprocessor::decode(in, data_out, temp_path, dictionary);
+    preprocessor::Decode(in, data_out, temp_path, dictionary);
     fseek(data_out, 0L, SEEK_END);
     *output_bytes = ftell(data_out);
     fclose(in);
@@ -220,7 +220,7 @@ bool RunDecompression(bool enable_preprocess, const std::string& input_path,
   FILE* data_out = fopen(output_path.c_str(), "wb");
   if (!data_out) return false;
 
-  preprocessor::decode(temp_in, data_out, temp_path, dictionary);
+  preprocessor::Decode(temp_in, data_out, temp_path, dictionary);
   fseek(data_out, 0L, SEEK_END);
   *output_bytes = ftell(data_out);
   fclose(temp_in);

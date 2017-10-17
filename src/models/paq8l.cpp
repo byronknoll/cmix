@@ -58,6 +58,8 @@ inline int min(int a, int b) {return a<b?a:b;}
 inline int max(int a, int b) {return a<b?b:a;}
 #endif
 
+using preprocessor::Filetype;
+
 void quit(const char* message=0) {}
 
 template <class T, int ALIGN=0> class Array {
@@ -4350,7 +4352,7 @@ int contextModel2() {
   static RunContextMap rcm7(MEM()), rcm9(MEM()), rcm10(MEM());
   static Mixer m(NUM_INPUTS, 10800+1024*4, NUM_SETS, 32);
   static U32 cxt[16];
-  static Filetype ft2,filetype=DEFAULT;
+  static Filetype ft2,filetype=preprocessor::DEFAULT;
   static int size=0;  // bytes remaining in block
   static int info=0;  // image width or audio type
   static ModelStats stats;
@@ -4360,7 +4362,7 @@ int contextModel2() {
     --size;
     ++blpos;
     if (size==-1) info=0, ft2=(Filetype)buf(1);
-		if (size==-5 && !hasInfo(ft2)) {
+		if (size==-5 && !preprocessor::HasInfo(ft2)) {
 			size=buf(4)<<24|buf(3)<<16|buf(2)<<8|buf(1);
       blpos=0;
     }
@@ -4368,23 +4370,23 @@ int contextModel2() {
 			size=buf(8)<<24|buf(7)<<16|buf(6)<<8|buf(5);
       info=buf(4)<<24|buf(3)<<16|buf(2)<<8|buf(1);
       blpos=0;
-      if (ft2==TEXT && info) size = info-8;
+      if (ft2==preprocessor::TEXT && info) size = info-8;
     }
     if (!blpos) filetype=ft2;
-    if (size==0) filetype=DEFAULT;
+    if (size==0) filetype=preprocessor::DEFAULT;
   }
 
   m.update();
   m.add(64);
 
   int ismatch=ilog(matchModel(m));
-  if (filetype==IMAGE1) return im1bitModel(m, info), m.p();
-  if (filetype==IMAGE4) return im4bitModel(m, info), m.p();
-  if (filetype==IMAGE8) return im8bitModel(m, info), m.p();
-  if (filetype==IMAGE8GRAY) return im8bitModel(m, info, 1), m.p();
-  if (filetype==IMAGE24) return im24bitModel(m, info), m.p();
-  if (filetype==IMAGE32) return im24bitModel(m, info, 1), m.p();
-  if ((filetype!=EXE && jpegModel(m)) || (size>0 && imgModel(m, &stats)) || audioModel(m, &stats))
+  if (filetype==preprocessor::IMAGE1) return im1bitModel(m, info), m.p();
+  if (filetype==preprocessor::IMAGE4) return im4bitModel(m, info), m.p();
+  if (filetype==preprocessor::IMAGE8) return im8bitModel(m, info), m.p();
+  if (filetype==preprocessor::IMAGE8GRAY) return im8bitModel(m, info, 1), m.p();
+  if (filetype==preprocessor::IMAGE24) return im24bitModel(m, info), m.p();
+  if (filetype==preprocessor::IMAGE32) return im24bitModel(m, info, 1), m.p();
+  if ((filetype!=preprocessor::EXE && jpegModel(m)) || (size>0 && imgModel(m, &stats)) || audioModel(m, &stats))
     return m.p();
 
   if (bpos==0) {
