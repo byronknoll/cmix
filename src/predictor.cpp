@@ -296,7 +296,7 @@ void Predictor::AddMixers() {
   for (unsigned int i = 0; i < vocab_.size(); ++i) {
     if (vocab_[i]) ++vocab_size;
   }
-  byte_mixer_.reset(new ByteMixer(byte_models_.size(), 200, 2, 40, 0.03,
+  byte_mixer_.reset(new ByteMixer(byte_models_.size(), 200, 2, 60, 0.05,
       manager_.bit_context_, vocab_, vocab_size));
   auxiliary_.push_back(models_.size() + byte_models_.size());
 
