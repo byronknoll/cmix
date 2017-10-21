@@ -1,17 +1,23 @@
-cmix version 13
+cmix version 14
 http://www.byronknoll.com/cmix.html
-Released by Byron Knoll on April 24, 2017.
+Released by Byron Knoll on October 20, 2017.
 cmix is free software distributed under the GNU General Public License.
 
 In Linux or OS X, use "make" to compile cmix using g++. In Windows, cmix can be compiled with MinGW (http://nuwen.net/mingw.html) or Cygwin (https://www.cygwin.com).
 
-When running cmix, it is usually recommended to enable preprocessing with "dictionary/english.dic". For most (but not all) files this will improve compression rate.
+When running cmix, it is usually recommended to enable preprocessing with "dictionary/english.dic".
 
 cmix can only compress/decompress single files. To compress multiple files or directories, create an archive file using "tar" (or some similar tool).
 
 For some files, preprocessing using "precomp" may improve compression: https://github.com/schnaader/precomp-cpp
 
-Compiling with "-Ofast -march=native" will have the fastest performance, but this can also cause compression results to vary slightly between different computers (due to floating-point precision issues). Compile with "-O3" to fix compatibility between computers.
+Compiling with "-Ofast" will have the fastest performance, but might lead to incompatibility between different computers (due to floating-point precision differences). Compile with "-O3" to fix compatibility issues.
+
+Changes from version 13 to version 14:
+- LSTM performance optimizations and tuning
+- Improved image/audio models from Márcio Pais
+- Disabled pretraining
+- New dictionary (from phda)
 
 Changes from version 12 to version 13:
 - Improved LSTM and SSE
