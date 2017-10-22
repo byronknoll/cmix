@@ -470,8 +470,8 @@ void train(short *t, short *w, int n, int err) {
 }
 #endif
 
-#define NUM_INPUTS 1277
-#define NUM_SETS 12
+#define NUM_INPUTS 1283
+#define NUM_SETS 13
 
 std::vector<float> model_predictions(NUM_INPUTS+NUM_SETS, 0.5);
 unsigned int prediction_index = 0;
@@ -1235,8 +1235,8 @@ void recordModel(Mixer& m, ModelStats *Stats = NULL) {
   static int rlen[3] = {2,3,4}; // run length and 2 candidates
   static int rcount[2] = {0,0}; // candidate counts
   static U8 padding = 0; // detected padding byte
-  static int prevTransition = 0, col = 0, mxCtx = 0; // position of the last padding transition
-  static ContextMap cm(32768, 3), cn(32768/2, 3), co(32768*2, 3), cp(MEM(), 6);
+  static int prevTransition = 0, nTransition = 0, col = 0, mxCtx = 0; // position of the last padding transition
+  static ContextMap cm(32768, 3), cn(32768/2, 3), co(32768*2, 3), cp(MEM(), 7);
   static StationaryMap Map8b(8,8), Map10b(10,8);
   static bool MayBeImg24b = false;
 
@@ -1282,6 +1282,7 @@ void recordModel(Mixer& m, ModelStats *Stats = NULL) {
             rlen[0] = rlen[i+1];
             rcount[i] = 0;
             MayBeImg24b = (rlen[0]>30 && (rlen[0]%3)==0);
+            nTransition = 0;
           }
           else
             // we found the same length again, that's positive reinforcement that
@@ -1313,6 +1314,8 @@ void recordModel(Mixer& m, ModelStats *Stats = NULL) {
     co.set(buf(1)<<8|buf(rlen[0]));
 
     col=pos%rlen[0];
+    if (!col)
+      nTransition = 0;
     cp.set(rlen[0]|buf(rlen[0])<<10|col<<18);
     cp.set(rlen[0]|buf(1)<<10|col<<18);
     cp.set(col|rlen[0]<<12);
@@ -1336,11 +1339,17 @@ void recordModel(Mixer& m, ModelStats *Stats = NULL) {
     anyway
     */
 
-    if ((((U16)(c4>>8) == ((SPACE<<8)+SPACE)) && (c != SPACE)) || (!(c4>>8) && c && ((padding != SPACE) || (pos-prevTransition > rlen[0])))){
+    if ((((c4>>8) == SPACE*0x010101) && (c != SPACE)) || (!(c4>>8) && c && ((padding != SPACE) || (pos-prevTransition > rlen[0])))){
       prevTransition = pos;
+      nTransition+=(nTransition<31);
       padding = (U8)d;
     }
-    cp.set( (rlen[0]>8)*hash( min(min(0xFF,rlen[0]),pos-prevTransition), min(0x3FF,col), (w&0xF0F0)|(w==((padding<<8)|padding)) ) );
+    if (rlen[0]>8){
+      cp.set( hash( min(min(0xFF,rlen[0]),pos-prevTransition), min(0x3FF,col), (w&0xF0F0)|(w==((padding<<8)|padding)), nTransition ) );
+      cp.set( hash( w, (buf(rlen[0]+1)==padding && buf(rlen[0])==padding), col/max(1,rlen[0]/32) ) );
+    }
+    else
+      cp.set(0), cp.set(0);
 
     int last4 = (buf(rlen[0]*4)<<24)|(buf(rlen[0]*3)<<16)|(buf(rlen[0]*2)<<8)|buf(rlen[0]);
     cp.set( (last4&0xFF)|((last4&0xF000)>>4)|((last4&0xE00000)>>9)|((last4&0xE0000000)>>14)|((col/max(1,rlen[0]/16))<<18) );
@@ -1365,6 +1374,7 @@ void recordModel(Mixer& m, ModelStats *Stats = NULL) {
   Map10b.mix(m);
 
   m.set( (rlen[0]>2)*( (bpos<<7)|mxCtx ), 1024 );
+  m.set( ((buf(rlen[0])^((U8)(c0<<(8-bpos))))>>4)|(min(0x1F,col/max(1,rlen[0]/32))<<4), 512 );
   if (Stats)
     (*Stats).Record = (min(0xFFFF,rlen[0])<<16)|min(0xFFFF,col);
 }
@@ -3033,6 +3043,7 @@ int jpegModel(Mixer& m) {
   (18/08/2017) v98: Initial release by Márcio Pais
   (19/08/2017) v99: Bug fixes, tables for instruction categorization, other small improvements
   (29/08/2017) v102: Added variable context dependent on parsing break point
+  (22/10/2017) v116: Fixed a bug in function ProcessMode (missing break, thank you Mauro Vezzosi)
 */
 
 // formats
@@ -3622,6 +3633,7 @@ void ProcessMode(Instruction &Op, ExeState &State){
           Op.Data|=(3<<TypeShift);
         }
         Op.BytesRead = 0;
+        break;
       }
       default: State = Start; /*no immediate*/
     }
@@ -4075,8 +4087,8 @@ void dmcModel(Mixer& m) {
   const int n1=t[curr].c1;
   const int n0=t[curr].c0;
   const int pr2=(n1+5)*4096/(n0+n1+10);
-  m.add(stretch(pr1));
-  m.add(stretch(pr2));
+  m.add(stretch(pr1)/4);
+  m.add(stretch(pr2)/4);
 }
 
 /*
@@ -4367,7 +4379,7 @@ U32 last_prediction = 2048;
 int contextModel2() {
   static ContextMap cm(MEM()*31, 9);
   static RunContextMap rcm7(MEM()), rcm9(MEM()), rcm10(MEM());
-  static Mixer m(NUM_INPUTS, 10800+1024*4, NUM_SETS, 32);
+  static Mixer m(NUM_INPUTS, 10800+1024*4+512, NUM_SETS, 32);
   static U32 cxt[16];
   static Filetype ft2,filetype=preprocessor::DEFAULT;
   static int size=0;  // bytes remaining in block
