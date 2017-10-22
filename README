@@ -15,7 +15,7 @@ Compiling with "-Ofast" will have the fastest performance, but might lead to inc
 
 Changes from version 13 to version 14:
 - LSTM performance optimizations and tuning
-- Improved image/audio models from Márcio Pais
+- Changes from Márcio Pais: improved preprocessing and many PAQ8 model improvements
 - Disabled pretraining
 - New dictionary (from phda)
 
