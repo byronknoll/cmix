@@ -2,6 +2,7 @@
 #define PREPROCESSOR_H
 
 #include <stdio.h>
+#include <string>
 
 namespace preprocessor {
 
