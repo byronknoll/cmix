@@ -1,8 +1,6 @@
 #ifndef PREPROCESSOR_H
 #define PREPROCESSOR_H
 
-#include "../predictor.h"
-
 #include <stdio.h>
 
 namespace preprocessor {
