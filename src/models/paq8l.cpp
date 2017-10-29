@@ -769,7 +769,7 @@ public:
     *cp = (Prediction<<10)|Count;
     B+=(y && B>1);
     cp=&Data[Context+B];
-    Prediction = (((*cp)>>10)+512)>>10;
+    Prediction = (*cp)>>20;
     m.add(stretch(Prediction)/4);
     m.add((Prediction-2048)/4);
     bCount<<=1; B<<=1;
@@ -1778,11 +1778,11 @@ void im8bitModel(Mixer& m, int w, int gray = 0) {
 
 void im24bitModel(Mixer& m, int w, int alpha=0) {
   const int SC=0x20000;
-  const int nMaps = 22+1;
+  const int nMaps = 30;
   static SmallStationaryContextMap scm1(SC), scm2(SC),
     scm3(SC), scm4(SC), scm5(SC), scm6(SC), scm7(SC), scm8(SC), scm9(SC*2), scm10(512);
-  static ContextMap cm(MEM()*4, 15+27);
-  static StationaryMap Map[nMaps] = { {12,8}, {12,8}, {12,8}, {12,8}, {10,8}, {8,8}, {8,8}, {8,8}, {8,8}, {8,8}, {8,8}, {8,8}, {8,8}, {8,8}, {8,8}, {8,8}, {8,8}, {8,8}, {8,8}, {8,8}, {8,8}, {8,8}, {0,8} };
+  static ContextMap cm(MEM()*4, 15+31);
+  static StationaryMap Map[nMaps] = { {12,8}, {12,8}, {12,8}, {12,8}, {10,8}, {8,8}, {8,8}, {8,8}, {8,8}, {8,8}, {8,8}, {8,8}, {8,8}, {8,8}, {8,8}, {8,8}, {8,8}, {8,8}, {8,8}, {8,8}, {8,8}, {8,8}, {8,8}, {8,8}, {8,8}, {8,8}, {8,8}, {8,8}, {8,8}, {0,8} };
   static U8 WWW, WW, W, NWW, NW, N, NE, NEE, NNWW, NNW, NN, NNE, NNEE, NNN; //pixel neighborhood
   static int color = -1, stride = 3;
   static int ctx, padding, lastPos, x = 0, column=0, columns=0;
@@ -1839,7 +1839,11 @@ void im24bitModel(Mixer& m, int w, int alpha=0) {
     cm.set(hash( N, NN&0x1F, NNN&0x1F ));
     cm.set(hash( W, WW&0x1F, WWW&0x1F ));
     cm.set(hash(++i, N, column ));
-    
+    cm.set(hash(++i, Clip(W+NEE-NE), LogMeanDiffQt(W,Clip(WW+NE-N))));
+    cm.set(hash( NN, buf(w*4)&0x1F, buf(w*6)&0x1F, column ));
+    cm.set(hash( WW, buf(stride*4)&0x1F, buf(stride*6)&0x1F, column ));
+    cm.set(hash( NNN, buf(w*6)&0x1F, buf(w*9)&0x1F, column ));
+
     cm.set(hash(++i, W, LogMeanDiffQt(W,WW)));
     cm.set(hash(++i, W, buf(1)));
     cm.set(hash(++i, W/4, LogMeanDiffQt(W,buf(1)), LogMeanDiffQt(W,buf(2)) ));
@@ -1881,12 +1885,19 @@ void im24bitModel(Mixer& m, int w, int alpha=0) {
     Map[13].set( Clip(W*2-WW + buf(1) - Clip(buf(stride+1)*2-buf(stride*2+1))) );
     Map[14].set( Clip(N+NN-NNN));
     Map[15].set( Clip(W+WW-WWW));
-    Map[16].set(Clip(W+N-NW));
-    Map[17].set(buf(1));
-    Map[18].set((W+NEE)/2);
-    Map[19].set(Clip(N*3-NN*3+NNN));
-    Map[20].set(Clip(N+NW-NNW));
-    Map[21].set(Clip(N+NE-NNE));
+    Map[16].set(Clip(W+NEE-NE));
+    Map[17].set(Clip(NN+W-NNW));
+    Map[18].set(Clip(NN+NW-buf(w*3+stride)));
+    Map[19].set(Clip(NN+NE-buf(w*3-stride)));
+    Map[20].set(Clip(NN+buf(w*4)-buf(w*6)));
+    Map[21].set(Clip(WW+buf(stride*4)-buf(stride*6)));
+    Map[22].set(Clip(WW+NEE-N+buf(1)-Clip(buf(stride*2+1)+buf(w-stride*2+1)-buf(w+1))));
+    Map[23].set(Clip(W+N-NW));
+    Map[24].set(buf(1));
+    Map[25].set((W+NEE)/2);
+    Map[26].set(Clip(N*3-NN*3+NNN));
+    Map[27].set(Clip(N+NW-NNW));
+    Map[28].set(Clip(N+NE-NNE));
   }
 
   // Predict next bit
@@ -3921,7 +3932,7 @@ bool exeModel(Mixer& m, bool Forced = false, ModelStats *Stats = NULL) {
     if (Valid || Forced){
       int mask=0, count0=0;
       for (int i=0, j=0; i<N1; ++i){
-        if (i) mask=mask*2+(buf(i-1)==0), count0+=mask&1;
+        if (i>1) mask=mask*2+(buf(i-1)==0), count0+=mask&1;
         j=(i<4)?i+1:5+(i-4)*(2+(i>6));
         cm.set(hash(execxt(j, buf(1)*(j>6)), ((1<<N1)|mask)*(count0*N1/2>=i), (0x08|(blpos&0x07))*(i<4)));
       }
