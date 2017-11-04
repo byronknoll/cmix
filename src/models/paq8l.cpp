@@ -976,7 +976,7 @@ void wordModel(Mixer& m) {
     static int w=0;
 
     if (bpos==0) {
-        int c=c4&255,pC=(U8)c4>>8,f=0;
+        int c=c4&255,pC=(U8)(c4>>8),f=0;
         if (spaces&0x80000000) --spacecount;
         if (words&0x80000000) --wordcount;
         spaces=spaces*2;
@@ -1026,7 +1026,7 @@ void wordModel(Mixer& m) {
                 wordlen1=wordlen;
                  wpos[w]=blpos;
                 if (c==':'|| c=='=') cword0=word0;
-                if (c==']'&& (frstchar!=':' || frstchar!='*')) xword0=word0;
+                if (c==']'&& (frstchar==':' || frstchar=='*')) xword0=word0;
                 ccword=0;
                 word0=wordlen=0;
                 if((c=='.'||c=='!'||c=='?' ||c=='}' ||c==')') && buf(2)!=10) f=1;
@@ -1237,7 +1237,7 @@ void recordModel(Mixer& m, ModelStats *Stats = NULL) {
   static U8 padding = 0; // detected padding byte
   static int prevTransition = 0, nTransition = 0, col = 0, mxCtx = 0; // position of the last padding transition
   static ContextMap cm(32768, 3), cn(32768/2, 3), co(32768*2, 3), cp(MEM(), 7);
-  static StationaryMap Map8b(8,8), Map10b(10,8);
+  static StationaryMap Map0(10,8), Map1(10,8);
   static bool MayBeImg24b = false;
 
   if (!bpos) {
@@ -1355,8 +1355,12 @@ void recordModel(Mixer& m, ModelStats *Stats = NULL) {
     cp.set( (last4&0xFF)|((last4&0xF000)>>4)|((last4&0xE00000)>>9)|((last4&0xE0000000)>>14)|((col/max(1,rlen[0]/16))<<18) );
     cp.set( (last4&0xF8F8)|(col<<16) );
 
-    Map8b.set( Clip(c+buf(rlen[0])-buf(rlen[0]+1)) );
-    Map10b.set( MayBeImg24b?Clip(((U8)c4>>16)+c-(c4>>24))|((col%3)<<8):Clip(c*2-d)|0x300);
+    int i=0x300;
+    if (MayBeImg24b)
+      i = (col%3)<<8, Map0.set(Clip(((U8)(c4>>16))+c-(c4>>24))|i);
+    else
+      Map0.set(Clip(c*2-d)|i);
+    Map1.set(Clip(c+buf(rlen[0])-buf(rlen[0]+1))|i);
 
     cpos4[c]=cpos3[c];
     cpos3[c]=cpos2[c];
@@ -1370,8 +1374,8 @@ void recordModel(Mixer& m, ModelStats *Stats = NULL) {
   cn.mix(m);
   co.mix(m);
   cp.mix(m);
-  Map8b.mix(m);
-  Map10b.mix(m);
+  Map0.mix(m);
+  Map1.mix(m);
 
   m.set( (rlen[0]>2)*( (bpos<<7)|mxCtx ), 1024 );
   m.set( ((buf(rlen[0])^((U8)(c0<<(8-bpos))))>>4)|(min(0x1F,col/max(1,rlen[0]/32))<<4), 512 );
@@ -1648,33 +1652,36 @@ void im4bitModel(Mixer& m, int w) {
 }
 
 void im8bitModel(Mixer& m, int w, int gray = 0) {
-  const int nMaps = 15;
-  static ContextMap cm(MEM()*4, 45);
-  static StationaryMap Map[nMaps] = { {12,8}, {8,8}, {8,8}, {8,8}, {8,8}, {8,8}, {8,8}, {8,8}, {8,8}, {8,8}, {8,8}, {8,8}, {8,8}, {8,8}, {0,8} };
+  const int nMaps = 20;
+  static ContextMap cm(MEM()*4, 48);
+  static StationaryMap Map[nMaps] = { {12,8}, {8,8}, {8,8}, {8,8}, {8,8}, {8,8}, {8,8}, {8,8}, {8,8}, {8,8}, {8,8}, {8,8}, {8,8}, {8,8}, {8,8}, {8,8}, {8,8}, {8,8}, {8,8}, {0,8} };
   static U8 WWW, WW, W, NWW, NW, N, NE, NEE, NNWW, NNW, NN, NNE, NNEE, NNN; //pixel neighborhood
-  static int ctx, lastPos=0, col=0, x=0, columns=0, column=0;
+  static int ctx, lastPos=0, col=0, x=0;
+  static int columns[2] = {1,1}, column[2];
   // Select nearby pixels as context
   if (!bpos) {
     if (pos!=lastPos+1){
       x = 0;
-      columns = max(1,w/max(1,ilog2(w)*2));
+      columns[0] = max(1,w/max(1,ilog2(w)*2));
+      columns[1] = max(1,columns[0]/max(1,ilog2(columns[0])));
     }
     else
       x*=(++x)<w;
     lastPos = pos;
-    column=x/columns;
+    column[0]=x/columns[0];
+    column[1]=x/columns[1];
     int i=0;
     WWW=buf(3), WW=buf(2), W=buf(1), NWW=buf(w+2), NW=buf(w+1), N=buf(w), NE=buf(w-1), NEE=buf(w-2), NNW=buf(w*2+1), NN=buf(w*2), NNE=buf(w*2-1), NNN=buf(w*3);
     
     if (!gray){
       cm.set(hash(++i, W));
-      cm.set(hash(++i, W, column));
+      cm.set(hash(++i, W, column[0]));
       cm.set(hash(++i, N));
-      cm.set(hash(++i, N, column));
+      cm.set(hash(++i, N, column[0]));
       cm.set(hash(++i, NW));
-      cm.set(hash(++i, NW, column));
+      cm.set(hash(++i, NW, column[0]));
       cm.set(hash(++i, NE));
-      cm.set(hash(++i, NE, column));
+      cm.set(hash(++i, NE, column[0]));
       cm.set(hash(++i, NWW));
       cm.set(hash(++i, NEE));
       cm.set(hash(++i, WW));
@@ -1705,15 +1712,18 @@ void im8bitModel(Mixer& m, int w, int gray = 0) {
       cm.set(hash(++i, W, buf(w-4)));
       cm.set(hash(++i, W, hash(N,NW)&0x7FF));
       cm.set(hash(++i, N, hash(NN,NNN)&0x7FF));
+      cm.set(hash(++i, W, hash(NE,NEE)&0x7FF));
       cm.set(hash(++i, W, hash(NW,N,NE)&0x7FF));
       cm.set(hash(++i, N, hash(NE,NN,NNE)&0x7FF));
       cm.set(hash(++i, N, hash(NW,NNW,NN)&0x7FF));
       cm.set(hash(++i, W, hash(WW,NWW,NW)&0x7FF));
       cm.set(hash(++i, W, hash(NW,N)&0xFF, hash(WW,NWW)&0xFF));
-      cm.set(hash(++i, column));
+      cm.set(hash(++i, column[0]));
+      cm.set(hash(++i, N, column[1] ));
+      cm.set(hash(++i, W, column[1] ));
       cm.set(++i);
 
-      ctx = min(0x1F,(x-1)/min(0x20,columns));
+      ctx = min(0x1F,(x-1)/min(0x20,columns[0]));
     }
     else{
       cm.set(hash(++i, N));
@@ -1726,12 +1736,12 @@ void im8bitModel(Mixer& m, int w, int gray = 0) {
       cm.set(hash(++i, NW, NNWW));
       cm.set(hash(++i, W, NEE));
       cm.set(hash(++i, Clamp4(W+N-NW,W,NW,N,NE)/2, LogMeanDiffQt(Clip(N+NE-NNE), Clip(N+NW-NNW))));
-      cm.set(hash(++i, W/4, NE/4, column));
+      cm.set(hash(++i, W/4, NE/4, column[0]));
       cm.set(hash(++i, Clip(W*2-WW)/4, Clip(N*2-NN)/4));
-      cm.set(hash(++i, Clamp4(N+NE-NNE,W,N,NE,NEE)/4, column));
-      cm.set(hash(++i, Clamp4(N+NW-NNW,W,NW,N,NE)/4, column));
-      cm.set(hash(++i, (W+NEE)/4, column));
-      cm.set(hash(++i, Clip(W+N-NW), column));
+      cm.set(hash(++i, Clamp4(N+NE-NNE,W,N,NE,NEE)/4, column[0]));
+      cm.set(hash(++i, Clamp4(N+NW-NNW,W,NW,N,NE)/4, column[0]));
+      cm.set(hash(++i, (W+NEE)/4, column[0]));
+      cm.set(hash(++i, Clip(W+N-NW), column[0]));
       cm.set(hash(++i, Clamp4(N*3-NN*3+NNN,W,N,NN,NE), LogMeanDiffQt(W,Clip(NW*2-NNW))));
       cm.set(hash(++i, Clamp4(W*3-WW*3+WWW,W,N,NE,NEE), LogMeanDiffQt(N,Clip(NW*2-NWW))));
       cm.set(hash(++i, (W+Clamp4(NE*3-NNE*3+buf(w*3-1),W,N,NE,NEE))/2, LogMeanDiffQt(N,(NW+NE)/2)));
@@ -1756,8 +1766,13 @@ void im8bitModel(Mixer& m, int w, int gray = 0) {
       Map[11].set(Clip(W*3-WW*3+WWW));
       Map[12].set((W+Clip(NE*3-NNE*3+buf(w*3-1)))/2);
       Map[13].set((W+Clip(NEE*3-buf(w*2-3)*3+buf(w*3-4)))/2);
+      Map[14].set(Clip(NN+buf(w*4)-buf(w*6)));
+      Map[15].set(Clip(WW+buf(4)-buf(6)));
+      Map[16].set(Clip(N+NN-NNN));
+      Map[17].set(Clip(W+WW-WWW));
+      Map[18].set(Clip(W+NEE-NE));
 
-      ctx = min(0x1F,x/max(1,w/min(32,columns)))|( ( ((abs(W-N)*16>W+N)<<1)|(abs(N-NW)>8) )<<5 )|((W+N)&0x180);
+      ctx = min(0x1F,x/max(1,w/min(32,columns[0])))|( ( ((abs(W-N)*16>W+N)<<1)|(abs(N-NW)>8) )<<5 )|((W+N)&0x180);
     }
   }
   
@@ -1772,8 +1787,8 @@ void im8bitModel(Mixer& m, int w, int gray = 0) {
   m.set((buf(w)+buf(1))>>4, 32);
   m.set(c0, 256);
   m.set( ((abs((int)(W-N))>4)<<9)|((abs((int)(N-NE))>4)<<8)|((abs((int)(W-NW))>4)<<7)|((W>N)<<6)|((N>NE)<<5)|((W>NW)<<4)|((W>WW)<<3)|((N>NN)<<2)|((NW>NNWW)<<1)|(NE>NNEE), 1024 );
-  if (gray)
-    m.set(min(63,column), 64);
+  m.set(min(63,column[0]), 64);
+  m.set(min(127,column[1]), 128);
 }
 
 void im24bitModel(Mixer& m, int w, int alpha=0) {
@@ -1781,11 +1796,12 @@ void im24bitModel(Mixer& m, int w, int alpha=0) {
   const int nMaps = 30;
   static SmallStationaryContextMap scm1(SC), scm2(SC),
     scm3(SC), scm4(SC), scm5(SC), scm6(SC), scm7(SC), scm8(SC), scm9(SC*2), scm10(512);
-  static ContextMap cm(MEM()*4, 15+31);
+  static ContextMap cm(MEM()*4, 15+32);
   static StationaryMap Map[nMaps] = { {12,8}, {12,8}, {12,8}, {12,8}, {10,8}, {8,8}, {8,8}, {8,8}, {8,8}, {8,8}, {8,8}, {8,8}, {8,8}, {8,8}, {8,8}, {8,8}, {8,8}, {8,8}, {8,8}, {8,8}, {8,8}, {8,8}, {8,8}, {8,8}, {8,8}, {8,8}, {8,8}, {8,8}, {8,8}, {0,8} };
   static U8 WWW, WW, W, NWW, NW, N, NE, NEE, NNWW, NNW, NN, NNE, NNEE, NNN; //pixel neighborhood
   static int color = -1, stride = 3;
-  static int ctx, padding, lastPos, x = 0, column=0, columns=0;
+  static int ctx, padding, lastPos, x = 0;
+  static int columns[2] = {1,1}, column[2];
 
   // Select nearby pixels as context
   if (!bpos) {
@@ -1793,7 +1809,8 @@ void im24bitModel(Mixer& m, int w, int alpha=0) {
       stride = 3+alpha;
       padding = w%stride;
       x = 0;
-      columns = max(1,w/max(1,ilog2(w)*3));
+      columns[0] = max(1,w/max(1,ilog2(w)*3));
+      columns[1] = max(1,columns[0]/max(1,ilog2(columns[0])));
     }
     lastPos = pos;
     x*=(++x)<w;
@@ -1803,7 +1820,8 @@ void im24bitModel(Mixer& m, int w, int alpha=0) {
       color=(padding>0)*(stride+1);
 
     int i=color<<5;
-    column=x/columns;
+    column[0]=x/columns[0];
+    column[1]=x/columns[1];
 
     WWW=buf(3*stride), WW=buf(2*stride), W=buf(stride), NWW=buf(w+2*stride), NW=buf(w+stride), N=buf(w), NE=buf(w-stride), NEE=buf(w-2*stride), NNWW=buf((w+stride)*2), NNW=buf(w*2+stride), NN=buf(w*2), NNE=buf(w*2-stride), NNEE=buf((w-stride)*2), NNN=buf(w*3);
     int mean=W+NW+N+NE;
@@ -1830,7 +1848,7 @@ void im24bitModel(Mixer& m, int w, int alpha=0) {
     cm.set(Clamp4(W*3-WW*3+WWW,W,N,NE,NEE)/2);
     cm.set(hash(++i, LogMeanDiffQt(W,buf(stride+1)), Clamp4((buf(1)*W)/max(1,buf(stride+1)),W,N,NE,NEE)));
     cm.set(hash(++i, Clamp4(N+buf(2)-buf(w+2),W,NW,N,NE)));
-    cm.set(hash(++i, Clip(W+N-NW), column));
+    cm.set(hash(++i, Clip(W+N-NW), column[0]));
     cm.set(hash(++i, Clip(N*2-NN), LogMeanDiffQt(W,Clip(NW*2-NNW))));
     cm.set(hash(++i, Clip(W*2-WW), LogMeanDiffQt(N,Clip(NW*2-NWW))));
     cm.set(hash( (W+NEE)/2, LogMeanDiffQt(W,(WW+NE)/2) ));
@@ -1838,11 +1856,12 @@ void im24bitModel(Mixer& m, int w, int alpha=0) {
     cm.set(hash(++i, W, buf(2) ));
     cm.set(hash( N, NN&0x1F, NNN&0x1F ));
     cm.set(hash( W, WW&0x1F, WWW&0x1F ));
-    cm.set(hash(++i, N, column ));
+    cm.set(hash(++i, N, column[0] ));
     cm.set(hash(++i, Clip(W+NEE-NE), LogMeanDiffQt(W,Clip(WW+NE-N))));
-    cm.set(hash( NN, buf(w*4)&0x1F, buf(w*6)&0x1F, column ));
-    cm.set(hash( WW, buf(stride*4)&0x1F, buf(stride*6)&0x1F, column ));
-    cm.set(hash( NNN, buf(w*6)&0x1F, buf(w*9)&0x1F, column ));
+    cm.set(hash( NN, buf(w*4)&0x1F, buf(w*6)&0x1F, column[1] ));
+    cm.set(hash( WW, buf(stride*4)&0x1F, buf(stride*6)&0x1F, column[1] ));
+    cm.set(hash( NNN, buf(w*6)&0x1F, buf(w*9)&0x1F, column[1] ));
+    cm.set(hash(++i, column[1]));
 
     cm.set(hash(++i, W, LogMeanDiffQt(W,WW)));
     cm.set(hash(++i, W, buf(1)));
@@ -1917,7 +1936,8 @@ void im24bitModel(Mixer& m, int w, int alpha=0) {
   static int col=0;
   if (++col>=stride*8) col=0;
   m.set(0, 1);
-  m.set(min(63,column)+((ctx>>3)&0xC0), 256);  
+  m.set(min(63,column[0])+((ctx>>3)&0xC0), 256);
+  m.set(min(127,column[1])+((ctx>>2)&0x180), 512);
   m.set( ctx, 2048 );
   m.set(col, stride*8);
   m.set(x%stride, stride);
@@ -4390,7 +4410,7 @@ U32 last_prediction = 2048;
 int contextModel2() {
   static ContextMap cm(MEM()*31, 9);
   static RunContextMap rcm7(MEM()), rcm9(MEM()), rcm10(MEM());
-  static Mixer m(NUM_INPUTS, 10800+1024*4+512, NUM_SETS, 32);
+  static Mixer m(NUM_INPUTS, 10800+1024*5, NUM_SETS, 32);
   static U32 cxt[16];
   static Filetype ft2,filetype=preprocessor::DEFAULT;
   static int size=0;  // bytes remaining in block
