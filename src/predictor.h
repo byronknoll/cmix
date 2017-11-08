@@ -18,6 +18,7 @@ class Predictor {
   Predictor(const std::vector<bool>& vocab);
   float Predict();
   void Perceive(int bit);
+  void Pretrain(int bit);
 
  private:
   void PrintStats();

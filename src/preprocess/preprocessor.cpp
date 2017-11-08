@@ -55,6 +55,40 @@ bool IsAscii(int byte) {
 
 int info;
 
+void Pretrain(Predictor* p, FILE* dictionary) {
+  fseek(dictionary, 0L, SEEK_END);
+  unsigned int len = ftell(dictionary);
+  fseek(dictionary, 0L, SEEK_SET);
+
+  std::vector<unsigned char> header;
+  header.push_back(DEFAULT);
+  header.push_back(len>>24);
+  header.push_back(len>>16);
+  header.push_back(len>>8);
+  header.push_back(len);
+
+  for (unsigned int i = 0; i < header.size(); ++i) {
+    for (int j = 7; j >= 0; --j) {
+      p->Pretrain((header[i]>>j)&1);
+    }
+  }
+
+  unsigned int percent = 1 + (len / 100);
+  for (unsigned int i = 0; i < len; ++i) {
+    unsigned char c = getc(dictionary);
+    if (c == '\n') c = ' ';
+    if (i % percent == 0) {
+      printf("\rpretraining: %d%%", i / percent);
+      fflush(stdout);
+    }
+    for (int j = 7; j >= 0; --j) {
+      p->Pretrain((c>>j)&1);
+    }
+  }
+  printf("\r                 \r");
+  fflush(stdout);
+}
+
 Filetype detect(FILE* in, int n, Filetype type) {
   U32 buf1=0, buf0=0;
   long start=ftell(in);

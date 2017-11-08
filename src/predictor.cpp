@@ -464,3 +464,21 @@ void Predictor::Perceive(int bit) {
     manager_.bit_context_ = 1;
   }
 }
+
+void Predictor::Pretrain(int bit) {
+  for (unsigned int i = 0; i < models_.size(); ++i) {
+    models_[i]->Predict();
+  }
+  for (const auto& model : models_) {
+    model->Perceive(bit);
+  }
+  bool byte_update = false;
+  if (manager_.bit_context_ >= 128) byte_update = true;
+  manager_.Perceive(bit);
+  if (byte_update) {
+    for (const auto& model : models_) {
+      model->ByteUpdate();
+    }
+    manager_.bit_context_ = 1;
+  }
+}

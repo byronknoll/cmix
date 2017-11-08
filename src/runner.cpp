@@ -171,6 +171,7 @@ bool RunCompression(bool enable_preprocess, const std::string& input_path,
 
   WriteHeader(temp_bytes, vocab, &data_out);
   Predictor p(vocab);
+  if (enable_preprocess) preprocessor::Pretrain(&p, dictionary);
   Compress(temp_bytes, &temp_in, &data_out, output_bytes, &p);
   temp_in.close();
   data_out.close();
@@ -207,6 +208,7 @@ bool RunDecompression(bool enable_preprocess, const std::string& input_path,
     return true;
   }
   Predictor p(vocab);
+  if (enable_preprocess) preprocessor::Pretrain(&p, dictionary);
 
   std::ofstream temp_out(temp_path, std::ios::out | std::ios::binary);
   if (!temp_out.is_open()) return false;
