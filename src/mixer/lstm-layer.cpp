@@ -1,15 +1,15 @@
-#include "layer.h"
+#include "lstm-layer.h"
 
 #include <math.h>
 #include <algorithm>
 #include <numeric>
 
-Layer::Layer(unsigned int input_size, unsigned int auxiliary_input_size,
+LstmLayer::LstmLayer(unsigned int input_size, unsigned int auxiliary_input_size,
     unsigned int output_size, unsigned int num_cells, int horizon,
-    float learning_rate) : state_(num_cells), output_gate_error_(num_cells),
-    state_error_(num_cells), input_node_error_(num_cells),
-    input_gate_error_(num_cells), forget_gate_error_(num_cells),
-    stored_error_(num_cells),
+    float learning_rate, float gradient_clip) : state_(num_cells),
+    output_gate_error_(num_cells), state_error_(num_cells),
+    input_node_error_(num_cells), input_gate_error_(num_cells),
+    forget_gate_error_(num_cells), stored_error_(num_cells),
     tanh_state_(std::valarray<float>(num_cells), horizon),
     output_gate_state_(std::valarray<float>(num_cells), horizon),
     input_node_state_(std::valarray<float>(num_cells), horizon),
@@ -24,9 +24,9 @@ Layer::Layer(unsigned int input_size, unsigned int auxiliary_input_size,
     input_node_update_(std::valarray<float>(input_size), num_cells),
     input_gate_update_(std::valarray<float>(input_size), num_cells),
     output_gate_update_(std::valarray<float>(input_size), num_cells),
-    learning_rate_(learning_rate), num_cells_(num_cells), epoch_(0),
-    horizon_(horizon), input_size_(auxiliary_input_size),
-    output_size_(output_size) {
+    learning_rate_(learning_rate), gradient_clip_(gradient_clip),
+    num_cells_(num_cells), epoch_(0), horizon_(horizon),
+    input_size_(auxiliary_input_size), output_size_(output_size) {
   float low = -0.2;
   float range = 0.4;
   for (unsigned int i = 0; i < num_cells_; ++i) {
@@ -40,7 +40,7 @@ Layer::Layer(unsigned int input_size, unsigned int auxiliary_input_size,
   }
 }
 
-void Layer::ForwardPass(const std::valarray<float>& input, int input_symbol,
+void LstmLayer::ForwardPass(const std::valarray<float>& input, int input_symbol,
     std::valarray<float>* hidden, int hidden_start) {
   last_state_[epoch_] = state_;
   for (unsigned int i = 0; i < num_cells_; ++i) {
@@ -66,14 +66,14 @@ void Layer::ForwardPass(const std::valarray<float>& input, int input_symbol,
   if (epoch_ == horizon_) epoch_ = 0;
 }
 
-void ClipGradients(std::valarray<float>* arr) {
+void LstmLayer::ClipGradients(std::valarray<float>* arr) {
   for (unsigned int i = 0; i < arr->size(); ++i) {
-    if ((*arr)[i] < -10) (*arr)[i] = -10;
-    else if ((*arr)[i] > 10) (*arr)[i] = 10;
+    if ((*arr)[i] < -gradient_clip_) (*arr)[i] = -gradient_clip_;
+    else if ((*arr)[i] > gradient_clip_) (*arr)[i] = gradient_clip_;
   }
 }
 
-void Layer::BackwardPass(const std::valarray<float>&input, int epoch,
+void LstmLayer::BackwardPass(const std::valarray<float>&input, int epoch,
     int layer, int input_symbol, std::valarray<float>* hidden_error) {
   if (epoch == (int)horizon_ - 1) {
     stored_error_ = *hidden_error;

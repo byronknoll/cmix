@@ -2,9 +2,10 @@
 
 ByteMixer::ByteMixer(unsigned int num_models, unsigned int num_cells,
     unsigned int num_layers, int horizon, float learning_rate,
-    const unsigned int& bit_context, const std::vector<bool>& vocab,
-    unsigned int vocab_size) : ByteModel(vocab), byte_(bit_context), lstm_(
-    vocab_size, vocab_size, num_cells, num_layers, horizon, learning_rate),
+    float gradient_clip, const unsigned int& bit_context,
+    const std::vector<bool>& vocab, unsigned int vocab_size) :
+    ByteModel(vocab), byte_(bit_context), lstm_(vocab_size, vocab_size,
+    num_cells, num_layers, horizon, learning_rate, gradient_clip),
     byte_map_(0, 256), inputs_(0.0, vocab_size), num_models_(num_models),
     vocab_size_(vocab_size), offset_(0) {
   for (int i = 0; i < 256; ++i) {

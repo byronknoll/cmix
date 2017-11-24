@@ -3,9 +3,9 @@
 #include <numeric>
 
 Lstm::Lstm(unsigned int input_size, unsigned int output_size, unsigned int
-    num_cells, unsigned int num_layers, int horizon, float learning_rate) :
-    input_history_(horizon), hidden_(num_cells * num_layers + 1),
-    hidden_error_(num_cells),
+    num_cells, unsigned int num_layers, int horizon, float learning_rate,
+    float gradient_clip) : input_history_(horizon),
+    hidden_(num_cells * num_layers + 1), hidden_error_(num_cells),
     layer_input_(std::valarray<std::valarray<float>>(std::valarray<float>
     (input_size + 1 + num_cells * 2), num_layers), horizon),
     output_layer_(std::valarray<std::valarray<float>>(std::valarray<float>
@@ -21,9 +21,9 @@ Lstm::Lstm(unsigned int input_size, unsigned int output_size, unsigned int
     }
   }
   for (unsigned int i = 0; i < num_layers; ++i) {
-    layers_.push_back(std::unique_ptr<Layer>(new Layer(layer_input_[0][i].size()
-        + output_size, input_size_, output_size_, num_cells, horizon,
-        learning_rate)));
+    layers_.push_back(std::unique_ptr<LstmLayer>(new LstmLayer(
+        layer_input_[0][i].size() + output_size, input_size_, output_size_,
+        num_cells, horizon, learning_rate, gradient_clip)));
   }
 }
 

@@ -1,15 +1,15 @@
-#ifndef LAYER_H
-#define LAYER_H
+#ifndef LSTM_LAYER_H
+#define LSTM_LAYER_H
 
 #include <valarray>
 #include <stdlib.h>
 #include <math.h>
 
-class Layer {
+class LstmLayer {
  public:
-  Layer(unsigned int input_size, unsigned int auxiliary_input_size,
+  LstmLayer(unsigned int input_size, unsigned int auxiliary_input_size,
       unsigned int output_size, unsigned int num_cells, int horizon,
-      float learning_rate);
+      float learning_rate, float gradient_clip);
   void ForwardPass(const std::valarray<float>& input, int input_symbol,
       std::valarray<float>* hidden, int hidden_start);
   void BackwardPass(const std::valarray<float>& input, int epoch,
@@ -26,8 +26,10 @@ class Layer {
       input_node_state_, input_gate_state_, forget_gate_state_, last_state_,
       forget_gate_, input_node_, input_gate_, output_gate_, forget_gate_update_,
       input_node_update_, input_gate_update_, output_gate_update_;
-  float learning_rate_;
+  float learning_rate_, gradient_clip_;
   unsigned int num_cells_, epoch_, horizon_, input_size_, output_size_;
+
+  void ClipGradients(std::valarray<float>* arr);
 };
 
 #endif
