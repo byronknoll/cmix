@@ -25,9 +25,10 @@ class Predictor {
   unsigned long long GetNumModels();
   unsigned long long GetNumNeurons();
   unsigned long long GetNumConnections();
-  void Add(Model* model);
+  void AddModel(Model* model);
   void AddByteModel(ByteModel* model);
-  void Add(int layer, Mixer* mixer);
+  void AddMixer(int layer, Mixer* mixer);
+  void AddByteMixer(ByteMixer* byte_mixer);
   void AddPAQ8L();
   void AddPAQ8HP();
   void AddPPM();
@@ -53,7 +54,7 @@ class Predictor {
   std::vector<unsigned int> auxiliary_;
   ContextManager manager_;
   Logistic logistic_;
-  std::unique_ptr<ByteMixer> byte_mixer_;
+  std::vector<std::unique_ptr<ByteMixer>> byte_mixers_;
   std::vector<bool> vocab_;
 };
 
