@@ -1,5 +1,5 @@
-#ifndef MANAGER_H
-#define MANAGER_H
+#ifndef CONTEXT_MANAGER_H
+#define CONTEXT_MANAGER_H
 
 #include "states/nonstationary.h"
 #include "states/run-map.h"
@@ -9,10 +9,10 @@
 #include <vector>
 #include <memory>
 
-class Manager {
+class ContextManager {
  friend class Predictor;
  public:
-  Manager();
+  ContextManager();
   const Context& AddContext(std::unique_ptr<Context> context);
   const BitContext& AddBitContext(std::unique_ptr<BitContext> bit_context);
   void UpdateContexts(int bit);

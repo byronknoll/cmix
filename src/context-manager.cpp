@@ -1,10 +1,11 @@
-#include "manager.h"
+#include "context-manager.h"
 
-Manager::Manager() : bit_context_(1), long_bit_context_(1), zero_context_(0),
-    history_pos_(0), line_break_(0), longest_match_(0), history_(100000000, 0),
-    shared_map_(256*8000000, 0), words_(8, 0), recent_bytes_(8, 0) {}
+ContextManager::ContextManager() : bit_context_(1), long_bit_context_(1),
+    zero_context_(0), history_pos_(0), line_break_(0), longest_match_(0),
+    history_(100000000, 0), shared_map_(256*8000000, 0), words_(8, 0),
+    recent_bytes_(8, 0) {}
 
-const Context& Manager::AddContext(std::unique_ptr<Context> context) {
+const Context& ContextManager::AddContext(std::unique_ptr<Context> context) {
   for (const auto& old : contexts_) {
     if (old->IsEqual(context.get())) return *old;
   }
@@ -12,19 +13,19 @@ const Context& Manager::AddContext(std::unique_ptr<Context> context) {
   return *(contexts_[contexts_.size() - 1]);
 }
 
-const BitContext& Manager::AddBitContext(std::unique_ptr<BitContext>
+const BitContext& ContextManager::AddBitContext(std::unique_ptr<BitContext>
     bit_context) {
   bit_contexts_.push_back(std::move(bit_context));
   return *(bit_contexts_[bit_contexts_.size() - 1]);
 }
 
-void Manager::UpdateHistory() {
+void ContextManager::UpdateHistory() {
   history_[history_pos_] = bit_context_;
   ++history_pos_;
   if (history_pos_ == history_.size()) history_pos_ = 0;
 }
 
-void Manager::UpdateWords() {
+void ContextManager::UpdateWords() {
   unsigned char c = bit_context_;
   if ((c >= 'a' && c <= 'z') || (c >= 'A' && c <= 'Z') || c >= 0x80) {
     words_[7] = words_[7] * 997*16 + c;
@@ -45,14 +46,14 @@ void Manager::UpdateWords() {
   }
 }
 
-void Manager::UpdateRecentBytes() {
+void ContextManager::UpdateRecentBytes() {
   for (int i = 7; i >= 1; --i) {
     recent_bytes_[i] = recent_bytes_[i-1];
   }
   recent_bytes_[0] = bit_context_;
 }
 
-void Manager::UpdateContexts(int bit) {
+void ContextManager::UpdateContexts(int bit) {
   bit_context_ += bit_context_ + bit;
   long_bit_context_ = bit_context_;
   if (bit_context_ >= 256) {
