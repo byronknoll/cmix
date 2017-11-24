@@ -15,7 +15,7 @@ class Manager {
   Manager();
   const Context& AddContext(std::unique_ptr<Context> context);
   const BitContext& AddBitContext(std::unique_ptr<BitContext> bit_context);
-  void Perceive(int bit);
+  void UpdateContexts(int bit);
 
  private:
   void UpdateHistory();

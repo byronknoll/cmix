@@ -402,7 +402,6 @@ void Predictor::AddMixers() {
 }
 
 float Predictor::Predict() {
-  // return models_[0]->Predict();
   for (unsigned int i = 0; i < models_.size(); ++i) {
     float p = models_[i]->Predict();
     layers_[0]->SetInput(i, p);
@@ -423,7 +422,7 @@ float Predictor::Predict() {
     }
   }
   float p = logistic_.Squash(mixers_[2][0]->Mix());
-  p = sse_.Process(p);
+  p = sse_.Predict(p);
   if (byte_mixer_p == 0 || byte_mixer_p == 1) return byte_mixer_p;
   return p;
 }
@@ -446,7 +445,7 @@ void Predictor::Perceive(int bit) {
   bool byte_update = false;
   if (manager_.bit_context_ >= 128) byte_update = true;
 
-  manager_.Perceive(bit);
+  manager_.UpdateContexts(bit);
   if (byte_update) {
     for (const auto& model : models_) {
       model->ByteUpdate();
@@ -466,15 +465,15 @@ void Predictor::Perceive(int bit) {
 }
 
 void Predictor::Pretrain(int bit) {
-  for (unsigned int i = 0; i < models_.size(); ++i) {
-    models_[i]->Predict();
+  for (const auto& model : models_) {
+    model->Predict();
   }
   for (const auto& model : models_) {
     model->Perceive(bit);
   }
   bool byte_update = false;
   if (manager_.bit_context_ >= 128) byte_update = true;
-  manager_.Perceive(bit);
+  manager_.UpdateContexts(bit);
   if (byte_update) {
     for (const auto& model : models_) {
       model->ByteUpdate();

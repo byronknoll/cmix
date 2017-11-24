@@ -317,7 +317,7 @@ SSE::~SSE() {
   delete sse_;
 }
 
-float SSE::Process(float input) {
+float SSE::Predict(float input) {
   int discrete = 1 + (1 - input) * 32766;
   int estimate = sse_->M_Estimate(discrete);
   return 1 - ((estimate - 1) / 32766.0);

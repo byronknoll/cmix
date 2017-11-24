@@ -52,7 +52,7 @@ void Manager::UpdateRecentBytes() {
   recent_bytes_[0] = bit_context_;
 }
 
-void Manager::Perceive(int bit) {
+void Manager::UpdateContexts(int bit) {
   bit_context_ += bit_context_ + bit;
   long_bit_context_ = bit_context_;
   if (bit_context_ >= 256) {

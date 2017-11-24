@@ -9,7 +9,7 @@ class SSE {
  public:
   SSE();
   ~SSE();
-  float Process(float input);
+  float Predict(float input);
   void Perceive(int bit);
 
  private:
