@@ -9,15 +9,11 @@
 #include <vector>
 #include <memory>
 
-class ContextManager {
- friend class Predictor;
- public:
+struct ContextManager {
   ContextManager();
   const Context& AddContext(std::unique_ptr<Context> context);
   const BitContext& AddBitContext(std::unique_ptr<BitContext> bit_context);
   void UpdateContexts(int bit);
-
- private:
   void UpdateHistory();
   void UpdateWords();
   void UpdateRecentBytes();
@@ -34,4 +30,3 @@ class ContextManager {
 };
 
 #endif
-
