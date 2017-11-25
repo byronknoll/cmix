@@ -5,7 +5,8 @@
 #include "ppmd.h"
 #include <cstring>
 
-namespace {
+namespace PPMD {
+
 #define NOASM
 #define _CRT_SECURE_NO_WARNINGS
 #define _CRT_SECURE_NO_DEPRECATE
@@ -1318,24 +1319,23 @@ void ppmd_UpdateByte( uint c ) {
 
 };
 
-static ppmd_Model ppmd_model;
-
 #pragma pack()
-}
 
 PPMD::PPMD(int order, int memory, const unsigned int& bit_context,
     const std::vector<bool>& vocab) : ByteModel(vocab), byte_(bit_context) {
-  ppmd_model.Init(order,memory,1,0);
+  ppmd_model_.reset(new ppmd_Model());
+  ppmd_model_->Init(order,memory,1,0);
 }
 
 void PPMD::ByteUpdate() {
-  ppmd_model.ppmd_UpdateByte(byte_);
-  ppmd_model.ppmd_PrepareByte();
+  ppmd_model_->ppmd_UpdateByte(byte_);
+  ppmd_model_->ppmd_PrepareByte();
   for (int i = 0; i < 256; ++i) {
-    probs_[i] = ppmd_model.sqp[i];
+    probs_[i] = ppmd_model_->sqp[i];
     if (probs_[i] < 1) probs_[i] = 1;
   }
   ByteModel::ByteUpdate();
   probs_ /= probs_.sum();
 }
 
+} // namespace PPMD

@@ -130,7 +130,7 @@ void Predictor::AddPPM() {
 }
 
 void Predictor::AddPPMD() {
-  AddByteModel(new PPMD(16, 1680, manager_.bit_context_, vocab_));
+  AddByteModel(new PPMD::PPMD(16, 1680, manager_.bit_context_, vocab_));
 }
 
 void Predictor::AddDMC() {
