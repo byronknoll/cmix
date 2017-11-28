@@ -399,7 +399,7 @@ void Predictor::AddMixers() {
   AddMixer(1, new Mixer(layers_[1]->Inputs(), logistic_, interval2.GetContext(),
       0.001, interval2.Size(), input_size));
 
-  input_size = mixers_[1].size() + auxiliary_.size();
+  input_size = mixers_[0].size() + mixers_[1].size() + auxiliary_.size();
   layers_[2]->SetNumModels(input_size);
   AddMixer(2, new Mixer(layers_[2]->Inputs(), logistic_, manager_.zero_context_,
       0.0003, 1, input_size));
@@ -420,14 +420,19 @@ float Predictor::Predict() {
     layers_[0]->SetInput(models_.size() + byte_models_.size() + i, p);
     if (p == 0 || p == 1) byte_mixer_override = p;
   }
-  for (unsigned int layer = 1; layer <= 2; ++layer) {
-    for (unsigned int i = 0; i < mixers_[layer - 1].size(); ++i) {
-      layers_[layer]->SetStretchedInput(i, mixers_[layer - 1][i]->Mix());
-    }
-    for (unsigned int i = 0; i < auxiliary_.size(); ++i) {
-      layers_[layer]->SetStretchedInput(mixers_[layer - 1].size() + i,
-          layers_[0]->Inputs()[auxiliary_[i]]);
-    }
+  for (unsigned int i = 0; i < mixers_[0].size(); ++i) {
+    float p = mixers_[0][i]->Mix();
+    layers_[1]->SetStretchedInput(i, p);
+    layers_[2]->SetStretchedInput(i, p);
+  }
+  for (unsigned int i = 0; i < auxiliary_.size(); ++i) {
+    float p = layers_[0]->Inputs()[auxiliary_[i]];
+    layers_[1]->SetStretchedInput(mixers_[0].size() + i, p);
+    layers_[2]->SetStretchedInput(mixers_[0].size() + mixers_[1].size() + i, p);
+  }
+  for (unsigned int i = 0; i < mixers_[1].size(); ++i) {
+    float p = mixers_[1][i]->Mix();
+    layers_[2]->SetStretchedInput(mixers_[0].size() + i, p);
   }
   float p = logistic_.Squash(mixers_[2][0]->Mix());
   p = sse_.Predict(p);
