@@ -5,7 +5,6 @@
 #include "models/byte-run.h"
 #include "models/match.h"
 #include "models/dmc.h"
-#include "models/ppm.h"
 #include "models/ppmd.h"
 #include "models/bracket.h"
 #include "models/paq8l.h"
@@ -30,7 +29,6 @@ Predictor::Predictor(const std::vector<bool>& vocab) : manager_(),
   AddBracket();
   AddPAQ8HP();
   AddPAQ8L();
-  AddPPM();
   AddPPMD();
   AddDMC();
   AddByteRun();
@@ -124,12 +122,9 @@ void Predictor::AddBracket() {
       manager_.bit_context_, 300, manager_.shared_map_));
 }
 
-void Predictor::AddPPM() {
-  AddByteModel(new PPM(7, manager_.bit_context_, 10000, 11000000, vocab_));
-  AddByteModel(new PPM(5, manager_.bit_context_, 10000, 7000000, vocab_));
-}
-
 void Predictor::AddPPMD() {
+  AddByteModel(new PPMD::PPMD(6, 1680, manager_.bit_context_, vocab_));
+  AddByteModel(new PPMD::PPMD(10, 1680, manager_.bit_context_, vocab_));
   AddByteModel(new PPMD::PPMD(16, 1680, manager_.bit_context_, vocab_));
 }
 
