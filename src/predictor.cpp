@@ -42,38 +42,10 @@ Predictor::Predictor(const std::vector<bool>& vocab) : manager_(),
   AddInterval();
 
   AddMixers();
-
-  // PrintStats();
-}
-
-void Predictor::PrintStats() {
-  printf("Number of models: %llu\n", GetNumModels());
-  printf("Number of neurons: %llu\n", GetNumNeurons());
-  printf("Number of connections: %llu\n", GetNumConnections());
 }
 
 unsigned long long Predictor::GetNumModels() {
   return models_.size() + byte_models_.size() + byte_mixers_.size();
-}
-
-unsigned long long Predictor::GetNumNeurons() {
-  unsigned long long neurons = GetNumModels();
-  for (unsigned int i = 0; i < layers_.size(); ++i) {
-    for (const auto& mixer : mixers_[i]) {
-      neurons += mixer->GetNumNeurons();
-    }
-  }
-  return neurons;
-}
-
-unsigned long long Predictor::GetNumConnections() {
-  unsigned long long connections = 0;
-  for (unsigned int i = 0; i < layers_.size(); ++i) {
-    for (const auto& mixer : mixers_[i]) {
-      connections += mixer->GetNumConnections();
-    }
-  }
-  return connections;
 }
 
 void Predictor::AddModel(Model* model) {
@@ -317,20 +289,20 @@ void Predictor::AddMixers() {
         <BitContext>(new BitContext(manager_.long_bit_context_,
         context.GetContext(), context.Size())));
     AddMixer(0, new Mixer(layers_[0]->Inputs(), logistic_,
-        bit_context.GetContext(), params[2], bit_context.Size(), input_size));
+        bit_context.GetContext(), params[2], input_size));
   }
 
   model_params = {{0, 0.001}, {2, 0.002}, {3, 0.005}};
   for (const auto& params : model_params) {
     AddMixer(0, new Mixer(layers_[0]->Inputs(), logistic_,
-        manager_.recent_bytes_[params[0]], params[1], 256, input_size));
+        manager_.recent_bytes_[params[0]], params[1], input_size));
   }
   AddMixer(0, new Mixer(layers_[0]->Inputs(), logistic_, manager_.zero_context_,
-      0.00005, 1, input_size));
+      0.00005, input_size));
   AddMixer(0, new Mixer(layers_[0]->Inputs(), logistic_, manager_.line_break_,
-      0.0007, 100, input_size));
+      0.0007, input_size));
   AddMixer(0, new Mixer(layers_[0]->Inputs(), logistic_, manager_.longest_match_,
-      0.0005, 8, input_size));
+      0.0005, input_size));
 
   std::vector<int> map1(256, 0), map2(256, 0);
   for (int i = 0; i < 256; ++i) {
@@ -344,60 +316,60 @@ void Predictor::AddMixers() {
   const Context& interval1 = manager_.AddContext(std::unique_ptr<Context>(
       new Interval(manager_.bit_context_, map1)));
   AddMixer(0, new Mixer(layers_[0]->Inputs(), logistic_, interval1.GetContext(),
-      0.001, interval1.Size(), input_size));
+      0.001, input_size));
   const Context& interval2 = manager_.AddContext(std::unique_ptr<Context>(
       new Interval(manager_.bit_context_, map2)));
   AddMixer(0, new Mixer(layers_[0]->Inputs(), logistic_, interval2.GetContext(),
-      0.001, interval2.Size(), input_size));
+      0.001, input_size));
 
   const BitContext& bit_context1 = manager_.AddBitContext(std::unique_ptr
       <BitContext>(new BitContext(manager_.long_bit_context_,
       manager_.recent_bytes_[1], 256)));
   AddMixer(0, new Mixer(layers_[0]->Inputs(), logistic_,
-      bit_context1.GetContext(), 0.005, bit_context1.Size(), input_size));
+      bit_context1.GetContext(), 0.005, input_size));
 
   const BitContext& bit_context2 = manager_.AddBitContext(std::unique_ptr
       <BitContext>(new BitContext(manager_.recent_bytes_[1],
       manager_.recent_bytes_[0], 256)));
   AddMixer(0, new Mixer(layers_[0]->Inputs(), logistic_,
-      bit_context2.GetContext(), 0.005, bit_context2.Size(), input_size));
+      bit_context2.GetContext(), 0.005, input_size));
 
   const BitContext& bit_context3 = manager_.AddBitContext(std::unique_ptr
       <BitContext>(new BitContext(manager_.recent_bytes_[2],
       manager_.recent_bytes_[1], 256)));
   AddMixer(0, new Mixer(layers_[0]->Inputs(), logistic_,
-      bit_context3.GetContext(), 0.003, bit_context3.Size(), input_size));
+      bit_context3.GetContext(), 0.003, input_size));
 
   input_size = mixers_[0].size() + auxiliary_.size();
   layers_[1]->SetNumModels(input_size);
 
   AddMixer(1, new Mixer(layers_[1]->Inputs(), logistic_, manager_.zero_context_,
-      0.005, 1, input_size));
+      0.005, input_size));
   AddMixer(1, new Mixer(layers_[1]->Inputs(), logistic_, manager_.zero_context_,
-      0.0005, 1, input_size));
+      0.0005, input_size));
   AddMixer(1, new Mixer(layers_[1]->Inputs(), logistic_,
-      manager_.long_bit_context_, 0.005, 256, input_size));
+      manager_.long_bit_context_, 0.005, input_size));
   AddMixer(1, new Mixer(layers_[1]->Inputs(), logistic_,
-      manager_.long_bit_context_, 0.0005, 256, input_size));
+      manager_.long_bit_context_, 0.0005, input_size));
   AddMixer(1, new Mixer(layers_[1]->Inputs(), logistic_,
-      manager_.long_bit_context_, 0.00001, 256, input_size));
+      manager_.long_bit_context_, 0.00001, input_size));
   AddMixer(1, new Mixer(layers_[1]->Inputs(), logistic_,
-      manager_.recent_bytes_[0], 0.005, 256, input_size));
+      manager_.recent_bytes_[0], 0.005, input_size));
   AddMixer(1, new Mixer(layers_[1]->Inputs(), logistic_,
-      manager_.recent_bytes_[1], 0.005, 256, input_size));
+      manager_.recent_bytes_[1], 0.005, input_size));
   AddMixer(1, new Mixer(layers_[1]->Inputs(), logistic_,
-      manager_.recent_bytes_[2], 0.005, 256, input_size));
+      manager_.recent_bytes_[2], 0.005, input_size));
   AddMixer(1, new Mixer(layers_[1]->Inputs(), logistic_,
-      manager_.longest_match_, 0.0005, 8, input_size));
+      manager_.longest_match_, 0.0005, input_size));
   AddMixer(1, new Mixer(layers_[1]->Inputs(), logistic_, interval1.GetContext(),
-      0.001, interval1.Size(), input_size));
+      0.001, input_size));
   AddMixer(1, new Mixer(layers_[1]->Inputs(), logistic_, interval2.GetContext(),
-      0.001, interval2.Size(), input_size));
+      0.001, input_size));
 
   input_size = mixers_[0].size() + mixers_[1].size() + auxiliary_.size();
   layers_[2]->SetNumModels(input_size);
   AddMixer(2, new Mixer(layers_[2]->Inputs(), logistic_, manager_.zero_context_,
-      0.0003, 1, input_size));
+      0.0003, input_size));
 }
 
 float Predictor::Predict() {

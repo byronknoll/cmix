@@ -5,33 +5,36 @@
 
 Mixer::Mixer(const std::valarray<float>& inputs, const Logistic& logistic,
     const unsigned long long& context, float learning_rate,
-    unsigned long long context_size, unsigned long long input_size) :
-    inputs_(inputs), logistic_(logistic), p_(0.5),
-    learning_rate_(learning_rate), context_(context), max_steps_(1),
-    steps_(0), context_steps_(context_size, 0),
-    weights_(context_size, std::valarray<float>(0.0, input_size)) {}
+    unsigned long long input_size) : inputs_(inputs), logistic_(logistic),
+    p_(0.5), learning_rate_(learning_rate), context_(context), max_steps_(1),
+    steps_(0), input_size_(input_size) {}
 
 float Mixer::Mix() {
-  p_ = (inputs_ * weights_[context_]).sum();
+  ContextData* data = context_map_[context_].get();
+  if (data == nullptr) {
+    context_map_[context_] = std::unique_ptr<ContextData>(
+        new ContextData(input_size_));
+    data = context_map_[context_].get();
+  }
+  p_ = (inputs_ * data->weights).sum();
   return p_;
 }
 
 void Mixer::Perceive(int bit) {
+  ContextData* data = context_map_[context_].get();
+  if (data == nullptr) {
+    context_map_[context_] = std::unique_ptr<ContextData>(
+        new ContextData(input_size_));
+    data = context_map_[context_].get();
+  }
   float decay = 0.9 / pow(0.0000001 * steps_ + 0.8, 0.8);
-  decay *= 1.5 - ((1.0 * context_steps_[context_]) / max_steps_);
+  decay *= 1.5 - ((1.0 * data->steps) / max_steps_);
   float update = decay * learning_rate_ * (bit - logistic_.Squash(p_));
   ++steps_;
-  ++context_steps_[context_];
-  if (context_steps_[context_] > max_steps_) {
-    max_steps_ = context_steps_[context_];
+  ++data->steps;
+  if (data->steps > max_steps_) {
+    max_steps_ = data->steps;
   }
-  weights_[context_] += update * inputs_;
+  data->weights += update * inputs_;
 }
 
-unsigned long long Mixer::GetNumNeurons() {
-  return weights_.size();
-}
-
-unsigned long long Mixer::GetNumConnections() {
-  return weights_.size() * weights_[0].size();
-}
