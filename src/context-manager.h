@@ -20,7 +20,7 @@ struct ContextManager {
 
   unsigned int bit_context_;
   unsigned long long long_bit_context_, zero_context_, history_pos_,
-      line_break_, longest_match_;
+      line_break_, longest_match_, auxiliary_context_;
   std::vector<unsigned char> history_, shared_map_;
   std::vector<unsigned long long> words_, recent_bytes_;
   std::vector<std::unique_ptr<Context>> contexts_;

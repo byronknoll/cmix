@@ -40,8 +40,10 @@ Predictor::Predictor(const std::vector<bool>& vocab) : manager_(),
   AddMatch();
   AddDoubleIndirect();
   AddInterval();
-
   AddMixers();
+  for (unsigned int i : auxiliary_) {
+    auxiliary_set_.insert(i);
+  }
 }
 
 unsigned long long Predictor::GetNumModels() {
@@ -301,8 +303,10 @@ void Predictor::AddMixers() {
       0.00005, input_size));
   AddMixer(0, new Mixer(layers_[0]->Inputs(), logistic_, manager_.line_break_,
       0.0007, input_size));
-  AddMixer(0, new Mixer(layers_[0]->Inputs(), logistic_, manager_.longest_match_,
-      0.0005, input_size));
+  AddMixer(0, new Mixer(layers_[0]->Inputs(), logistic_,
+      manager_.longest_match_, 0.0005, input_size));
+  AddMixer(0, new Mixer(layers_[0]->Inputs(), logistic_,
+      manager_.auxiliary_context_, 0.0005, input_size));
 
   std::vector<int> map1(256, 0), map2(256, 0);
   for (int i = 0; i < 256; ++i) {
@@ -373,10 +377,17 @@ void Predictor::AddMixers() {
 }
 
 float Predictor::Predict() {
+  float auxiliary_average = 0;
   for (unsigned int i = 0; i < models_.size(); ++i) {
     float p = models_[i]->Predict();
+    if (auxiliary_set_.find(i) != auxiliary_set_.end()) {
+      auxiliary_average += p;
+    }
     layers_[0]->SetInput(i, p);
   }
+  auxiliary_average /= auxiliary_.size();
+  manager_.auxiliary_context_ = auxiliary_average * 20;
+
   for (unsigned int i = 0; i < byte_models_.size(); ++i) {
     float p = byte_models_[i]->Predict();
     layers_[0]->SetInput(models_.size() + i, p);

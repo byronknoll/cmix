@@ -11,6 +11,7 @@
 #include "context-manager.h"
 
 #include <vector>
+#include <set>
 #include <memory>
 
 class Predictor {
@@ -48,6 +49,7 @@ class Predictor {
   std::vector<std::unique_ptr<MixerInput>> layers_;
   std::vector<std::vector<std::unique_ptr<Mixer>>> mixers_;
   std::vector<unsigned int> auxiliary_;
+  std::set<unsigned int> auxiliary_set_;
   ContextManager manager_;
   Logistic logistic_;
   std::vector<std::unique_ptr<ByteMixer>> byte_mixers_;
