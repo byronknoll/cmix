@@ -90,7 +90,7 @@ void Pretrain(Predictor* p, FILE* dictionary) {
 }
 
 Filetype detect(FILE* in, int n, Filetype type) {
-  U32 buf1=0, buf0=0;
+  U32 buf2=0, buf1=0, buf0=0;
   long start=ftell(in);
 
   // For EXE detection
@@ -118,10 +118,15 @@ Filetype detect(FILE* in, int n, Filetype type) {
   // For TGA detection
   uint64_t tga=0;
   int tgaid=0, tgaw=0, tgah=0;
+  // For PBM, PGM, PPM, PAM detection
+  uint64_t pgm=0;
+  int pgmcomment=0,pgmw=0,pgmh=0,pgm_ptr=0,pgmc=0,pgmn=0,pamatr=0,pamd=0;
+  char pgm_buf[32];
 
   for (int i=0; i<n; ++i) {
     int c=getc(in);
     if (c==EOF) return (Filetype)(-1);
+    buf2=buf2<<8|buf1>>24;
     buf1=buf1<<8|buf0>>24;
     buf0=buf0<<8|c;
 
@@ -221,6 +226,46 @@ Filetype detect(FILE* in, int n, Filetype type) {
         if (tga && (buf0&0xFFDF)==0x1800)
           IMG_DET(IMAGE24, (tga-7), 18+tgaid, tgaw*3, tgah);
       }
+    }
+
+    // Detect .pbm .pgm .ppm .pam image
+    if ((buf0&0xfff0ff)==0x50300a) {
+      pgmn=(buf0&0xf00)>>8;
+      if ((pgmn>=4 && pgmn<=6) || pgmn==7) pgm=i,pgm_ptr=pgmw=pgmh=pgmc=pgmcomment=pamatr=pamd=0;
+    }
+    if (pgm) {
+      if (i-pgm==1 && c==0x23) pgmcomment=1; //pgm comment
+      if (!pgmcomment && pgm_ptr) {
+        int s=0;
+        if (pgmn==7) {
+           if ((buf1&0xdfdf)==0x5749 && (buf0&0xdfdfdfff)==0x44544820) pgm_ptr=0, pamatr=1; // WIDTH
+           if ((buf1&0xdfdfdf)==0x484549 && (buf0&0xdfdfdfff)==0x47485420) pgm_ptr=0, pamatr=2; // HEIGHT
+           if ((buf1&0xdfdfdf)==0x4d4158 && (buf0&0xdfdfdfff)==0x56414c20) pgm_ptr=0, pamatr=3; // MAXVAL
+           if ((buf1&0xdfdf)==0x4445 && (buf0&0xdfdfdfff)==0x50544820) pgm_ptr=0, pamatr=4; // DEPTH
+           if ((buf2&0xdf)==0x54 && (buf1&0xdfdfdfdf)==0x55504c54 && (buf0&0xdfdfdfff)==0x59504520) pgm_ptr=0, pamatr=5; // TUPLTYPE
+           if ((buf1&0xdfdfdf)==0x454e44 && (buf0&0xdfdfdfff)==0x4844520a) pgm_ptr=0, pamatr=6; // ENDHDR
+           if (c==0x0a) {
+             if (pamatr==0) pgm=0;
+             else if (pamatr<5) s=pamatr;
+             if (pamatr!=6) pamatr=0;
+           }
+        } else if (c==0x20 && !pgmw) s=1;
+        else if (c==0x0a && !pgmh) s=2;
+        else if (c==0x0a && !pgmc && pgmn!=4) s=3;
+        if (s) {
+          pgm_buf[pgm_ptr++]=0;
+          int v=atoi(pgm_buf);
+          if (s==1) pgmw=v; else if (s==2) pgmh=v; else if (s==3) pgmc=v; else if (s==4) pamd=v;
+          if (v==0 || (s==3 && v>255)) pgm=0; else pgm_ptr=0;
+        }
+      }
+      if (!pgmcomment) pgm_buf[pgm_ptr++]=c;
+      if (pgm_ptr>=32) pgm=0;
+      if (pgmcomment && c==0x0a) pgmcomment=0;
+      if (pgmw && pgmh && !pgmc && pgmn==4) IMG_DET_NOHDR(IMAGE1,i-pgm+3,(pgmw+7)/8,pgmh);
+      if (pgmw && pgmh && pgmc && (pgmn==5 || (pgmn==7 && pamd==1 && pamatr==6))) IMG_DET_NOHDR(IMAGE8GRAY,i-pgm+3,pgmw,pgmh);
+      if (pgmw && pgmh && pgmc && (pgmn==6 || (pgmn==7 && pamd==3 && pamatr==6))) IMG_DET_NOHDR(IMAGE24,i-pgm+3,pgmw*3,pgmh);
+      if (pgmw && pgmh && pgmc && (pgmn==7 && pamd==4 && pamatr==6)) IMG_DET_NOHDR(IMAGE32,i-pgm+3,pgmw*4,pgmh);
     }
     
     // Detect .tiff image
