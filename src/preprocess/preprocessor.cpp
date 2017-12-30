@@ -1,29 +1,8 @@
-// This preprocessor is adapted from paq8l, paq8hp12any and paq8px_v101.
+// This preprocessor is adapted from paq8l, paq8hp12any and paq8px.
 
 #include <vector>
 #include <cstdlib>
 #include <string.h>
-
-#define preprocFlag 1220
-#define OPTION_UTF8							1
-#define OPTION_USE_NGRAMS					2
-#define OPTION_CAPITAL_CONVERSION			4
-#define OPTION_WORD_SURROROUNDING_MODELING	8
-#define OPTION_SPACE_AFTER_EOL				16
-#define OPTION_EOL_CODING					32
-#define OPTION_NORMAL_TEXT_FILTER			64
-#define OPTION_USE_DICTIONARY				128
-#define OPTION_RECORD_INTERLEAVING			256
-#define OPTION_DNA_QUARTER_BYTE				512
-#define OPTION_TRY_SHORTER_WORD				1024
-#define OPTION_TO_LOWER_AFTER_PUNCTUATION	2048
-#define OPTION_SPACELESS_WORDS				4096
-#define OPTION_ADD_SYMBOLS_0_5				8192
-#define OPTION_ADD_SYMBOLS_14_31			16384
-#define OPTION_ADD_SYMBOLS_A_Z				32768
-#define OPTION_ADD_SYMBOLS_MISC				65536
-#define OPTION_SPACE_AFTER_CC_FLAG			131072
-#define IF_OPTION(option) ((preprocFlag & option)!=0)
 
 #include "textfilter.cpp"
 #include "preprocessor.h"
@@ -320,14 +299,6 @@ int decode_default(FILE* in) {
   return getc(in);
 }
 
-void encode_jpeg(FILE* in, FILE* out, int len) {
-  while (len--) putc(getc(in), out);
-}
-
-int decode_jpeg(FILE* in) {
-  return getc(in);
-}
-
 void encode_bmp(FILE* in, FILE* out, int len, int width) {
   fprintf(out, "%c%c%c%c", width>>24, width>>16, width>>8, width);
   int r,g,b;
@@ -564,7 +535,6 @@ void Encode(FILE* in, FILE* out, int n, string temp_path, FILE* dictionary) {
     if (len>0) {
       fprintf(out, "%c%c%c%c%c", type, len>>24, len>>16, len>>8, len);
       switch(type) {
-        case JPEG:    encode_jpeg(in, out, len); break;
         case IMAGE24: encode_bmp(in, out, len, info); break;
         case EXE:     encode_exe(in, out, len, begin); break;
         case TEXT:    encode_text(in, out, len, temp_path, dictionary); break;
@@ -603,7 +573,6 @@ int decode2(FILE* in, string temp_path, FILE* dictionary) {
   }
   --len;
   switch (type) {
-    case JPEG:    return decode_jpeg(in);
     case IMAGE24: return decode_bmp(in, reset);
     case EXE:     return decode_exe(in);
     case TEXT:    return decode_text(in, dictionary);
