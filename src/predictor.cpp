@@ -33,7 +33,7 @@ Predictor::Predictor(const std::vector<bool>& vocab) : manager_(),
   AddDMC();
   AddByteRun();
   AddNonstationary();
-  AddEnglish();
+  AddWord();
   AddSparse();
   AddDirect();
   AddRunMap();
@@ -132,7 +132,7 @@ void Predictor::AddNonstationary() {
   }
 }
 
-void Predictor::AddEnglish() {
+void Predictor::AddWord() {
   float delta = 200;
   std::vector<std::vector<unsigned int>> model_params = {{0}, {0, 1}, {7, 2},
       {7}, {1}, {1, 2}, {1, 2, 3}, {1, 3}, {1, 4}, {1, 5}, {2, 3}, {3, 4},

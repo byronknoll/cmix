@@ -34,7 +34,7 @@ class Predictor {
   void AddDMC();
   void AddByteRun();
   void AddNonstationary();
-  void AddEnglish();
+  void AddWord();
   void AddSparse();
   void AddDirect();
   void AddRunMap();
