@@ -1,4 +1,4 @@
-// This code is a hybrid of paq8l, paq8pxd_11 (released by Kaido Orav) and paq8px (v101 and up, released by Jan Ondrus and Márcio Pais).
+// This code is a hybrid of paq8l, paq8pxd (released by Kaido Orav) and paq8px (v101 and up, released by Jan Ondrus and Márcio Pais).
 
 /*
     Copyright (C) 2006 Matt Mahoney, Serge Osnach, Alexander Ratushnyak,
@@ -18,7 +18,7 @@
     Visit <http://www.gnu.org/copyleft/gpl.html>.
 */
 
-#include "paq8l.h"
+#include "paq8.h"
 #include "../preprocess/preprocessor.h"
 
 #include <stdio.h>
@@ -4661,20 +4661,20 @@ Predictor paq8;
 
 }
 
-PAQ8L::PAQ8L(int memory) {
+PAQ8::PAQ8(int memory) {
   level = memory;
   buf.setsize(MEM()*8);
 }
 
-float PAQ8L::Predict() {
+float PAQ8::Predict() {
   return paq8.p() * conversion_factor;
 }
 
-void PAQ8L::Perceive(int bit) {
+void PAQ8::Perceive(int bit) {
   y = bit;
   paq8.update();
 }
 
-const std::vector<float>& PAQ8L::ModelPredictions() {
+const std::vector<float>& PAQ8::ModelPredictions() {
   return model_predictions;
 }

@@ -2,7 +2,7 @@ CC = g++
 CFLAGS = -std=c++11 -Wall -c
 LFLAGS = -std=c++11 -Wall
 
-OBJS = build/preprocessor.o build/encoder.o build/decoder.o build/predictor.o build/logistic.o build/mixer-input.o build/mixer.o build/byte-mixer.o build/byte-model.o build/sse.o build/context-manager.o build/direct.o build/direct-hash.o build/indirect.o build/nonstationary.o build/run-map.o build/byte-run.o build/match.o build/dmc.o build/ppmd.o build/bracket.o build/paq8l.o build/paq8hp.o build/bracket-context.o build/context-hash.o build/sparse.o build/lstm.o build/lstm-layer.o build/indirect-hash.o build/interval.o build/interval-hash.o build/bit-context.o
+OBJS = build/preprocessor.o build/encoder.o build/decoder.o build/predictor.o build/logistic.o build/mixer-input.o build/mixer.o build/byte-mixer.o build/byte-model.o build/sse.o build/context-manager.o build/direct.o build/direct-hash.o build/indirect.o build/nonstationary.o build/run-map.o build/byte-run.o build/match.o build/dmc.o build/ppmd.o build/bracket.o build/paq8.o build/paq8hp.o build/bracket-context.o build/context-hash.o build/sparse.o build/lstm.o build/lstm-layer.o build/indirect-hash.o build/interval.o build/interval-hash.o build/bit-context.o
 
 all: CFLAGS += -Ofast
 all: LFLAGS += -Ofast
@@ -24,7 +24,7 @@ build/encoder.o: src/coder/encoder.h src/coder/encoder.cpp src/predictor.h
 build/decoder.o: src/coder/decoder.h src/coder/decoder.cpp src/predictor.h
 	$(CC) $(CFLAGS) src/coder/decoder.cpp -o build/decoder.o
 
-build/predictor.o: src/predictor.h src/predictor.cpp src/mixer/mixer-input.h src/mixer/byte-mixer.h src/mixer/mixer.h src/mixer/sse.h src/models/model.h src/models/byte-model.h src/models/direct.h src/models/direct-hash.h src/models/indirect.h src/models/byte-run.h src/models/match.h src/models/dmc.h src/models/bracket.h src/models/ppmd.h src/models/facade.h src/models/paq8l.h src/models/paq8hp.h src/context-manager.h src/contexts/context-hash.h src/contexts/bracket-context.h src/contexts/sparse.h src/contexts/interval.h src/contexts/interval-hash.h src/contexts/indirect-hash.h src/contexts/bit-context.h src/models/facade.h src/mixer/logistic.h
+build/predictor.o: src/predictor.h src/predictor.cpp src/mixer/mixer-input.h src/mixer/byte-mixer.h src/mixer/mixer.h src/mixer/sse.h src/models/model.h src/models/byte-model.h src/models/direct.h src/models/direct-hash.h src/models/indirect.h src/models/byte-run.h src/models/match.h src/models/dmc.h src/models/bracket.h src/models/ppmd.h src/models/facade.h src/models/paq8.h src/models/paq8hp.h src/context-manager.h src/contexts/context-hash.h src/contexts/bracket-context.h src/contexts/sparse.h src/contexts/interval.h src/contexts/interval-hash.h src/contexts/indirect-hash.h src/contexts/bit-context.h src/models/facade.h src/mixer/logistic.h
 	$(CC) $(CFLAGS) src/predictor.cpp -o build/predictor.o
 
 build/logistic.o: src/mixer/logistic.h src/mixer/logistic.cpp
@@ -78,8 +78,8 @@ build/bracket.o: src/models/bracket.h src/models/bracket.cpp src/models/byte-mod
 build/ppmd.o: src/models/ppmd.h src/models/ppmd.cpp src/models/byte-model.h
 	$(CC) $(CFLAGS) src/models/ppmd.cpp -o build/ppmd.o
 
-build/paq8l.o: src/models/paq8l.h src/models/paq8l.cpp src/models/model.h src/preprocess/preprocessor.h
-	$(CC) $(CFLAGS) src/models/paq8l.cpp -o build/paq8l.o
+build/paq8.o: src/models/paq8.h src/models/paq8.cpp src/models/model.h src/preprocess/preprocessor.h
+	$(CC) $(CFLAGS) src/models/paq8.cpp -o build/paq8.o
 
 build/paq8hp.o: src/models/paq8hp.h src/models/paq8hp.cpp src/models/model.h
 	$(CC) $(CFLAGS) src/models/paq8hp.cpp -o build/paq8hp.o

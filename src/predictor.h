@@ -27,7 +27,7 @@ class Predictor {
   void AddByteModel(ByteModel* model);
   void AddMixer(int layer, Mixer* mixer);
   void AddByteMixer(ByteMixer* byte_mixer);
-  void AddPAQ8L();
+  void AddPAQ8();
   void AddPAQ8HP();
   void AddPPMD();
   void AddBracket();

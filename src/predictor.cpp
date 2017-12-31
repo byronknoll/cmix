@@ -7,7 +7,7 @@
 #include "models/dmc.h"
 #include "models/ppmd.h"
 #include "models/bracket.h"
-#include "models/paq8l.h"
+#include "models/paq8.h"
 #include "models/paq8hp.h"
 #include "contexts/context-hash.h"
 #include "contexts/bracket-context.h"
@@ -28,7 +28,7 @@ Predictor::Predictor(const std::vector<bool>& vocab) : manager_(),
 
   AddBracket();
   AddPAQ8HP();
-  AddPAQ8L();
+  AddPAQ8();
   AddPPMD();
   AddDMC();
   AddByteRun();
@@ -76,9 +76,9 @@ void Predictor::AddPAQ8HP() {
   }
 }
 
-void Predictor::AddPAQ8L() {
+void Predictor::AddPAQ8() {
   auxiliary_.push_back(models_.size());
-  PAQ8L* paq = new PAQ8L(11);
+  PAQ8* paq = new PAQ8(11);
   AddModel(paq);
   const std::vector<float>& predictions = paq->ModelPredictions();
   for (unsigned int i = 0; i < predictions.size(); ++i) {
