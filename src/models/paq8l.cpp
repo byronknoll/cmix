@@ -470,7 +470,7 @@ void train(short *t, short *w, int n, int err) {
 }
 #endif
 
-#define NUM_INPUTS 1283
+#define NUM_INPUTS 1337
 #define NUM_SETS 13
 
 std::vector<float> model_predictions(NUM_INPUTS+NUM_SETS, 0.5);
@@ -750,7 +750,7 @@ class StationaryMap {
   int Context, Mask, bCount, B;
   U32 *cp;
 public:
-  StationaryMap(int BitsOfContext, int BitsPerContext, int Rate=0): Data(1<<(BitsOfContext+BitsPerContext)), Context(0), Mask(1<<BitsPerContext), bCount(1), B(1) {    
+  StationaryMap(int BitsOfContext, int BitsPerContext, int Rate=0): Data(1<<(BitsOfContext+BitsPerContext)), Context(0), Mask(1<<BitsPerContext), bCount(1), B(1) {
     Reset(Rate);
     cp=&Data[0];
   }
@@ -960,6 +960,7 @@ U32 w5=0,f4=0,tt=0;
 U32 WRT_mpw[16]= { 4, 4, 3, 2, 2, 2, 1, 1, 1, 1, 1, 1, 0, 0, 0, 0 };
 U32 WRT_mtt[16]= { 0, 0, 1, 2, 3, 4, 5, 5, 6, 6, 6, 6, 7, 7, 7, 7 };
 U32 col=0;
+#define SPACE 0x20
 
 static U32 frstchar=0,spafdo=0,spaces=0,spacecount=0, words=0,wordcount=0,wordlen=0,wordlen1=0;
 void wordModel(Mixer& m) {
@@ -969,7 +970,7 @@ void wordModel(Mixer& m) {
     static U32 number0=0, number1=0;
     static U32 text0=0;
     static U32 lastLetter=0, firstLetter=0, lastUpper=0, lastDigit=0, wordGap=0;
-    static ContextMap cm(MEM()*31, 47);
+    static ContextMap cm(MEM()*31, 59);
     static int nl1=-3, nl=-2;
     static U32 mask=0, mask2=0;
     static Array<int> wpos(0x10000);
@@ -981,25 +982,32 @@ void wordModel(Mixer& m) {
         if (words&0x80000000) --wordcount;
         spaces=spaces*2;
         words=words*2;
-        lastUpper=min(lastUpper+1,63);
-        lastLetter=min(lastLetter+1,63);
-        if (c>='A' && c<='Z') c+='a'-'A';
-        if ((c>='a' && c<='z') || c==1 || c==2 ||(c>=128 &&(b2!=3))) {
+        lastUpper=min(lastUpper+1,255);
+        lastLetter=min(lastLetter+1,255);
+        mask2<<=2;
+
+        if (c>='A' && c<='Z') c+='a'-'A', lastUpper=0;
+        if ((c>='a' && c<='z') ||  ((c>=128&&(b3!=3)) || (c>0 && c<4))) {
             if (!wordlen){
-                // model syllabification with "+"
-                if ((lastLetter==3 && (c4&0xFFFF00)==0x2B0A00) || (lastLetter==4 && (c4&0xFFFFFF00)==0x2B0D0A00)){
-                    word0 = word1;
+                // model syllabification with "+"  //book1 case +\n +\r\n
+                if ((lastLetter=3 && (c4&0xFFFF00)==0x2B0A00 && buf(4)!=0x2B) || (lastLetter=4 && (c4&0xFFFFFF00)==0x2B0D0A00 && buf(5)!=0x2B) ||
+                    (lastLetter=3 && (c4&0xFFFF00)==0x2D0A00 && buf(4)!=0x2D) || (lastLetter=4 && (c4&0xFFFFFF00)==0x2D0D0A00 && buf(5)!=0x2D)){
+                    word0=word1;
+                    word1=word2;
+                    word2=word3;
+                    word3=word4;
+                    word4=word5;
+                    word5=0;
                     wordlen = wordlen1;
-                }
-                else{
-                    wordGap = lastLetter;
-                    firstLetter = c;
-                    wrdhsh = 0;
+                }else{
+                      wordGap = lastLetter;
+                      firstLetter = c;
+                      wrdhsh = 0;
                 }
             }
             lastLetter=0;
             ++words, ++wordcount;
-            word0^=hash(word0, c,0);
+            if (c>4)word0^=hash(word0, c,0);
             text0=text0*997*16+c;
             wordlen++;
             wordlen=min(wordlen,45);
@@ -1007,16 +1015,13 @@ void wordModel(Mixer& m) {
             w=word0&(wpos.size()-1);
             if ((c=='a' || c=='e' || c=='i' || c=='o' || c=='u') || (c=='y' && (wordlen>0 && pC!='a' && pC!='e' && pC!='i' && pC!='o' && pC!='u'))){
                 mask2++;
-                wrdhsh = wrdhsh*997*8+(c/4-22);
-            }
-            else if (c>='b' && c<='z'){
+                wrdhsh=wrdhsh*997*8+(c/4-22);
+            }else if (c>='b' && c<='z'){
                 mask2+=2;
-                wrdhsh = wrdhsh*271*32+(c-97);
-            }
-            else
-                wrdhsh = wrdhsh*11*32+c;
-        }
-        else {
+                wrdhsh=wrdhsh*271*32+(c-97);
+            }else
+                wrdhsh=wrdhsh*11*32+c;
+        } else {
             if (word0) {
                 word5=word4;
                 word4=word3;
@@ -1026,19 +1031,21 @@ void wordModel(Mixer& m) {
                 wordlen1=wordlen;
                  wpos[w]=blpos;
                 if (c==':'|| c=='=') cword0=word0;
-                if (c==']'&& (frstchar==':' || frstchar=='*')) xword0=word0;
+                if (c==']'&& (frstchar!=':')) xword0=word0;
                 ccword=0;
                 word0=wordlen=0;
                 if((c=='.'||c=='!'||c=='?' ||c=='}' ||c==')') && buf(2)!=10) f=1;
 
             }
-            if ((c4&0xFFFF)==0x3D3D) xword1=word1,xword2=word2;
-            if ((c4&0xFFFF)==0x2727) xword1=word1,xword2=word2;
-            if (c==32 || c==10 ) { ++spaces, ++spacecount; if (c==10 ) nl1=nl, nl=pos-1;}
+            if ((c4&0xFFFF)==0x3D3D) xword1=word1,xword2=word2; // == wiki
+            if ((c4&0xFFFF)==0x2727) xword1=word1,xword2=word2; // ''
+            if (c==SPACE || c==10 || c==5) { ++spaces, ++spacecount; if (c==10 || c==5) nl1=nl, nl=pos-1;}
             else if (c=='.' || c=='!' || c=='?' || c==',' || c==';' || c==':') spafdo=0,ccword=c,mask2+=3;
             else { ++spafdo; spafdo=min(63,spafdo); }
         }
+        lastDigit=min(0xFF,lastDigit+1);
         if (c>='0' && c<='9') {
+            if (buf(3)>='0' && buf(3)<='9' && (buf(2)=='.')&& number0==0) {number0=number1; number1=0;} // 0.4645
             number0^=hash(number0, c,1);
             lastDigit = 0;
         }
@@ -1046,66 +1053,82 @@ void wordModel(Mixer& m) {
             number1=number0;
             number0=0,ccword=0;
         }
-
         col=min(255, pos-nl);
-        int above=buf[nl1+col];
+
+        int above=buf[nl1+col]; // text column context
         if (col<=2) frstchar=(col==2?min(c,96):0);
-        if (frstchar=='[' && c==32) {if(buf(3)==']' || buf(4)==']' ) frstchar=96,xword0=0;}
-        cm.set(hash(513,spafdo, spaces,ccword));
+        if (frstchar=='[' && c==32)    {if(buf(3)==']' || buf(4)==']' ) frstchar=96,xword0=0;}
+          cm.set(hash(513,spafdo, spaces,ccword));
         cm.set(hash(514,frstchar, c));
-        cm.set(hash(515,col, frstchar, (lastUpper<col)*4+(mask2&3)));
+        cm.set(hash(515,col, frstchar, (lastUpper<col)*4+(mask2&3)));//?
         cm.set(hash(516,spaces, (words&255)));
 
-        cm.set(hash(256,number0, word2));
-        cm.set(hash(257,number0, word1));
+        cm.set(spaces&0x7fff);
+        cm.set(spaces&0xff);
+
+        cm.set(hash(257,number0, word1,wordGap));
         cm.set(hash(258,number1, c,ccword));
-        cm.set(hash(259,number0, number1));
+        cm.set(hash(259,number0, number1,wordGap));
         cm.set(hash(260,word0, number1, lastDigit<wordGap+wordlen));
-
-        cm.set(hash(518,wordlen1,col));
-        cm.set(hash(519,c,spacecount/2));
+        cm.set(hash(274,number0, cword0));
+        cm.set(hash(518,wordlen1,col)); //?//?
+        cm.set(hash(519,c,spacecount/2,wordGap));
         U32 h=wordcount*64+spacecount;
-        cm.set(hash(520,c,h,ccword));
-         cm.set(hash(517,frstchar,h));
+        cm.set(hash(520,c,h,ccword));  //?//?
+        cm.set(hash(517,frstchar,h,lastLetter)); //+
+        cm.set(h);
         cm.set(hash(521,h,spafdo));
-
         U32 d=c4&0xf0ff;
         cm.set(hash(522,d,frstchar,ccword));
 
         h=word0*271;
         h=h+buf(1);
-        cm.set(hash(262,h, 0));
-        cm.set(hash(263,word0, 0));
-        cm.set(hash(264,h, word1));
-        cm.set(hash(265,word0, word1));
-        cm.set(hash(266,h, word1,word2,lastUpper<wordlen));
-        cm.set(hash(268,text0&0xfffff, 0));
-          cm.set(hash(269,word0, xword0));
-          cm.set(hash(270,word0, xword1));
-          cm.set(hash(271,word0, xword2));
-          cm.set(hash(272,frstchar, xword2));
 
-        cm.set(hash(273,word0, cword0));
-        cm.set(hash(274,number0, cword0));
-        cm.set(hash(275,h, word2));
-        cm.set(hash(276,h, word3));
-        cm.set(hash(277,h, word4));
-        cm.set(hash(278,h, word5));
-        cm.set(hash(279,h, word1,word3));
-        cm.set(hash(280,h, word2,word3));
+         cm.set(hash(262,h, 0));
+         cm.set(hash( number0*271+buf(1), 0));
+         cm.set(hash(263,word0, 0));
+         if (wrdhsh) cm.set(hash(wrdhsh,buf(wpos[word1&(wpos.size()-1)]))); else cm.set(0);
+         cm.set(hash(264,h, word1));
+         cm.set(hash(265,word0, word1));
+         cm.set(hash(266,h, word1,word2,lastUpper<wordlen));//?
+         cm.set(text0&0xffffff);
+         cm.set(text0&0xfffff);
+         cm.set(hash(269,word0, xword0));
+         cm.set(hash(270,word0, xword1));
+         cm.set(hash(271,word0, xword2));
+         cm.set(hash(272,frstchar, xword2));
+         cm.set(hash(273,word0, cword0));
+         cm.set(hash(275,h, word2));
+         cm.set(hash(276,h, word3));
+         cm.set(hash(277,h, word4));
+         cm.set(hash(278,h, word5));
+         cm.set(hash(279,h, word1,word3));
+         cm.set(hash(280,h, word2,word3));
+        cm.set(buf(1)|buf(3)<<8|buf(5)<<16);
+        cm.set(buf(2)|buf(4)<<8|buf(6)<<16);
+        cm.set(buf(1)|buf(4)<<8|buf(7)<<16);
         if (f) {
-            word5=word4;
-            word4=word3;
-            word3=word2;
-            word2=word1;
+            word5=word4;//*29;
+            word4=word3;//*31;
+            word3=word2;//*37;
+            word2=word1;//*41;
             word1='.';
         }
-        cm.set(hash(523,col,buf(1),above));
-        cm.set(hash(524,buf(1),above));
-        cm.set(hash(525,col,buf(1)));
-        cm.set(hash(526,col,c==32));
-        cm.set(hash(281, w, llog(blpos-wpos[w])>>4));
-        cm.set(hash(282,buf(1),llog(blpos-wpos[w])>>2));
+        if (col<((U32)255)){
+           cm.set(hash(523,col,buf(1),above));
+           cm.set(hash(524,buf(1),above));
+           cm.set(hash(525,col,buf(1)));
+           cm.set(hash(526,col,c==32));
+        }
+        else {
+          cm.set(0); cm.set(0); cm.set(0); cm.set(0);
+        }
+
+       if (wordlen) cm.set(hash(281, word0, llog(blpos-wpos[word1&(wpos.size()-1)])>>4));
+       else cm.set(0);
+
+        cm.set(hash(282,buf(1),llog(blpos-wpos[word1&(wpos.size()-1)])>>2));
+        cm.set(hash(283,buf(1),word0,llog(blpos-wpos[word2&(wpos.size()-1)])>>2));
 
    int fl = 0;
     if ((c4&0xff) != 0) {
@@ -1119,23 +1142,25 @@ void wordModel(Mixer& m) {
     }
     mask = (mask<<3)|fl;
 
-    cm.set(hash(528,mask,0));
-    cm.set(hash(529,mask,buf(1)));
-    cm.set(hash(530,mask&0xff,col));
-    cm.set(hash(531,mask,buf(2),buf(3)));
-    cm.set(hash(532,mask&0x1ff,f4&0x00fff0));
-
-    cm.set(hash(h, llog(wordGap), mask&0x1FF,
-        ((wordlen1 > 3)<<6)|
-        ((wordlen > 0)<<5)|
-        ((spafdo == wordlen + 2)<<4)|
-        ((spafdo == wordlen + wordlen1 + 3)<<3)|
-        ((spafdo >= lastLetter + wordlen1 + wordGap)<<2)|
-        ((lastUpper < lastLetter + wordlen1)<<1)|
-        (lastUpper < wordlen + wordlen1 + wordGap)
+  {
+   cm.set(hash(528,mask,0));
+     cm.set(hash(529,mask,buf(1)));
+     cm.set(hash(530,mask&0xff,col));
+     cm.set(hash(531,mask,buf(2),buf(3)));
+     cm.set(hash(532,mask&0x1ff,f4&0x00fff0));
+     cm.set(hash(h, llog(wordGap), mask&0x1FF,
+      ((wordlen1 > 3)<<6)|
+      ((wordlen > 0)<<5)|
+      ((spafdo == wordlen + 2)<<4)|
+      ((spafdo == wordlen + wordlen1 + 3)<<3)|
+      ((spafdo >= lastLetter + wordlen1 + wordGap)<<2)|
+      ((lastUpper < lastLetter + wordlen1)<<1)|
+      (lastUpper < wordlen + wordlen1 + wordGap)
     ));
-    cm.set(hash(col,wordlen1,above&0x5F,c4&0x5F));
-    cm.set(hash( mask2&0x3F, wrdhsh&0xFFF, (0x100|firstLetter)*(wordlen<6),(wordGap>4)*2+(wordlen1>5)) );
+    }
+    if (wordlen1)    cm.set(hash(col,wordlen1,above&0x5F,c4&0x5F)); else cm.set(0); //wordlist
+    if (wrdhsh)  cm.set(hash(mask2&0x3F, wrdhsh&0xFFF, (0x100|firstLetter)*(wordlen<6),(wordGap>4)*2+(wordlen1>5)) ); else cm.set(0);//?
+
     }
     cm.mix(m);
 }
@@ -1243,7 +1268,7 @@ void recordModel(Mixer& m, Filetype filetype, ModelStats *Stats = NULL) {
   static int rcount[2] = {0,0}; // candidate counts
   static U8 padding = 0; // detected padding byte
   static int prevTransition = 0, nTransition = 0; // position of the last padding transition
-  static int col = 0, mxCtx = 0; 
+  static int col = 0, mxCtx = 0;
   static ContextMap cm(32768, 3), cn(32768/2, 3), co(32768*2, 3), cp(MEM(), 7);
   static StationaryMap Map0(10,8), Map1(10,8);
   static bool MayBeImg24b = false;
@@ -1712,7 +1737,7 @@ void im8bitModel(Mixer& m, int w, int gray = 0) {
     column[1]=x/columns[1];
     int i=0;
     WWW=buf(3), WW=buf(2), W=buf(1), NWW=buf(w+2), NW=buf(w+1), N=buf(w), NE=buf(w-1), NEE=buf(w-2), NNW=buf(w*2+1), NN=buf(w*2), NNE=buf(w*2-1), NNN=buf(w*3);
-    
+
     if (!gray){
       cm.set(hash(++i, W));
       cm.set(hash(++i, W, column[0]));
@@ -1826,7 +1851,7 @@ void im8bitModel(Mixer& m, int w, int gray = 0) {
       Map[31].set((buf(4)+buf(6))/2);
       Map[32].set((W+N+buf(w-5)+buf(w-7))/4);
       Map[33].set(Clip(buf(w-3)+W-NEE));
-      Map[34].set(Clip(4*NNN-3*buf(w*4)));       
+      Map[34].set(Clip(4*NNN-3*buf(w*4)));
       Map[35].set(Clip(WW+NEE-N));
       Map[36].set((Clip(W*2-NW)+Clip(W*2-NWW)+N+NE)/4);
       Map[37].set(Clamp4(N*2-NN,W,N,NE,NEE));
@@ -1838,7 +1863,7 @@ void im8bitModel(Mixer& m, int w, int gray = 0) {
       ctx = min(0x1F,x/max(1,w/min(32,columns[0])))|( ( ((abs(W-N)*16>W+N)<<1)|(abs(N-NW)>8) )<<5 )|((W+N)&0x180);
     }
   }
-  
+
   cm.mix(m);
   if (gray){
     for (int i=0;i<nMaps;i++)
@@ -1894,7 +1919,7 @@ void im24bitModel(Mixer& m, int w, int alpha=0) {
 
     ctx[0] = (min(color,stride-1)<<9)|((abs(W-N)>3)<<8)|((W>N)<<7)|((W>NW)<<6)|((abs(N-NW)>3)<<5)|((N>NW)<<4)|((abs(N-NE)>3)<<3)|((N>NE)<<2)|((W>WW)<<1)|(N>NN);
     ctx[1] = ((LogMeanDiffQt(buf(1),Clip(buf(w+1)+buf(w-stride+1)-buf(w*2-stride+1)))>>1)<<5)|((LogMeanDiffQt(Clip(N+NE-NNE),Clip(N+NW-NNW))>>1)<<2)|min(color,stride-1);
-    
+
     cm.set(hash((N+1)>>1, LogMeanDiffQt(N,Clip(NN*2-NNN))));
     cm.set(hash((W+1)>>1, LogMeanDiffQt(W,Clip(WW*2-WWW))));
     cm.set(hash(Clamp4(W+N-NW,W,NW,N,NE), LogMeanDiffQt(Clip(N+NE-NNE), Clip(N+NW-NNW))));
@@ -1952,7 +1977,7 @@ void im24bitModel(Mixer& m, int w, int alpha=0) {
     scm7.set(NE+buf(1)-buf(w-stride+1));
     scm8.set(N+NE-NNE);
     scm9.set(mean>>1|(logvar<<1&0x180));
-    
+
     Map[0].set( ((U8)Clip(W+N-NW))|(LogMeanDiffQt(Clip(N+NE-NNE),Clip(N+NW-NNW))<<8) );
     Map[1].set( ((U8)Clip(N*2-NN))|(LogMeanDiffQt(W,Clip(NW*2-NNW))<<8) );
     Map[2].set( ((U8)Clip(W*2-WW))|(LogMeanDiffQt(N,Clip(NW*2-NWW))<<8) );
@@ -2220,7 +2245,7 @@ void wavModel(Mixer& m, int info, ModelStats *Stats = NULL) {
     rpos=(pos==lastPos+1)?rpos+1:0;
     lastPos = pos;
   }
-  
+
   if (!bpos && !rpos) {
     bits=((info%4)/2)*8+8;
     channels=info%2+1;
@@ -2359,7 +2384,7 @@ struct WAVAudio{
 int audioModel(Mixer& m, ModelStats *Stats = NULL) {
   static U32 eoi=0, length=0, info=0;
   static WAVAudio WAV;
-  
+
   if (!bpos){
     if (pos>=(int)(eoi+4) && !WAV.Header && m4(4)==0x52494646){
       WAV.Header = pos;
@@ -2399,16 +2424,16 @@ int audioModel(Mixer& m, ModelStats *Stats = NULL) {
       }
     }
   }
-  
+
   if (pos>(int)eoi)
     return info=0;
 
   if (info)
     wavModel(m, info-1, Stats);
-  
+
   if (bpos==7 && (pos+1)==(int)eoi)
     memset(&WAV, 0, sizeof(WAVAudio));
-  
+
   return info;
 }
 
