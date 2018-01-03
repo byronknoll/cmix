@@ -727,7 +727,7 @@ public:
   void mix(Mixer& m, int rate=7) {
     *cp += ((y<<16)-*cp+(1<<(rate-1))) >> rate;
     cp=&t[cxt+c0];
-    m.add(stretch(*cp>>4));
+    m.add(stretch(*cp>>4)/2);
   }
 };
 
@@ -770,7 +770,7 @@ public:
     B+=(y && B>1);
     cp=&Data[Context+B];
     Prediction = (*cp)>>20;
-    m.add(stretch(Prediction)/4);
+    m.add(stretch(Prediction)/2);
     m.add((Prediction-2048)/4);
     bCount<<=1; B<<=1;
     if (bCount==Mask){
@@ -1713,12 +1713,12 @@ void im4bitModel(Mixer& m, int w) {
 }
 
 void im8bitModel(Mixer& m, int w, int gray = 0) {
-  const int nMaps = 43;
+  const int nMaps = 56;
   static ContextMap cm(MEM()*4, 48);
   static StationaryMap Map[nMaps] = {
     {12,8}, {8,8}, {8,8}, {8,8}, {8,8}, {8,8}, {8,8}, {8,8}, {8,8}, {8,8}, {8,8}, {8,8}, {8,8}, {8,8}, {8,8}, {8,8}, {8,8}, {8,8}, {8,8}, {8,8},
      {8,8}, {8,8}, {8,8}, {8,8}, {8,8}, {8,8}, {8,8}, {8,8}, {8,8}, {8,8}, {8,8}, {8,8}, {8,8}, {8,8}, {8,8}, {8,8}, {8,8}, {8,8}, {8,8}, {8,8},
-     {8,8}, {8,8}, {0,8}
+     {8,8}, {8,8}, {8,8}, {8,8}, {8,8}, {8,8}, {8,8}, {8,8}, {8,8}, {8,8}, {8,8}, {8,8}, {8,8}, {8,8}, {8,8}, {0,8}
   };
   static U8 WWW, WW, W, NWW, NW, N, NE, NEE, NNWW, NNW, NN, NNE, NNEE, NNN; //pixel neighborhood
   static int ctx, lastPos=0, col=0, x=0;
@@ -1736,7 +1736,7 @@ void im8bitModel(Mixer& m, int w, int gray = 0) {
     column[0]=x/columns[0];
     column[1]=x/columns[1];
     int i=0;
-    WWW=buf(3), WW=buf(2), W=buf(1), NWW=buf(w+2), NW=buf(w+1), N=buf(w), NE=buf(w-1), NEE=buf(w-2), NNW=buf(w*2+1), NN=buf(w*2), NNE=buf(w*2-1), NNN=buf(w*3);
+    WWW=buf(3), WW=buf(2), W=buf(1), NWW=buf(w+2), NW=buf(w+1), N=buf(w), NE=buf(w-1), NEE=buf(w-2), NNWW=buf(w*2+2), NNW=buf(w*2+1), NN=buf(w*2), NNE=buf(w*2-1), NNEE=buf(w*2-2), NNN=buf(w*3);
 
     if (!gray){
       cm.set(hash(++i, W));
@@ -1859,6 +1859,19 @@ void im8bitModel(Mixer& m, int w, int gray = 0) {
       Map[39].set(Clip(NN+W-NNW));
       Map[40].set(Clip(NWW+N-NNWW));
       Map[41].set(Clip((4*WWW-15*WW+20*W+NEE)/10));
+      Map[42].set(Clip((buf(w*3-3)-4*NNEE+6*NE+Clip(W*3-NW*3+NNW))/4));
+      Map[43].set(Clip((N*2+NE)-(NN+2*NNE)+buf(w*3-1)));
+      Map[44].set(Clip((NW*2+NNW)-(NNWW+buf(w*3+2)*2)+buf(w*4+3)));
+      Map[45].set(Clip(NNWW+W-buf(w*2+3)));
+      Map[46].set(Clip((-buf(w*4)+5*NNN-10*NN+10*N+Clip(W*4-NWW*6+buf(w*2+3)*4-buf(w*3+4)))/5));
+      Map[47].set(Clip(NEE+Clip(buf(w-3)*2-buf(w*2-4))-buf(w-4)));
+      Map[48].set(Clip(NW+W-NWW));
+      Map[49].set(Clip((N*2+NW)-(NN+2*NNW)+buf(w*3+1)));
+      Map[50].set(Clip(NN+Clip(NEE*2-buf(w*2-3))-NNE));
+      Map[51].set(Clip((-buf(4)+5*WWW-10*WW+10*W+Clip(NE*2-NNE))/5));
+      Map[52].set(Clip((-buf(5)+4*buf(4)-5*WWW+5*W+Clip(NE*2-NNE))/4));
+      Map[53].set(Clip((WWW-4*WW+6*W+Clip(NE*3-NNE*3+buf(w*3-1)))/4));
+      Map[54].set(Clip((-NNEE+3*NE+Clip(W*4-NW*6+NNW*4-buf(w*3+1)))/3));
 
       ctx = min(0x1F,x/max(1,w/min(32,columns[0])))|( ( ((abs(W-N)*16>W+N)<<1)|(abs(N-NW)>8) )<<5 )|((W+N)&0x180);
     }
@@ -1872,7 +1885,7 @@ void im8bitModel(Mixer& m, int w, int gray = 0) {
   col=(col+1)&7;
   m.set(ctx, 2048);
   m.set(col, 8);
-  m.set((buf(w)+buf(1))>>4, 32);
+  m.set((N+W)>>4, 32);
   m.set(c0, 256);
   m.set( ((abs((int)(W-N))>4)<<9)|((abs((int)(N-NE))>4)<<8)|((abs((int)(W-NW))>4)<<7)|((W>N)<<6)|((N>NE)<<5)|((W>NW)<<4)|((W>WW)<<3)|((N>NN)<<2)|((NW>NNWW)<<1)|(NE>NNEE), 1024 );
   m.set(min(63,column[0]), 64);
@@ -1881,11 +1894,11 @@ void im8bitModel(Mixer& m, int w, int gray = 0) {
 
 void im24bitModel(Mixer& m, int w, int alpha=0) {
   const int SC=0x20000;
-  const int nMaps = 34;
+  const int nMaps = 35;
   static SmallStationaryContextMap scm1(SC), scm2(SC),
     scm3(SC), scm4(SC), scm5(SC), scm6(SC), scm7(SC), scm8(SC), scm9(SC*2), scm10(512);
   static ContextMap cm(MEM()*4, 15+32);
-  static StationaryMap Map[nMaps] = { {12,8}, {12,8}, {12,8}, {12,8}, {10,8}, {8,8}, {8,8}, {8,8}, {8,8}, {8,8}, {8,8}, {8,8}, {8,8}, {8,8}, {8,8}, {8,8}, {8,8}, {8,8}, {8,8}, {8,8}, {8,8}, {8,8}, {8,8}, {8,8}, {8,8}, {8,8}, {8,8}, {8,8}, {8,8}, {8,8}, {8,8}, {8,8}, {8,8}, {0,8} };
+  static StationaryMap Map[nMaps] = { {12,8}, {12,8}, {12,8}, {12,8}, {10,8}, {8,8}, {8,8}, {8,8}, {8,8}, {8,8}, {8,8}, {8,8}, {8,8}, {8,8}, {8,8}, {8,8}, {8,8}, {8,8}, {8,8}, {8,8}, {8,8}, {8,8}, {8,8}, {8,8}, {8,8}, {8,8}, {8,8}, {8,8}, {8,8}, {8,8}, {8,8}, {8,8}, {8,8}, {8,8}, {0,8} };
   static U8 WWW, WW, W, NWW, NW, N, NE, NEE, NNWW, NNW, NN, NNE, NNEE, NNN; //pixel neighborhood
   static int color = -1, stride = 3;
   static int ctx[2], padding, lastPos, x = 0;
@@ -2011,19 +2024,20 @@ void im24bitModel(Mixer& m, int w, int alpha=0) {
     Map[30].set(buf(w*6));
     Map[31].set((buf(w-4*stride)+buf(w-6*stride))/2);
     Map[32].set((Clip(W*2-NW)+Clip(W*2-NWW)+N+NE)/4);
+    Map[33].set((buf(stride*6)+buf(stride*4))/2);
   }
 
   // Predict next bit
-  scm1.mix(m);
-  scm2.mix(m);
-  scm3.mix(m);
-  scm4.mix(m);
+  scm1.mix(m,8);
+  scm2.mix(m,8);
+  scm3.mix(m,8);
+  scm4.mix(m,8);
   scm5.mix(m);
   scm6.mix(m);
   scm7.mix(m);
   scm8.mix(m);
-  scm9.mix(m);
-  scm10.mix(m);
+  scm9.mix(m,8);
+  scm10.mix(m,8);
   cm.mix(m);
   for (int i=0;i<nMaps;i++)
     Map[i].mix(m);
