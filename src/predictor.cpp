@@ -308,41 +308,59 @@ void Predictor::AddMixers() {
   AddMixer(0, new Mixer(layers_[0]->Inputs(), logistic_,
       manager_.auxiliary_context_, 0.0005, input_size));
 
-  std::vector<int> map1(256, 0), map2(256, 0), map3(256, 0), map4(256, 0);
+  std::vector<int> map(256, 0);
   for (int i = 0; i < 256; ++i) {
-    map1[i] = (i < 1) + (i < 32) + (i < 64) + (i < 128) + (i < 255) +
+    map[i] = (i < 1) + (i < 32) + (i < 64) + (i < 128) + (i < 255) +
       (i < 142) + (i < 138) + (i < 140) + (i < 137) + (i < 97);
-    map2[i] = (i < 41) + (i < 92) + (i < 124) + (i < 58) +
+  }
+  const Context& interval1 = manager_.AddContext(std::unique_ptr<Context>(
+      new Interval(manager_.bit_context_, map, 8)));
+  AddMixer(0, new Mixer(layers_[0]->Inputs(), logistic_, interval1.GetContext(),
+      0.001, input_size));
+
+  for (int i = 0; i < 256; ++i) {
+    map[i] = (i < 41) + (i < 92) + (i < 124) + (i < 58) +
         (i < 11) + (i < 46) + (i < 36) + (i < 47) +
         (i < 64) + (i < 4) + (i < 61) + (i < 97) +
         (i < 125) + (i < 45) + (i < 48);
   }
-  const Context& interval1 = manager_.AddContext(std::unique_ptr<Context>(
-      new Interval(manager_.bit_context_, map1, 8)));
-  AddMixer(0, new Mixer(layers_[0]->Inputs(), logistic_, interval1.GetContext(),
-      0.001, input_size));
   const Context& interval2 = manager_.AddContext(std::unique_ptr<Context>(
-      new Interval(manager_.bit_context_, map2, 8)));
+      new Interval(manager_.bit_context_, map, 8)));
   AddMixer(0, new Mixer(layers_[0]->Inputs(), logistic_, interval2.GetContext(),
       0.001, input_size));
 
-  for (int i = 'a'; i <= 'z'; ++i) map3[i] = 1;
-  for (int i = 'A'; i <= 'Z'; ++i) map3[i] = 1;
-  for (int i = '0'; i <= '9'; ++i) map3[i] = 1;
-  for (int i = 0x80; i < 256; ++i) map3[i] = 1;
+  for (int i = 0; i < 256; ++i) map[i] = 0;
+  for (int i = 'a'; i <= 'z'; ++i) map[i] = 1;
+  for (int i = 'A'; i <= 'Z'; ++i) map[i] = 1;
+  for (int i = '0'; i <= '9'; ++i) map[i] = 1;
+  for (int i = 0x80; i < 256; ++i) map[i] = 1;
   const Context& interval3 = manager_.AddContext(std::unique_ptr<Context>(
-      new Interval(manager_.bit_context_, map3, 8)));
+      new Interval(manager_.bit_context_, map, 8)));
   AddMixer(0, new Mixer(layers_[0]->Inputs(), logistic_, interval3.GetContext(),
       0.001, input_size));
 
-  for (int i = 'a'; i <= 'z'; ++i) map4[i] = 1;
-  for (int i = 'A'; i <= 'Z'; ++i) map4[i] = 1;
-  for (int i = '0'; i <= '9'; ++i) map4[i] = 1;
-  for (int i = 0x80; i < 256; ++i) map4[i] = 2;
-  map4[' '] = 3;
+  for (int i = 0; i < 256; ++i) map[i] = 0;
+  for (int i = 'a'; i <= 'z'; ++i) map[i] = 1;
+  for (int i = 'A'; i <= 'Z'; ++i) map[i] = 1;
+  for (int i = '0'; i <= '9'; ++i) map[i] = 1;
+  for (int i = 0x80; i < 256; ++i) map[i] = 2;
+  map[' '] = 3;
   const Context& interval4 = manager_.AddContext(std::unique_ptr<Context>(
-      new Interval(manager_.bit_context_, map4, 10)));
+      new Interval(manager_.bit_context_, map, 10)));
   AddMixer(0, new Mixer(layers_[0]->Inputs(), logistic_, interval4.GetContext(),
+      0.001, input_size));
+
+  for (int i = 0; i < 256; ++i) map[i] = 0;
+  for (int i = 0x20; i <= 0x7E; ++i) map[i] = 1;
+  for (int i = 'a'; i <= 'z'; ++i) map[i] = 2;
+  for (int i = '0'; i <= '9'; ++i) map[i] = 3;
+  for (int i = 0x80; i <= 0xCF; ++i) map[i] = 4;
+  for (int i = 0xD0; i <= 0xEF; ++i) map[i] = 5;
+  for (int i = 0xF0; i <= 0xFF; ++i) map[i] = 6;
+  map[' '] = 7;
+  const Context& interval5 = manager_.AddContext(std::unique_ptr<Context>(
+      new Interval(manager_.bit_context_, map, 9)));
+  AddMixer(0, new Mixer(layers_[0]->Inputs(), logistic_, interval5.GetContext(),
       0.001, input_size));
 
   const BitContext& bit_context1 = manager_.AddBitContext(std::unique_ptr
