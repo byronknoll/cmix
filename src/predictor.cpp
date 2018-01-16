@@ -24,7 +24,7 @@
 
 Predictor::Predictor(const std::vector<bool>& vocab) : manager_(),
     logistic_(10000), vocab_(vocab) {
-  srand(0x44444);
+  srand(0xDEADBEEF);
 
   AddBracket();
   AddPAQ8HP();
