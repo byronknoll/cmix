@@ -14,7 +14,7 @@ Lstm::Lstm(unsigned int input_size, unsigned int output_size, unsigned int
     output_(std::valarray<float>(1.0 / output_size, output_size), horizon),
     learning_rate_(learning_rate), num_cells_(num_cells), epoch_(0),
     horizon_(horizon), input_size_(input_size), output_size_(output_size) {
-  srand(0x55555);
+  srand(14003);
   hidden_[hidden_.size() - 1] = 1;
   for (int epoch = 0; epoch < horizon; ++epoch) {
     layer_input_[epoch][0].resize(1 + num_cells + input_size);
