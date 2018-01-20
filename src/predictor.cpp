@@ -350,7 +350,7 @@ void Predictor::AddMixers() {
   AddMixer(0, new Mixer(layers_[0]->Inputs(), logistic_, interval4.GetContext(),
       0.001, input_size));
   const Context& interval5 = manager_.AddContext(std::unique_ptr<Context>(
-      new Interval(manager_.bit_context_, map, 12)));
+      new Interval(manager_.bit_context_, map, 16)));
   AddMixer(0, new Mixer(layers_[0]->Inputs(), logistic_, interval5.GetContext(),
       0.001, input_size));
 
