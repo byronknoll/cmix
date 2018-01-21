@@ -410,6 +410,14 @@ void Predictor::AddMixers() {
       0.001, input_size));
   AddMixer(1, new Mixer(layers_[1]->Inputs(), logistic_, interval2.GetContext(),
       0.001, input_size));
+  AddMixer(1, new Mixer(layers_[1]->Inputs(), logistic_, interval3.GetContext(),
+      0.001, input_size));
+  AddMixer(1, new Mixer(layers_[1]->Inputs(), logistic_, interval4.GetContext(),
+      0.001, input_size));
+  AddMixer(1, new Mixer(layers_[1]->Inputs(), logistic_, interval5.GetContext(),
+      0.001, input_size));
+  AddMixer(1, new Mixer(layers_[1]->Inputs(), logistic_, interval6.GetContext(),
+      0.001, input_size));
 
   input_size = mixers_[0].size() + mixers_[1].size() + auxiliary_.size();
   layers_[2]->SetNumModels(input_size);
