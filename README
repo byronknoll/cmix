@@ -1,7 +1,10 @@
 cmix version 14
 http://www.byronknoll.com/cmix.html
 Released by Byron Knoll on October 20, 2017.
-cmix is free software distributed under the GNU General Public License.
+
+cmix is a lossless data compression program aimed at optimizing compression ratio at the cost of high CPU/memory usage. cmix is free software distributed under the GNU General Public License.
+
+cmix works in Linux, Windows, and Mac OS X. At least 32GB of RAM is recommended to run cmix. Feel free to contact me at byron@byronknoll.com if you have any questions.
 
 In Linux or OS X, use "make" to compile cmix using g++. In Windows, cmix can be compiled with MinGW (http://nuwen.net/mingw.html) or Cygwin (https://www.cygwin.com).
 
