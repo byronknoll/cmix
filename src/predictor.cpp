@@ -258,7 +258,7 @@ void Predictor::AddInterval() {
   float delta = 400;
   for (const auto& params : model_params) {
     const Context& interval = manager_.AddContext(std::unique_ptr<Context>(
-        new IntervalHash(manager_.bit_context_, map, params[0], params[1])));
+        new IntervalHash(manager_.bit_context_, map, 8, params[0], params[1])));
     AddModel(new Indirect(manager_.nonstationary_, interval.GetContext(),
         manager_.bit_context_, delta, manager_.shared_map_));
   }
