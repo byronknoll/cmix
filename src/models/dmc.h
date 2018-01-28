@@ -14,7 +14,7 @@ struct Node {
 class DMC : public Model {
  public:
   DMC(float delta, unsigned int max_size);
-  float Predict();
+  const std::valarray<float>& Predict();
   void Perceive(int bit);
   void ByteUpdate() {};
 

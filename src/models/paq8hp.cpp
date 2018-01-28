@@ -434,7 +434,7 @@ void train(short *t, short *w, int n, int err) {
 }
 #endif
 
-std::vector<float> model_predictions(460, 0.5);
+std::valarray<float> model_predictions(0.5, 461);
 unsigned int prediction_index = 0;
 float conversion_factor = 1.0 / 4095;
 
@@ -1163,8 +1163,14 @@ PAQ8HP::PAQ8HP(int memory) {
   buf.setsize(MEM*8);
 }
 
-float PAQ8HP::Predict() {
-  return paq8.p() * conversion_factor;
+const std::valarray<float>& PAQ8HP::Predict() {
+  model_predictions[model_predictions.size() - 1] = paq8.p() *
+      conversion_factor;
+  return model_predictions;
+}
+
+unsigned int PAQ8HP::NumOutputs() {
+  return model_predictions.size();
 }
 
 void PAQ8HP::Perceive(int bit) {
@@ -1177,6 +1183,3 @@ void PAQ8HP::Perceive(int bit) {
   paq8.update();
 }
 
-const std::vector<float>& PAQ8HP::ModelPredictions() {
-  return model_predictions;
-}

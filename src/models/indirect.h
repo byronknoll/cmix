@@ -13,7 +13,7 @@ class Indirect : public Model {
       const unsigned long long& byte_context,
       const unsigned int& bit_context, float delta,
       std::vector<unsigned char>& map);
-  float Predict();
+  const std::valarray<float>& Predict();
   void Perceive(int bit);
   void ByteUpdate();
 

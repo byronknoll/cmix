@@ -25,9 +25,10 @@ void DMC::Reset() {
   cur_ = 0;
 }
 
-float DMC::Predict() {
-  return (delta_ + nodes_[cur_].count[1]) / (nodes_[cur_].count[0] +
+const std::valarray<float>& DMC::Predict() {
+  outputs_[0] = (delta_ + nodes_[cur_].count[1]) / (nodes_[cur_].count[0] +
       nodes_[cur_].count[1] + 2 * delta_);
+  return outputs_;
 }
 
 void DMC::Perceive(int bit) {

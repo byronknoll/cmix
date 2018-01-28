@@ -13,8 +13,9 @@ DirectHash::DirectHash(const unsigned long long& byte_context,
   }
 }
 
-float DirectHash::Predict() {
-  return predictions_[index_][bit_context_];
+const std::valarray<float>& DirectHash::Predict() {
+  outputs_[0] = predictions_[index_][bit_context_];
+  return outputs_;
 }
 
 void DirectHash::Perceive(int bit) {

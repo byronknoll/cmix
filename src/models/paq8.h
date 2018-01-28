@@ -7,10 +7,10 @@
 class PAQ8 : public Model {
  public:
   PAQ8(int memory);
-  float Predict();
+  const std::valarray<float>& Predict();
+  unsigned int NumOutputs();
   void Perceive(int bit);
   void ByteUpdate() {};
-  const std::vector<float>& ModelPredictions();
 };
 
 #endif

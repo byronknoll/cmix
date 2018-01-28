@@ -12,7 +12,7 @@ class Match : public Model {
     const unsigned long long& byte_context, const unsigned int& bit_context_,
     int limit, float delta, unsigned long long map_size,
     unsigned long long* longest_match);
-  float Predict();
+  const std::valarray<float>& Predict();
   void Perceive(int bit);
   void ByteUpdate();
 

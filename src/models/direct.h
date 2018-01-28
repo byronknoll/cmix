@@ -10,7 +10,7 @@ class Direct : public Model {
  public:
   Direct(const unsigned long long& byte_context,
       const unsigned int& bit_context, int limit, float delta, int size);
-  float Predict();
+  const std::valarray<float>& Predict();
   void Perceive(int bit);
   void ByteUpdate() {};
 

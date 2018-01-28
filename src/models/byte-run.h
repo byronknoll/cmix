@@ -11,7 +11,7 @@ class ByteRun : public Model {
   ByteRun(const unsigned long long& byte_context,
       const unsigned int& bit_context, float delta,
       unsigned long long map_size);
-  float Predict();
+  const std::valarray<float>& Predict();
   void Perceive(int bit);
   void ByteUpdate();
 

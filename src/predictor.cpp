@@ -16,7 +16,6 @@
 #include "contexts/interval.h"
 #include "contexts/interval-hash.h"
 #include "contexts/bit-context.h"
-#include "models/facade.h"
 
 #include <vector>
 #include <stdlib.h>
@@ -41,13 +40,20 @@ Predictor::Predictor(const std::vector<bool>& vocab) : manager_(),
   AddDoubleIndirect();
   AddInterval();
   AddMixers();
-  for (unsigned int i : auxiliary_) {
-    auxiliary_set_.insert(i);
-  }
 }
 
 unsigned long long Predictor::GetNumModels() {
-  return models_.size() + byte_models_.size() + byte_mixers_.size();
+  unsigned long long num = 0;
+  for (unsigned int i = 0; i < models_.size(); ++i) {
+    num += models_[i]->NumOutputs();
+  }
+  for (unsigned int i = 0; i < byte_models_.size(); ++i) {
+    num += byte_models_[i]->NumOutputs();
+  }
+  for (unsigned int i = 0; i < byte_mixers_.size(); ++i) {
+    num += byte_mixers_[i]->NumOutputs();
+  }
+  return num;
 }
 
 void Predictor::AddModel(Model* model) {
@@ -66,24 +72,22 @@ void Predictor::AddByteMixer(ByteMixer* byte_mixer) {
   byte_mixers_.push_back(std::unique_ptr<ByteMixer>(byte_mixer));
 }
 
+void Predictor::AddAuxiliary() {
+  unsigned int index = GetNumModels() - 1;
+  auxiliary_.push_back(index);
+  auxiliary_set_.insert(index);
+}
+
 void Predictor::AddPAQ8HP() {
-  auxiliary_.push_back(models_.size());
   PAQ8HP* paq = new PAQ8HP(11);
   AddModel(paq);
-  const std::vector<float>& predictions = paq->ModelPredictions();
-  for (unsigned int i = 0; i < predictions.size(); ++i) {
-    AddModel(new Facade(predictions[i]));
-  }
+  AddAuxiliary();
 }
 
 void Predictor::AddPAQ8() {
-  auxiliary_.push_back(models_.size());
   PAQ8* paq = new PAQ8(11);
   AddModel(paq);
-  const std::vector<float>& predictions = paq->ModelPredictions();
-  for (unsigned int i = 0; i < predictions.size(); ++i) {
-    AddModel(new Facade(predictions[i]));
-  }
+  AddAuxiliary();
 }
 
 void Predictor::AddBracket() {
@@ -271,7 +275,7 @@ void Predictor::AddMixers() {
   }
   AddByteMixer(new ByteMixer(byte_models_.size(), 150, 2, 40, 0.03, 10,
       manager_.bit_context_, vocab_, vocab_size));
-  auxiliary_.push_back(models_.size() + byte_models_.size());
+  AddAuxiliary();
 
   for (int i = 0; i < 3; ++i) {
     layers_.push_back(std::unique_ptr<MixerInput>(new MixerInput(logistic_,
@@ -427,25 +431,37 @@ void Predictor::AddMixers() {
 
 float Predictor::Predict() {
   float auxiliary_average = 0;
+  unsigned int input_index = 0;
   for (unsigned int i = 0; i < models_.size(); ++i) {
-    float p = models_[i]->Predict();
-    if (auxiliary_set_.find(i) != auxiliary_set_.end()) {
-      auxiliary_average += p;
+    const std::valarray<float>& outputs = models_[i]->Predict();
+    for (unsigned int j = 0; j < outputs.size(); ++j) {
+      float p = outputs[j];
+      if (auxiliary_set_.find(input_index) != auxiliary_set_.end()) {
+        auxiliary_average += p;
+      }
+      layers_[0]->SetInput(input_index, p);
+      ++input_index;
     }
-    layers_[0]->SetInput(i, p);
   }
   auxiliary_average /= auxiliary_.size();
   manager_.auxiliary_context_ = auxiliary_average * 20;
 
   for (unsigned int i = 0; i < byte_models_.size(); ++i) {
-    float p = byte_models_[i]->Predict();
-    layers_[0]->SetInput(models_.size() + i, p);
+    const std::valarray<float>& outputs = byte_models_[i]->Predict();
+    for (unsigned int j = 0; j < outputs.size(); ++j) {
+      layers_[0]->SetInput(input_index, outputs[j]);
+      ++input_index;
+    }
   }
   float byte_mixer_override = -1;
   for (unsigned int i = 0; i < byte_mixers_.size(); ++i) {
-    float p = byte_mixers_[i]->Predict();
-    layers_[0]->SetInput(models_.size() + byte_models_.size() + i, p);
-    if (p == 0 || p == 1) byte_mixer_override = p;
+    const std::valarray<float>& outputs = byte_mixers_[i]->Predict();
+    for (unsigned int j = 0; j < outputs.size(); ++j) {
+      float p = outputs[j];
+      if (p == 0 || p == 1) byte_mixer_override = p;
+      layers_[0]->SetInput(input_index, p);
+      ++input_index;
+    }
   }
   for (unsigned int i = 0; i < mixers_[0].size(); ++i) {
     float p = mixers_[0][i]->Mix();

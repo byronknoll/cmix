@@ -473,7 +473,7 @@ void train(short *t, short *w, int n, int err) {
 #define NUM_INPUTS 1343
 #define NUM_SETS 13
 
-std::vector<float> model_predictions(NUM_INPUTS+NUM_SETS, 0.5);
+std::valarray<float> model_predictions(0.5, NUM_INPUTS + NUM_SETS + 1);
 unsigned int prediction_index = 0;
 float conversion_factor = 1.0 / 4095;
 
@@ -5433,15 +5433,17 @@ PAQ8::PAQ8(int memory) {
   buf.setsize(MEM()*8);
 }
 
-float PAQ8::Predict() {
-  return paq8.p() * conversion_factor;
+const std::valarray<float>& PAQ8::Predict() {
+  model_predictions[model_predictions.size() - 1] = paq8.p() *
+      conversion_factor;
+  return model_predictions;
+}
+
+unsigned int PAQ8::NumOutputs() {
+  return model_predictions.size();
 }
 
 void PAQ8::Perceive(int bit) {
   y = bit;
   paq8.update();
-}
-
-const std::vector<float>& PAQ8::ModelPredictions() {
-  return model_predictions;
 }

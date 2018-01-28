@@ -13,9 +13,10 @@ Indirect::Indirect(const State& state,
   }
 }
 
-float Indirect::Predict() {
+const std::valarray<float>& Indirect::Predict() {
   map_index_ += bit_context_;
-  return predictions_[map_[map_index_]];
+  outputs_[0] = predictions_[map_[map_index_]];
+  return outputs_;
 }
 
 void Indirect::Perceive(int bit) {

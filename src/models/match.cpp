@@ -14,9 +14,10 @@ Match::Match(const std::vector<unsigned char>& history,
   counts_.fill(0);
 }
 
-float Match::Predict() {
-  if (cur_byte_ & bit_pos_) return predictions_[match_length_];
-  return 1 - predictions_[match_length_];
+const std::valarray<float>& Match::Predict() {
+  if (cur_byte_ & bit_pos_) outputs_[0] = predictions_[match_length_];
+  else outputs_[0] = 1 - predictions_[match_length_];
+  return outputs_;
 }
 
 void Match::Perceive(int bit) {

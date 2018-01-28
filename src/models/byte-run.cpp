@@ -11,9 +11,10 @@ ByteRun::ByteRun(const unsigned long long& byte_context,
   }
 }
 
-float ByteRun::Predict() {
-  if (byte_prediction_ & bit_pos_) return predictions_[run_length_];
-  return 1 - predictions_[run_length_];
+const std::valarray<float>& ByteRun::Predict() {
+  if (byte_prediction_ & bit_pos_) outputs_[0] = predictions_[run_length_];
+  else outputs_[0] = 1 - predictions_[run_length_];
+  return outputs_;
 }
 
 void ByteRun::Perceive(int bit) {
