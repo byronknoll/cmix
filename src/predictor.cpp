@@ -75,7 +75,6 @@ void Predictor::AddByteMixer(ByteMixer* byte_mixer) {
 void Predictor::AddAuxiliary() {
   unsigned int index = GetNumModels() - 1;
   auxiliary_.push_back(index);
-  auxiliary_set_.insert(index);
 }
 
 void Predictor::AddPAQ8HP() {
@@ -436,21 +435,14 @@ void Predictor::AddMixers() {
 }
 
 float Predictor::Predict() {
-  float auxiliary_average = 0;
   unsigned int input_index = 0;
   for (unsigned int i = 0; i < models_.size(); ++i) {
     const std::valarray<float>& outputs = models_[i]->Predict();
     for (unsigned int j = 0; j < outputs.size(); ++j) {
-      float p = outputs[j];
-      if (auxiliary_set_.find(input_index) != auxiliary_set_.end()) {
-        auxiliary_average += p;
-      }
-      layers_[0]->SetInput(input_index, p);
+      layers_[0]->SetInput(input_index, outputs[j]);
       ++input_index;
     }
   }
-  auxiliary_average /= auxiliary_.size();
-  manager_.auxiliary_context_ = auxiliary_average * 20;
 
   for (unsigned int i = 0; i < byte_models_.size(); ++i) {
     const std::valarray<float>& outputs = byte_models_[i]->Predict();
@@ -469,6 +461,13 @@ float Predictor::Predict() {
       ++input_index;
     }
   }
+  float auxiliary_average = 0;
+  for (unsigned int i = 0; i < auxiliary_.size(); ++i) {
+    auxiliary_average += logistic_.Squash(layers_[0]->Inputs()[auxiliary_[i]]);
+  }
+  auxiliary_average /= auxiliary_.size();
+  manager_.auxiliary_context_ = auxiliary_average * 15;
+
   for (unsigned int i = 0; i < mixers_[0].size(); ++i) {
     float p = mixers_[0][i]->Mix();
     layers_[1]->SetStretchedInput(i, p);
