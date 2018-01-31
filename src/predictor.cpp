@@ -356,13 +356,13 @@ void Predictor::AddMixers() {
       0.001, input_size));
 
   for (int i = 0; i < 256; ++i) map[i] = 0;
-  for (int i = 0x20; i < 0x30; ++i) map[i] = 1;
-  for (int i = 0x30; i < 0x40; ++i) map[i] = 2;
-  for (int i = 0x40; i < 0x50; ++i) map[i] = 3;
-  for (int i = 0x50; i < 0x60; ++i) map[i] = 4;
-  for (int i = 0x60; i < 0x80; ++i) map[i] = 5;
-  for (int i = 0x80; i < 0xD0; ++i) map[i] = 6;
-  for (int i = 0xD0; i < 256; ++i) map[i] = 7;
+  for (int i = 0x20; i <= 0x7E; ++i) map[i] = 1;
+  for (int i = 'a'; i <= 'z'; ++i) map[i] = 2;
+  for (int i = '0'; i <= '9'; ++i) map[i] = 3;
+  for (int i = 0x80; i <= 0xCF; ++i) map[i] = 4;
+  for (int i = 0xD0; i <= 0xEF; ++i) map[i] = 5;
+  for (int i = 0xF0; i <= 0xFF; ++i) map[i] = 6;
+  map[' '] = 7;
   const Context& interval6 = manager_.AddContext(std::unique_ptr<Context>(
       new Interval(manager_.bit_context_, map, 9)));
   AddMixer(0, new Mixer(layers_[0]->Inputs(), logistic_, interval6.GetContext(),
