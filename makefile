@@ -2,7 +2,7 @@ CC = g++
 CFLAGS = -std=c++11 -Wall -c
 LFLAGS = -std=c++11 -Wall
 
-OBJS = build/preprocessor.o build/encoder.o build/decoder.o build/predictor.o build/logistic.o build/mixer-input.o build/mixer.o build/byte-mixer.o build/byte-model.o build/sse.o build/context-manager.o build/direct.o build/direct-hash.o build/indirect.o build/nonstationary.o build/run-map.o build/byte-run.o build/match.o build/dmc.o build/ppmd.o build/bracket.o build/paq8.o build/paq8hp.o build/bracket-context.o build/context-hash.o build/sparse.o build/lstm.o build/lstm-layer.o build/indirect-hash.o build/interval.o build/interval-hash.o build/bit-context.o
+OBJS = build/preprocessor.o build/encoder.o build/decoder.o build/predictor.o build/logistic.o build/mixer-input.o build/mixer.o build/byte-mixer.o build/byte-model.o build/sse.o build/context-manager.o build/direct.o build/direct-hash.o build/indirect.o build/nonstationary.o build/run-map.o build/byte-run.o build/match.o build/dmc.o build/ppmd.o build/bracket.o build/paq8.o build/paq8hp.o build/bracket-context.o build/context-hash.o build/sparse.o build/lstm.o build/lstm-layer.o build/indirect-hash.o build/interval.o build/interval-hash.o build/bit-context.o build/combined-context.o
 
 all: CFLAGS += -Ofast
 all: LFLAGS += -Ofast
@@ -108,8 +108,11 @@ build/interval-hash.o: src/contexts/interval-hash.h src/contexts/interval-hash.c
 build/sparse.o: src/contexts/sparse.h src/contexts/sparse.cpp src/contexts/context.h
 	$(CC) $(CFLAGS) src/contexts/sparse.cpp -o build/sparse.o
 
-build/bit-context.o: src/contexts/bit-context.h src/contexts/bit-context.cpp
+build/bit-context.o: src/contexts/bit-context.h src/contexts/bit-context.cpp src/contexts/context.h
 	$(CC) $(CFLAGS) src/contexts/bit-context.cpp -o build/bit-context.o
+
+build/combined-context.o: src/contexts/combined-context.h src/contexts/combined-context.cpp src/contexts/context.h
+	$(CC) $(CFLAGS) src/contexts/combined-context.cpp -o build/combined-context.o
 
 build:
 	mkdir -p build/

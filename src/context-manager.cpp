@@ -15,6 +15,9 @@ const Context& ContextManager::AddContext(std::unique_ptr<Context> context) {
 
 const BitContext& ContextManager::AddBitContext(std::unique_ptr<BitContext>
     bit_context) {
+  for (const auto& old : bit_contexts_) {
+    if (old->IsEqual(bit_context.get())) return *old;
+  }
   bit_contexts_.push_back(std::move(bit_context));
   return *(bit_contexts_[bit_contexts_.size() - 1]);
 }

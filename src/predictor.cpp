@@ -16,6 +16,7 @@
 #include "contexts/interval.h"
 #include "contexts/interval-hash.h"
 #include "contexts/bit-context.h"
+#include "contexts/combined-context.h"
 
 #include <vector>
 #include <stdlib.h>
@@ -397,17 +398,17 @@ void Predictor::AddMixers() {
   AddMixer(0, new Mixer(layers_[0]->Inputs(), logistic_,
       bit_context1.GetContext(), 0.005, input_size));
 
-  const BitContext& bit_context2 = manager_.AddBitContext(std::unique_ptr
-      <BitContext>(new BitContext(manager_.recent_bytes_[1],
-      manager_.recent_bytes_[0], 256)));
+  const Context& combined1 = manager_.AddContext(std::unique_ptr
+      <Context>(new CombinedContext(manager_.recent_bytes_[1],
+      manager_.recent_bytes_[0], 256, 256)));
   AddMixer(0, new Mixer(layers_[0]->Inputs(), logistic_,
-      bit_context2.GetContext(), 0.005, input_size));
+      combined1.GetContext(), 0.005, input_size));
 
-  const BitContext& bit_context3 = manager_.AddBitContext(std::unique_ptr
-      <BitContext>(new BitContext(manager_.recent_bytes_[2],
-      manager_.recent_bytes_[1], 256)));
+  const Context& combined2 = manager_.AddContext(std::unique_ptr
+      <Context>(new CombinedContext(manager_.recent_bytes_[2],
+      manager_.recent_bytes_[1], 256, 256)));
   AddMixer(0, new Mixer(layers_[0]->Inputs(), logistic_,
-      bit_context3.GetContext(), 0.003, input_size));
+      combined2.GetContext(), 0.003, input_size));
 
   input_size = mixers_[0].size() + auxiliary_.size();
   layers_[1]->SetNumModels(input_size);
