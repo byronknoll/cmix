@@ -1102,16 +1102,16 @@ public:
       k = (k*64)/(k-~n0);
       n0=-!n0, n1=-!n1;
       // predict from last byte in context
-      if (((ByteHistory[i][1]+256)>>(8-bitPos))==bits){
+      if ((U32)((ByteHistory[i][1]+256)>>(8-bitPos))==bits){
         int RunStats = ByteHistory[i][0]; // count*2, +1 if 2 different bytes seen
         int sign=(ByteHistory[i][1]>>(7-bitPos)&1)*2-1;  // predicted bit + for 1, - for 0
         int value = ilog(RunStats+1)<<(3-(RunStats&1));
         m.add(sign*value);
       }
       else if (bitPos>0 && (ByteHistory[i][0]&1)>0) {
-        if ((ByteHistory[i][2]+256)>>(8-bitPos)==bits)
+        if ((U32)((ByteHistory[i][2]+256)>>(8-bitPos))==bits)
           m.add((((ByteHistory[i][2]>>(7-bitPos))&1)*2-1)*128);
-        else if (HasHistory[i] && (ByteHistory[i][3]+256)>>(8-bitPos)==bits)
+        else if (HasHistory[i] && (U32)((ByteHistory[i][3]+256)>>(8-bitPos))==bits)
           m.add((((ByteHistory[i][3]>>(7-bitPos))&1)*2-1)*128);
         else
           m.add(0);
