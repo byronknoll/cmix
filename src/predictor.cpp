@@ -339,7 +339,7 @@ void Predictor::AddMixers() {
   for (int i = '0'; i <= '9'; ++i) map[i] = 1;
   for (int i = 0x80; i < 256; ++i) map[i] = 1;
   const Context& interval3 = manager_.AddContext(std::unique_ptr<Context>(
-      new Interval(manager_.bit_context_, map, 8)));
+      new Interval(manager_.bit_context_, map, 7)));
   AddMixer(0, new Mixer(layers_[0]->Inputs(), logistic_, interval3.GetContext(),
       0.001, input_size));
   const BitContext& bit_context5 = manager_.AddBitContext(std::unique_ptr
@@ -357,11 +357,11 @@ void Predictor::AddMixers() {
   AddMixer(0, new Mixer(layers_[0]->Inputs(), logistic_, interval4.GetContext(),
       0.001, input_size));
   const Context& interval5 = manager_.AddContext(std::unique_ptr<Context>(
-      new Interval(manager_.bit_context_, map, 16)));
+      new Interval(manager_.bit_context_, map, 15)));
   AddMixer(0, new Mixer(layers_[0]->Inputs(), logistic_, interval5.GetContext(),
       0.001, input_size));
   const Context& interval8 = manager_.AddContext(std::unique_ptr<Context>(
-      new Interval(manager_.bit_context_, map, 8)));
+      new Interval(manager_.bit_context_, map, 7)));
   const BitContext& bit_context4 = manager_.AddBitContext(std::unique_ptr
       <BitContext>(new BitContext(manager_.long_bit_context_,
       interval8.GetContext(), interval8.Size())));
@@ -381,11 +381,11 @@ void Predictor::AddMixers() {
   AddMixer(0, new Mixer(layers_[0]->Inputs(), logistic_, interval6.GetContext(),
       0.001, input_size));
   const Context& interval7 = manager_.AddContext(std::unique_ptr<Context>(
-      new IntervalHash(manager_.bit_context_, map, 8, 8, 2)));
+      new IntervalHash(manager_.bit_context_, map, 8, 7, 2)));
   AddMixer(0, new Mixer(layers_[0]->Inputs(), logistic_, interval7.GetContext(),
       0.001, input_size));
   const Context& interval9 = manager_.AddContext(std::unique_ptr<Context>(
-      new Interval(manager_.bit_context_, map, 8)));
+      new Interval(manager_.bit_context_, map, 7)));
   const BitContext& bit_context6 = manager_.AddBitContext(std::unique_ptr
       <BitContext>(new BitContext(manager_.long_bit_context_,
       interval9.GetContext(), interval9.Size())));
