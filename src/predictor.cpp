@@ -101,13 +101,13 @@ void Predictor::AddBracket() {
 }
 
 void Predictor::AddPPMD() {
-  AddByteModel(new PPMD::PPMD(6, 1680, manager_.bit_context_, vocab_));
-  AddByteModel(new PPMD::PPMD(10, 1680, manager_.bit_context_, vocab_));
-  AddByteModel(new PPMD::PPMD(16, 1680, manager_.bit_context_, vocab_));
+  AddByteModel(new PPMD::PPMD(6, 1200, manager_.bit_context_, vocab_));
+  AddByteModel(new PPMD::PPMD(10, 1200, manager_.bit_context_, vocab_));
+  AddByteModel(new PPMD::PPMD(16, 1200, manager_.bit_context_, vocab_));
 }
 
 void Predictor::AddDMC() {
-  AddModel(new DMC(0.02, 70000000));
+  AddModel(new DMC(0.02, 40000000));
 }
 
 void Predictor::AddByteRun() {
