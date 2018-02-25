@@ -107,7 +107,7 @@ void Predictor::AddPPMD() {
 }
 
 void Predictor::AddDMC() {
-  AddModel(new DMC(0.02, 40000000));
+  AddModel(new DMC(0.02, 10000000));
 }
 
 void Predictor::AddByteRun() {
