@@ -471,8 +471,8 @@ void train(short *t, short *w, int n, int err) {
 }
 #endif
 
-#define NUM_INPUTS 1567
-#define NUM_SETS 17
+#define NUM_INPUTS 1607
+#define NUM_SETS 19
 
 std::valarray<float> model_predictions(0.5, NUM_INPUTS + NUM_SETS + 1);
 unsigned int prediction_index = 0;
@@ -1176,7 +1176,7 @@ public:
     return !operator==(s);
   }
   void operator+=(const char c) {
-    if (End<MAX_WORD_SIZE-1){
+    if (End<MAX_WORD_SIZE-1) {
       End+=(Letters[End]>0);
       Letters[End]=tolower(c);
     }
@@ -1209,9 +1209,9 @@ public:
   }
   bool ChangeSuffix(const char *OldSuffix, const char *NewSuffix) {
     size_t len=strlen(OldSuffix);
-    if (Length()>len && memcmp(&Letters[End-len+1], OldSuffix, len)==0){
+    if (Length()>len && memcmp(&Letters[End-len+1], OldSuffix, len)==0) {
       size_t n=strlen(NewSuffix);
-      if (n>0){
+      if (n>0) {
         memcpy(&Letters[End-int(len)+1], NewSuffix, min(MAX_WORD_SIZE-1,End+int(n))-End);
         End=min(MAX_WORD_SIZE-1, End-int(len)+int(n));
       }
@@ -1256,7 +1256,8 @@ public:
   U32 SegmentCount;
   U32 VerbIndex; // relative position of last detected verb
   U32 NounIndex; // relative position of last detected noun
-  Word lastVerb, lastNoun;
+  U32 CapitalIndex; // relative position of last capitalized word, excluding the initial word of this sentence
+  Word lastVerb, lastNoun, lastCapital;
 };
 
 class Paragraph {
@@ -1274,6 +1275,7 @@ public:
     Unknown,
     English,
     French,
+    German,
     Count
   };
   virtual bool IsAbbreviation(Word *W) = 0;
@@ -1324,9 +1326,38 @@ public:
   bool IsAbbreviation(Word *W) { return W->MatchesAny(Abbreviations, NUM_ABBREV); };
 };
 
+class German : public Language {
+private:
+  static const int NUM_ABBREV = 3;
+  const char *Abbreviations[NUM_ABBREV]={ "fr","hr","hrn" };
+public:
+  enum Flags {
+    Adjective              = (1<<2),
+    Plural                 = (1<<3),
+    Female                 = (1<<4)
+  };
+  bool IsAbbreviation(Word *W) { return W->MatchesAny(Abbreviations, NUM_ABBREV); };
+};
+
 //////////////////////////// Stemming routines /////////////////////////
 
 class Stemmer {
+protected:
+  U32 GetRegion(const Word *W, const U32 From) {
+    bool hasVowel = false;
+    for (int i=W->Start+From; i<=W->End; i++) {
+      if (IsVowel(W->Letters[i])) {
+        hasVowel = true;
+        continue;
+      }
+      else if (hasVowel)
+        return i-W->Start+1;
+    }
+    return W->Start+W->Length();
+  }
+  bool SuffixInRn(const Word *W, const U32 Rn, const char *Suffix) {
+    return (W->Start!=W->End && Rn<=W->Length()-strlen(Suffix));
+  }
 public:
   virtual bool IsVowel(const char c) = 0;
   virtual void Hash(Word *W) = 0;
@@ -1496,246 +1527,231 @@ private:
   static const int NUM_EXCEPTIONS2 = 8;
   const char *Exceptions2[NUM_EXCEPTIONS2]={"inning","outing","canning","herring","earring","proceed","exceed","succeed"};
   const U32 TypesExceptions2[NUM_EXCEPTIONS2]={English::Noun,English::Noun,English::Noun,English::Noun,English::Noun,English::Verb,English::Verb,English::Verb}; 
-  inline bool IsConsonant(const char c){
+  inline bool IsConsonant(const char c) {
     return !IsVowel(c);
   }
-  inline bool IsShortConsonant(const char c){
+  inline bool IsShortConsonant(const char c) {
     return !CharInArray(c, NonShortConsonants, NUM_NON_SHORT_CONSONANTS);
   }
-  inline bool IsDouble(const char c){
+  inline bool IsDouble(const char c) {
     return CharInArray(c, Doubles, NUM_DOUBLES);
   }
-  inline bool IsLiEnding(const char c){
+  inline bool IsLiEnding(const char c) {
     return CharInArray(c, LiEndings, NUM_LI_ENDINGS);
   }
-  U32 GetRegion(const Word *W, const U32 From){
-    bool hasVowel = false;
-    for (int i=(*W).Start+From; i<=(*W).End; i++){
-      if (IsVowel((*W).Letters[i])){
-        hasVowel = true;
-        continue;
-      }
-      else if (hasVowel)
-        return i-(*W).Start+1;
-    }
-    return (*W).Start+(*W).Length();
-  }
-  U32 GetRegion1(const Word *W){
-    for (int i=0; i<NUM_EXCEPTION_REGION1; i++){
-      if ((*W).StartsWith(ExceptionsRegion1[i]))
+  U32 GetRegion1(const Word *W) {
+    for (int i=0; i<NUM_EXCEPTION_REGION1; i++) {
+      if (W->StartsWith(ExceptionsRegion1[i]))
         return U32(strlen(ExceptionsRegion1[i]));
     }
     return GetRegion(W, 0);
   }
-  bool SuffixInRn(const Word *W, const U32 Rn, const char *Suffix){
-    return ((*W).Start!=(*W).End && Rn<=(*W).Length()-strlen(Suffix));
-  }
-  bool EndsInShortSyllable(const Word *W){
-    if ((*W).End==(*W).Start)
+  bool EndsInShortSyllable(const Word *W) {
+    if (W->End==W->Start)
       return false;
-    else if ((*W).End==(*W).Start+1)
+    else if (W->End==W->Start+1)
       return IsVowel((*W)(1)) && IsConsonant((*W)(0));
     else
       return (IsConsonant((*W)(2)) && IsVowel((*W)(1)) && IsConsonant((*W)(0)) && IsShortConsonant((*W)(0)));
   }
-  bool IsShortWord(const Word *W){
-    return (EndsInShortSyllable(W) && GetRegion1(W)==(*W).Length());
+  bool IsShortWord(const Word *W) {
+    return (EndsInShortSyllable(W) && GetRegion1(W)==W->Length());
   }
-  inline bool HasVowels(const Word *W){
-    for (int i=(*W).Start; i<=(*W).End; i++){
-      if (IsVowel((*W).Letters[i]))
+  inline bool HasVowels(const Word *W) {
+    for (int i=W->Start; i<=W->End; i++) {
+      if (IsVowel(W->Letters[i]))
         return true;
     }
     return false;
   }
-  bool TrimStartingApostrophe(Word *W){
-    bool r=((*W).Start!=(*W).End && (*W)[0]=='\'');
-    (*W).Start+=(U8)r;
+  bool TrimStartingApostrophe(Word *W) {
+    bool r=(W->Start!=W->End && (*W)[0]=='\'');
+    W->Start+=(U8)r;
     return r;
   }
-  void MarkYsAsConsonants(Word *W){
+  void MarkYsAsConsonants(Word *W) {
     if ((*W)[0]=='y')
-      (*W).Letters[(*W).Start]='Y';
-    for (int i=(*W).Start+1; i<=(*W).End; i++){
-      if (IsVowel((*W).Letters[i-1]) && (*W).Letters[i]=='y')
-        (*W).Letters[i]='Y';
+      W->Letters[W->Start]='Y';
+    for (int i=W->Start+1; i<=W->End; i++) {
+      if (IsVowel(W->Letters[i-1]) && W->Letters[i]=='y')
+        W->Letters[i]='Y';
     }
   }
-  bool ProcessPrefixes(Word *W){
-    if ((*W).StartsWith("irr") && (*W).Length()>5 && ((*W)[3]=='a' || (*W)[3]=='e'))
-      (*W).Start+=2, (*W).Type|=English::Negation;
-    else if ((*W).StartsWith("over") && (*W).Length()>5)
-      (*W).Start+=4, (*W).Type|=English::PrefixOver;
-    else if ((*W).StartsWith("under") && (*W).Length()>6)
-      (*W).Start+=5, (*W).Type|=English::PrefixUnder;
-    else if ((*W).StartsWith("unn") && (*W).Length()>5)
-      (*W).Start+=2, (*W).Type|=English::Negation;
-    else if ((*W).StartsWith("non") && (*W).Length()>(U32)(5+((*W)[3]=='-')))
-      (*W).Start+=2+((*W)[3]=='-'), (*W).Type|=English::Negation;
+  bool ProcessPrefixes(Word *W) {
+    if (W->StartsWith("irr") && W->Length()>5 && ((*W)[3]=='a' || (*W)[3]=='e'))
+      W->Start+=2, W->Type|=English::Negation;
+    else if (W->StartsWith("over") && W->Length()>5)
+      W->Start+=4, W->Type|=English::PrefixOver;
+    else if (W->StartsWith("under") && W->Length()>6)
+      W->Start+=5, W->Type|=English::PrefixUnder;
+    else if (W->StartsWith("unn") && W->Length()>5)
+      W->Start+=2, W->Type|=English::Negation;
+    else if (W->StartsWith("non") && W->Length()>(U32)(5+((*W)[3]=='-')))
+      W->Start+=2+((*W)[3]=='-'), W->Type|=English::Negation;
     else
       return false;
     return true;
   }
-  bool ProcessSuperlatives(Word *W){
-    if ((*W).EndsWith("est") && (*W).Length()>4){
-      U8 i=(*W).End;
-      (*W).End-=3;
-      (*W).Type|=English::AdjectiveSuperlative;
+  bool ProcessSuperlatives(Word *W) {
+    if (W->EndsWith("est") && W->Length()>4) {
+      U8 i=W->End;
+      W->End-=3;
+      W->Type|=English::AdjectiveSuperlative;
 
-      if ((*W)(0)==(*W)(1) && (*W)(0)!='r' && !((*W).Length()>=4 && memcmp("sugg",&(*W).Letters[(*W).End-3],4)==0)){
-        (*W).End-= ( ((*W)(0)!='f' && (*W)(0)!='l' && (*W)(0)!='s') ||
-                   ((*W).Length()>4 && (*W)(1)=='l' && ((*W)(2)=='u' || (*W)(3)=='u' || (*W)(3)=='v'))) &&
-                   (!((*W).Length()==3 && (*W)(1)=='d' && (*W)(2)=='o'));
-        if ((*W).Length()==2 && ((*W)[0]!='i' || (*W)[1]!='n'))
-          (*W).End = i, (*W).Type&=~English::AdjectiveSuperlative;
+      if ((*W)(0)==(*W)(1) && (*W)(0)!='r' && !(W->Length()>=4 && memcmp("sugg",&W->Letters[W->End-3],4)==0)) {
+        W->End-= ( ((*W)(0)!='f' && (*W)(0)!='l' && (*W)(0)!='s') ||
+                   (W->Length()>4 && (*W)(1)=='l' && ((*W)(2)=='u' || (*W)(3)=='u' || (*W)(3)=='v'))) &&
+                   (!(W->Length()==3 && (*W)(1)=='d' && (*W)(2)=='o'));
+        if (W->Length()==2 && ((*W)[0]!='i' || (*W)[1]!='n'))
+          W->End = i, W->Type&=~English::AdjectiveSuperlative;
       }
-      else{
-        switch((*W)(0)){
+      else {
+        switch((*W)(0)) {
           case 'd': case 'k': case 'm': case 'y': break;
           case 'g': {
-            if (!( (*W).Length()>3 && ((*W)(1)=='n' || (*W)(1)=='r') && memcmp("cong",&(*W).Letters[(*W).End-3],4)!=0 ))
-              (*W).End = i, (*W).Type&=~English::AdjectiveSuperlative;
+            if (!( W->Length()>3 && ((*W)(1)=='n' || (*W)(1)=='r') && memcmp("cong",&W->Letters[W->End-3],4)!=0 ))
+              W->End = i, W->Type&=~English::AdjectiveSuperlative;
             else
-              (*W).End+=((*W)(2)=='a');
+              W->End+=((*W)(2)=='a');
             break;
           }
-          case 'i': {(*W).Letters[(*W).End]='y'; break;}
+          case 'i': { W->Letters[W->End]='y'; break; }
           case 'l': {
-            if ((*W).End==(*W).Start+1 || memcmp("mo",&(*W).Letters[(*W).End-2],2)==0)
-              (*W).End = i, (*W).Type&=~English::AdjectiveSuperlative;
+            if (W->End==W->Start+1 || memcmp("mo",&W->Letters[W->End-2],2)==0)
+              W->End = i, W->Type&=~English::AdjectiveSuperlative;
             else
-              (*W).End+=IsConsonant((*W)(1));
+              W->End+=IsConsonant((*W)(1));
             break;
           }
           case 'n': {
-            if ((*W).Length()<3 || IsConsonant((*W)(1)) || IsConsonant((*W)(2)))
-              (*W).End = i, (*W).Type&=~English::AdjectiveSuperlative;
+            if (W->Length()<3 || IsConsonant((*W)(1)) || IsConsonant((*W)(2)))
+              W->End = i, W->Type&=~English::AdjectiveSuperlative;
             break;
           }
           case 'r': {
-            if ((*W).Length()>3 && IsVowel((*W)(1)) && IsVowel((*W)(2)))
-              (*W).End+=((*W)(2)=='u') && ((*W)(1)=='a' || (*W)(1)=='i');
+            if (W->Length()>3 && IsVowel((*W)(1)) && IsVowel((*W)(2)))
+              W->End+=((*W)(2)=='u') && ((*W)(1)=='a' || (*W)(1)=='i');
             else
-              (*W).End = i, (*W).Type&=~English::AdjectiveSuperlative;
+              W->End = i, W->Type&=~English::AdjectiveSuperlative;
             break;
           }
-          case 's': {(*W).End++; break;}
+          case 's': { W->End++; break; }
           case 'w': {
-            if (!((*W).Length()>2 && IsVowel((*W)(1))))
-              (*W).End = i, (*W).Type&=~English::AdjectiveSuperlative;
+            if (!(W->Length()>2 && IsVowel((*W)(1))))
+              W->End = i, W->Type&=~English::AdjectiveSuperlative;
             break;
           }
           case 'h': {
-            if (!((*W).Length()>2 && IsConsonant((*W)(1))))
-              (*W).End = i, (*W).Type&=~English::AdjectiveSuperlative;
+            if (!(W->Length()>2 && IsConsonant((*W)(1))))
+              W->End = i, W->Type&=~English::AdjectiveSuperlative;
             break;
           }
           default: {
-            (*W).End+=3;
-            (*W).Type&=~English::AdjectiveSuperlative;
+            W->End+=3;
+            W->Type&=~English::AdjectiveSuperlative;
           }
         }
       }
     }
-    return ((*W).Type&English::AdjectiveSuperlative)>0;
+    return (W->Type&English::AdjectiveSuperlative)>0;
   }
-  bool Step0(Word *W){
-    for (int i=0; i<NUM_SUFFIXES_STEP0; i++){
-      if ((*W).EndsWith(SuffixesStep0[i])){
-        (*W).End-=U8(strlen(SuffixesStep0[i]));
-        (*W).Type|=English::Plural;
+  bool Step0(Word *W) {
+    for (int i=0; i<NUM_SUFFIXES_STEP0; i++) {
+      if (W->EndsWith(SuffixesStep0[i])) {
+        W->End-=U8(strlen(SuffixesStep0[i]));
+        W->Type|=English::Plural;
         return true;
       }
     }
     return false;
   }
-  bool Step1a(Word *W){
-    if ((*W).EndsWith("sses")){
-      (*W).End-=2;
-      (*W).Type|=English::Plural;
+  bool Step1a(Word *W) {
+    if (W->EndsWith("sses")) {
+      W->End-=2;
+      W->Type|=English::Plural;
       return true;
     }
-    if ((*W).EndsWith("ied") || (*W).EndsWith("ies")){
-      (*W).Type|=((*W)(0)=='d')?English::PastTense:English::Plural;
-      (*W).End-=1+((*W).Length()>4);
+    if (W->EndsWith("ied") || W->EndsWith("ies")) {
+      W->Type|=((*W)(0)=='d')?English::PastTense:English::Plural;
+      W->End-=1+(W->Length()>4);
       return true;
     }
-    if ((*W).EndsWith("us") || (*W).EndsWith("ss"))
+    if (W->EndsWith("us") || W->EndsWith("ss"))
       return false;
-    if ((*W)(0)=='s' && (*W).Length()>2){
-      for (int i=(*W).Start;i<=(*W).End-2;i++){
-        if (IsVowel((*W).Letters[i])){
-          (*W).End--;
-          (*W).Type|=English::Plural;
+    if ((*W)(0)=='s' && W->Length()>2) {
+      for (int i=W->Start;i<=W->End-2;i++) {
+        if (IsVowel(W->Letters[i])) {
+          W->End--;
+          W->Type|=English::Plural;
           return true;
         }
       }
     }
-    if ((*W).EndsWith("n't") && (*W).Length()>4){
-      switch ((*W)(3)){
+    if (W->EndsWith("n't") && W->Length()>4) {
+      switch ((*W)(3)) {
         case 'a': {
           if ((*W)(4)=='c')
-            (*W).End-=2;
+            W->End-=2;
           else
-            (*W).ChangeSuffix("n't","ll");
+            W->ChangeSuffix("n't","ll");
           break;
         }
-        case 'i': {(*W).ChangeSuffix("in't","m"); break;}
+        case 'i': { W->ChangeSuffix("in't","m"); break; }
         case 'o': {
           if ((*W)(4)=='w')
-            (*W).ChangeSuffix("on't","ill");
+            W->ChangeSuffix("on't","ill");
           else
-            (*W).End-=3;
+            W->End-=3;
           break;
         }
-        default: (*W).End-=3;
+        default: W->End-=3;
       }
-      (*W).Type|=English::Negation;
+      W->Type|=English::Negation;
       return true;
     }
-    if ((*W).EndsWith("hood") && (*W).Length()>7){
-      (*W).End-=4;
+    if (W->EndsWith("hood") && W->Length()>7) {
+      W->End-=4;
       return true;
     }
     return false;
   }
-  bool Step1b(Word *W, const U32 R1){
-    for (int i=0; i<NUM_SUFFIXES_STEP1b; i++){
-      if ((*W).EndsWith(SuffixesStep1b[i])){
-        switch(i){
+  bool Step1b(Word *W, const U32 R1) {
+    for (int i=0; i<NUM_SUFFIXES_STEP1b; i++) {
+      if (W->EndsWith(SuffixesStep1b[i])) {
+        switch(i) {
           case 0: case 1: {
             if (SuffixInRn(W, R1, SuffixesStep1b[i]))
-              (*W).End-=1+i*2;
+              W->End-=1+i*2;
             break;
           }
           default: {
-            U8 j=(*W).End;
-            (*W).End-=U8(strlen(SuffixesStep1b[i]));
-            if (HasVowels(W)){
-              if ((*W).EndsWith("at") || (*W).EndsWith("bl") || (*W).EndsWith("iz") || IsShortWord(W))
+            U8 j=W->End;
+            W->End-=U8(strlen(SuffixesStep1b[i]));
+            if (HasVowels(W)) {
+              if (W->EndsWith("at") || W->EndsWith("bl") || W->EndsWith("iz") || IsShortWord(W))
                 (*W)+='e';
-              else if ((*W).Length()>2){
+              else if (W->Length()>2) {
                 if ((*W)(0)==(*W)(1) && IsDouble((*W)(0)))
-                  (*W).End--;
-                else if (i==2 || i==3){
-                  switch((*W)(0)){
-                    case 'c': case 's': case 'v': {(*W).End+=!((*W).EndsWith("ss") || (*W).EndsWith("ias")); break;}
+                  W->End--;
+                else if (i==2 || i==3) {
+                  switch((*W)(0)) {
+                    case 'c': case 's': case 'v': { W->End+=!(W->EndsWith("ss") || W->EndsWith("ias")); break; }
                     case 'd': {
                       static const char nAllowed[4] = {'a','e','i','o'};
-                      (*W).End+=IsVowel((*W)(1)) && (!CharInArray((*W)(2), nAllowed, 4)); break;
+                      W->End+=IsVowel((*W)(1)) && (!CharInArray((*W)(2), nAllowed, 4)); break;
                     }
-                    case 'k': {(*W).End+=(*W).EndsWith("uak"); break;}
+                    case 'k': { W->End+=W->EndsWith("uak"); break; }
                     case 'l': {
                       static const char Allowed1[10] = {'b','c','d','f','g','k','p','t','y','z'};
                       static const char Allowed2[4] = {'a','i','o','u'};
-                      (*W).End+= CharInArray((*W)(1), Allowed1, 10) ||
+                      W->End+= CharInArray((*W)(1), Allowed1, 10) ||
                                 (CharInArray((*W)(1), Allowed2, 4) && IsConsonant((*W)(2)));
                       break;
                     }
                   }
                 }
-                else if (i>=4){
-                  switch((*W)(0)){
+                else if (i>=4) {
+                  switch((*W)(0)) {
                     case 'd': {
                       if (IsVowel((*W)(1)) && (*W)(2)!='a' && (*W)(2)!='e' && (*W)(2)!='o')
                         (*W)+='e';
@@ -1749,7 +1765,7 @@ private:
                           (*W)(2)=='e' ||
                           ((*W)(2)=='u' && (*W)(3)!='b' && (*W)(3)!='d') ||
                           ((*W)(2)=='a' && ((*W)(3)=='r' || ((*W)(3)=='h' && (*W)(4)=='c'))) ||
-                          ((*W).EndsWith("ring") && ((*W)(4)=='c' || (*W)(4)=='f'))
+                          (W->EndsWith("ring") && ((*W)(4)=='c' || (*W)(4)=='f'))
                          )
                         ) 
                       )
@@ -1759,8 +1775,8 @@ private:
                     case 'l': {
                       if (!((*W)(1)=='l' || (*W)(1)=='r' || (*W)(1)=='w' || (IsVowel((*W)(1)) && IsVowel((*W)(2)))))
                         (*W)+='e';
-                      if ((*W).EndsWith("uell") && (*W).Length()>4 && (*W)(4)!='q')
-                        (*W).End--;
+                      if (W->EndsWith("uell") && W->Length()>4 && (*W)(4)!='q')
+                        W->End--;
                       break;
                     }
                     case 'r': {
@@ -1768,7 +1784,7 @@ private:
                         ((*W)(1)=='i' && (*W)(2)!='a' && (*W)(2)!='e' && (*W)(2)!='o') ||
                         ((*W)(1)=='a' && (!((*W)(2)=='e' || (*W)(2)=='o' || ((*W)(2)=='l' && (*W)(3)=='l')))) ||
                         ((*W)(1)=='o' && (!((*W)(2)=='o' || ((*W)(2)=='t' && (*W)(3)!='s')))) ||
-                        (*W)(1)=='c' || (*W)(1)=='t') && (!(*W).EndsWith("str"))
+                        (*W)(1)=='c' || (*W)(1)=='t') && (!W->EndsWith("str"))
                       )
                         (*W)+='e';
                       break;
@@ -1779,26 +1795,26 @@ private:
                       break;
                     }
                     case 'u': {
-                      if (!((*W).Length()>3 && IsVowel((*W)(1)) && IsVowel((*W)(2))))
+                      if (!(W->Length()>3 && IsVowel((*W)(1)) && IsVowel((*W)(2))))
                         (*W)+='e';
                       break;
                     }
                     case 'z': {
-                      if ((*W).EndsWith("izz") && (*W).Length()>3 && ((*W)(3)=='h' || (*W)(3)=='u'))
-                        (*W).End--;
+                      if (W->EndsWith("izz") && W->Length()>3 && ((*W)(3)=='h' || (*W)(3)=='u'))
+                        W->End--;
                       else if ((*W)(1)!='t' && (*W)(1)!='z')
                         (*W)+='e';
                       break;
                     }
                     case 'k': {
-                      if ((*W).EndsWith("uak"))
+                      if (W->EndsWith("uak"))
                         (*W)+='e';
                       break;
                     }
                     case 'b': case 'c': case 's': case 'v': {
                       if (!(
                         ((*W)(0)=='b' && ((*W)(1)=='m' || (*W)(1)=='r')) ||
-                        (*W).EndsWith("ss") || (*W).EndsWith("ias") || (*W)=="zinc"
+                        W->EndsWith("ss") || W->EndsWith("ias") || (*W)=="zinc"
                       ))
                         (*W)+='e';
                       break;
@@ -1807,75 +1823,75 @@ private:
                 }
               }
             }
-            else{
-              (*W).End=j;
+            else {
+              W->End=j;
               return false;
             }
           }
         }
-        (*W).Type|=TypesStep1b[i];
+        W->Type|=TypesStep1b[i];
         return true;
       }
     }
     return false;
   }
-  bool Step1c(Word *W){
-    if ((*W).Length()>2 && tolower((*W)(0))=='y' && IsConsonant((*W)(1))){
-      (*W).Letters[(*W).End]='i';
+  bool Step1c(Word *W) {
+    if (W->Length()>2 && tolower((*W)(0))=='y' && IsConsonant((*W)(1))) {
+      W->Letters[W->End]='i';
       return true;
     }
     return false;
   }
-  bool Step2(Word *W, const U32 R1){
-    for (int i=0; i<NUM_SUFFIXES_STEP2; i++){
-      if ((*W).EndsWith(SuffixesStep2[i][0]) && SuffixInRn(W, R1, SuffixesStep2[i][0])){
-        (*W).ChangeSuffix(SuffixesStep2[i][0], SuffixesStep2[i][1]);
-        (*W).Type|=TypesStep2[i];
+  bool Step2(Word *W, const U32 R1) {
+    for (int i=0; i<NUM_SUFFIXES_STEP2; i++) {
+      if (W->EndsWith(SuffixesStep2[i][0]) && SuffixInRn(W, R1, SuffixesStep2[i][0])) {
+        W->ChangeSuffix(SuffixesStep2[i][0], SuffixesStep2[i][1]);
+        W->Type|=TypesStep2[i];
         return true;
       }
     }
-    if ((*W).EndsWith("logi") && SuffixInRn(W, R1, "ogi")){
-      (*W).End--;
+    if (W->EndsWith("logi") && SuffixInRn(W, R1, "ogi")) {
+      W->End--;
       return true;
     }
-    else if ((*W).EndsWith("li")){
-      if (SuffixInRn(W, R1, "li") && IsLiEnding((*W)(2))){
-        (*W).End-=2;
-        (*W).Type|=English::AdverbOfManner;
+    else if (W->EndsWith("li")) {
+      if (SuffixInRn(W, R1, "li") && IsLiEnding((*W)(2))) {
+        W->End-=2;
+        W->Type|=English::AdverbOfManner;
         return true;
       }
-      else if ((*W).Length()>3){
-        switch((*W)(2)){
+      else if (W->Length()>3) {
+        switch((*W)(2)) {
             case 'b': {
-              (*W).Letters[(*W).End]='e';
-              (*W).Type|=English::AdverbOfManner;
+              W->Letters[W->End]='e';
+              W->Type|=English::AdverbOfManner;
               return true;              
             }
             case 'i': {
-              if ((*W).Length()>4){
-                (*W).End-=2;
-                (*W).Type|=English::AdverbOfManner;
+              if (W->Length()>4) {
+                W->End-=2;
+                W->Type|=English::AdverbOfManner;
                 return true;
               }
               break;
             }
             case 'l': {
-              if ((*W).Length()>5 && ((*W)(3)=='a' || (*W)(3)=='u')){
-                (*W).End-=2;
-                (*W).Type|=English::AdverbOfManner;
+              if (W->Length()>5 && ((*W)(3)=='a' || (*W)(3)=='u')) {
+                W->End-=2;
+                W->Type|=English::AdverbOfManner;
                 return true;
               }
               break;
             }
             case 's': {
-              (*W).End-=2;
-              (*W).Type|=English::AdverbOfManner;
+              W->End-=2;
+              W->Type|=English::AdverbOfManner;
               return true;
             }
             case 'e': case 'g': case 'm': case 'n': case 'r': case 'w': {
-              if ((*W).Length()>(U32)(4+((*W)(2)=='r'))){
-                (*W).End-=2;
-                (*W).Type|=English::AdverbOfManner;
+              if (W->Length()>(U32)(4+((*W)(2)=='r'))) {
+                W->End-=2;
+                W->Type|=English::AdverbOfManner;
                 return true;
               }
             }
@@ -1884,37 +1900,37 @@ private:
     }
     return false;
   }
-  bool Step3(Word *W, const U32 R1, const U32 R2){
+  bool Step3(Word *W, const U32 R1, const U32 R2) {
     bool res=false;
-    for (int i=0; i<NUM_SUFFIXES_STEP3; i++){
-      if ((*W).EndsWith(SuffixesStep3[i][0]) && SuffixInRn(W, R1, SuffixesStep3[i][0])){
-        (*W).ChangeSuffix(SuffixesStep3[i][0], SuffixesStep3[i][1]);
-        (*W).Type|=TypesStep3[i];
+    for (int i=0; i<NUM_SUFFIXES_STEP3; i++) {
+      if (W->EndsWith(SuffixesStep3[i][0]) && SuffixInRn(W, R1, SuffixesStep3[i][0])) {
+        W->ChangeSuffix(SuffixesStep3[i][0], SuffixesStep3[i][1]);
+        W->Type|=TypesStep3[i];
         res=true;
         break;
       }
     }
-    if ((*W).EndsWith("ative") && SuffixInRn(W, R2, "ative")){
-      (*W).End-=5;
-      (*W).Type|=English::SuffixIVE;
+    if (W->EndsWith("ative") && SuffixInRn(W, R2, "ative")) {
+      W->End-=5;
+      W->Type|=English::SuffixIVE;
       return true;
     }
-    if ((*W).Length()>5 && (*W).EndsWith("less")){
-      (*W).End-=4;
-      (*W).Type|=English::AdjectiveWithout;
+    if (W->Length()>5 && W->EndsWith("less")) {
+      W->End-=4;
+      W->Type|=English::AdjectiveWithout;
       return true;
     }
     return res;
   }
-  bool Step4(Word *W, const U32 R2){
+  bool Step4(Word *W, const U32 R2) {
     bool res=false;
-    for (int i=0; i<NUM_SUFFIXES_STEP4; i++){
-      if ((*W).EndsWith(SuffixesStep4[i]) && SuffixInRn(W, R2, SuffixesStep4[i])){
-        (*W).End-=U8(strlen(SuffixesStep4[i])-(i>17));
+    for (int i=0; i<NUM_SUFFIXES_STEP4; i++) {
+      if (W->EndsWith(SuffixesStep4[i]) && SuffixInRn(W, R2, SuffixesStep4[i])) {
+        W->End-=U8(strlen(SuffixesStep4[i])-(i>17));
         if (i!=10 || (*W)(0)!='m')
-          (*W).Type|=TypesStep4[i];
-        if (i==0 && (*W).EndsWith("nti")){
-          (*W).End--;
+          W->Type|=TypesStep4[i];
+        if (i==0 && W->EndsWith("nti")) {
+          W->End--;
           res=true;
           continue;
         }
@@ -1923,20 +1939,20 @@ private:
     }
     return res;
   }
-  bool Step5(Word *W, const U32 R1, const U32 R2){
-    if ((*W)(0)=='e' && (*W)!="here"){
+  bool Step5(Word *W, const U32 R1, const U32 R2) {
+    if ((*W)(0)=='e' && (*W)!="here") {
       if (SuffixInRn(W, R2, "e"))
-        (*W).End--;
-      else if (SuffixInRn(W, R1, "e")){
-        (*W).End--;
-        (*W).End+=!EndsInShortSyllable(W);
+        W->End--;
+      else if (SuffixInRn(W, R1, "e")) {
+        W->End--;
+        W->End+=!EndsInShortSyllable(W);
       }
       else
         return false;
       return true;
     }
-    else if ((*W).Length()>1 && (*W)(0)=='l' && SuffixInRn(W, R2, "l") && (*W)(1)=='l'){
-      (*W).End--;
+    else if (W->Length()>1 && (*W)(0)=='l' && SuffixInRn(W, R2, "l") && (*W)(1)=='l') {
+      W->End--;
       return true;
     }
     return false;
@@ -1946,36 +1962,36 @@ public:
     return CharInArray(c, Vowels, NUM_VOWELS);
   }
   inline void Hash(Word *W) final {
-    (*W).Hash[2] = (*W).Hash[3] = 0xb0a710ad;
-    for (int i=(*W).Start; i<=(*W).End; i++) {
-      U8 l = (*W).Letters[i];
-      (*W).Hash[2]=(*W).Hash[2]*263*32 + l;
+    W->Hash[2] = W->Hash[3] = 0xb0a710ad;
+    for (int i=W->Start; i<=W->End; i++) {
+      U8 l = W->Letters[i];
+      W->Hash[2]=W->Hash[2]*263*32 + l;
       if (IsVowel(l))
-        (*W).Hash[3]=(*W).Hash[3]*997*8 + (l/4-22);
+        W->Hash[3]=W->Hash[3]*997*8 + (l/4-22);
       else if (l>='b' && l<='z')
-        (*W).Hash[3]=(*W).Hash[3]*271*32 + (l-97);
+        W->Hash[3]=W->Hash[3]*271*32 + (l-97);
       else
-        (*W).Hash[3]=(*W).Hash[3]*11*32 + l;
+        W->Hash[3]=W->Hash[3]*11*32 + l;
     }
   }
-  bool Stem(Word *W){
-    if ((*W).Length()<2){
+  bool Stem(Word *W) {
+    if (W->Length()<2) {
       Hash(W);
       return false;
     }
     bool res = TrimStartingApostrophe(W);
     res|=ProcessPrefixes(W);
     res|=ProcessSuperlatives(W);
-    for (int i=0; i<NUM_EXCEPTIONS1; i++){
-      if ((*W)==Exceptions1[i][0]){
-        if (i<11){
+    for (int i=0; i<NUM_EXCEPTIONS1; i++) {
+      if ((*W)==Exceptions1[i][0]) {
+        if (i<11) {
           size_t len=strlen(Exceptions1[i][1]);
-          memcpy(&(*W).Letters[(*W).Start], Exceptions1[i][1], len);
-          (*W).End=(*W).Start+U8(len-1);
+          memcpy(&W->Letters[W->Start], Exceptions1[i][1], len);
+          W->End=W->Start+U8(len-1);
         }
         Hash(W);
-        (*W).Type|=TypesExceptions1[i];
-        (*W).Language = Language::English;
+        W->Type|=TypesExceptions1[i];
+        W->Language = Language::English;
         return (i<11);
       }
     }
@@ -1985,11 +2001,11 @@ public:
     U32 R1=GetRegion1(W), R2=GetRegion(W,R1);
     res|=Step0(W);
     res|=Step1a(W);
-    for (int i=0; i<NUM_EXCEPTIONS2; i++){
-      if ((*W)==Exceptions2[i]){
+    for (int i=0; i<NUM_EXCEPTIONS2; i++) {
+      if ((*W)==Exceptions2[i]) {
         Hash(W);
-        (*W).Type|=TypesExceptions2[i];
-        (*W).Language = Language::English;
+        W->Type|=TypesExceptions2[i];
+        W->Language = Language::English;
         return res;
       }
     }
@@ -2000,21 +2016,21 @@ public:
     res|=Step4(W, R2);
     res|=Step5(W, R1, R2);
 
-    for (U8 i=(*W).Start; i<=(*W).End; i++){
-      if ((*W).Letters[i]=='Y')
-        (*W).Letters[i]='y';
+    for (U8 i=W->Start; i<=W->End; i++) {
+      if (W->Letters[i]=='Y')
+        W->Letters[i]='y';
     }
-    if (!(*W).Type || (*W).Type==English::Plural) {
-      if ((*W).MatchesAny(MaleWords, NUM_MALE_WORDS))
-        res = true, (*W).Type|=English::Male;
-      else if ((*W).MatchesAny(FemaleWords, NUM_FEMALE_WORDS))
-        res = true, (*W).Type|=English::Female;
+    if (!W->Type || W->Type==English::Plural) {
+      if (W->MatchesAny(MaleWords, NUM_MALE_WORDS))
+        res = true, W->Type|=English::Male;
+      else if (W->MatchesAny(FemaleWords, NUM_FEMALE_WORDS))
+        res = true, W->Type|=English::Female;
     }
     if (!res)
-      res=(*W).MatchesAny(CommonWords, NUM_COMMON_WORDS);
+      res=W->MatchesAny(CommonWords, NUM_COMMON_WORDS);
     Hash(W);
     if (res)
-      (*W).Language = Language::English;
+      W->Language = Language::English;
     return res;
   }
 };
@@ -2025,6 +2041,7 @@ public:
   Changelog:
   (28/01/2018) v133: Initial release by Márcio Pais
   (04/02/2018) v135: Added processing of common words
+  (25/02/2018) v139: Added UTF8 conversion
 */
 
 class FrenchStemmer: public Stemmer {
@@ -2086,179 +2103,175 @@ private:
   const char *SuffixesStep4[NUM_SUFFIXES_STEP4]={"i\xE8re","I\xE8re","ion","ier","Ier","e","\xEB"};
   static const int NUM_SUFFIXES_STEP5 = 5;
   const char *SuffixesStep5[NUM_SUFFIXES_STEP5]={"enn","onn","ett","ell","eill"};
-  inline bool IsConsonant(const char c){
+  inline bool IsConsonant(const char c) {
     return !IsVowel(c);
   }
-  void MarkVowelsAsConsonants(Word *W){
-    for (int i=(*W).Start; i<=(*W).End; i++){
-      switch ((*W).Letters[i]) {
+  void ConvertUTF8(Word *W) {
+    for (int i=W->Start; i<W->End; i++) {
+      U8 c = W->Letters[i+1]+((W->Letters[i+1]<0xA0)?0x60:0x40);
+      if (W->Letters[i]==0xC3 && (IsVowel(c) || (W->Letters[i+1]&0xDF)==0x87)) {
+        W->Letters[i] = c;
+        if (i+1<W->End)
+          memcpy(&W->Letters[i+1], &W->Letters[i+2], W->End-i-1);
+        W->End--;
+      }
+    }
+  }
+  void MarkVowelsAsConsonants(Word *W) {
+    for (int i=W->Start; i<=W->End; i++) {
+      switch (W->Letters[i]) {
         case 'i': case 'u': {
-          if (i>(*W).Start && i<(*W).End && (IsVowel((*W).Letters[i-1]) || ((*W).Letters[i-1]=='q' && (*W).Letters[i]=='u')) && IsVowel((*W).Letters[i+1]))
-            (*W).Letters[i] = toupper((*W).Letters[i]);
+          if (i>W->Start && i<W->End && (IsVowel(W->Letters[i-1]) || (W->Letters[i-1]=='q' && W->Letters[i]=='u')) && IsVowel(W->Letters[i+1]))
+            W->Letters[i] = toupper(W->Letters[i]);
           break;
         }
         case 'y': {
-          if ((i>(*W).Start && IsVowel((*W).Letters[i-1])) || (i<(*W).End && IsVowel((*W).Letters[i+1])))
-            (*W).Letters[i] = toupper((*W).Letters[i]);
+          if ((i>W->Start && IsVowel(W->Letters[i-1])) || (i<W->End && IsVowel(W->Letters[i+1])))
+            W->Letters[i] = toupper(W->Letters[i]);
         }
       }
     }
   }
   U32 GetRV(Word *W) {
-    U32 len = (*W).Length(), res = (*W).Start+len;
-    if (len>=3 && ((IsVowel((*W).Letters[(*W).Start]) && IsVowel((*W).Letters[(*W).Start+1])) || (*W).StartsWith("par") || (*W).StartsWith("col") || (*W).StartsWith("tap") ))
-      return (*W).Start+3;
+    U32 len = W->Length(), res = W->Start+len;
+    if (len>=3 && ((IsVowel(W->Letters[W->Start]) && IsVowel(W->Letters[W->Start+1])) || W->StartsWith("par") || W->StartsWith("col") || W->StartsWith("tap") ))
+      return W->Start+3;
     else {
-      for (int i=(*W).Start+1;i<=(*W).End;i++) {
-        if (IsVowel((*W).Letters[i]))
+      for (int i=W->Start+1;i<=W->End;i++) {
+        if (IsVowel(W->Letters[i]))
           return i+1;
       }
     }
     return res;
   }
-  U32 GetRegion(const Word *W, const U32 From){
-    bool hasVowel = false;
-    for (int i=(*W).Start+From; i<=(*W).End; i++){
-      if (IsVowel((*W).Letters[i])){
-        hasVowel = true;
-        continue;
-      }
-      else if (hasVowel)
-        return i-(*W).Start+1;
-    }
-    return (*W).Start+(*W).Length();
-  }
-  bool SuffixInRn(const Word *W, const U32 Rn, const char *Suffix){
-    return ((*W).Start!=(*W).End && Rn<=(*W).Length()-strlen(Suffix));
-  }
   bool Step1(Word *W, const U32 RV, const U32 R1, const U32 R2, bool *ForceStep2a) {
     int i = 0;
     for (; i<11; i++) {
-      if ((*W).EndsWith(SuffixesStep1[i]) && SuffixInRn(W, R2, SuffixesStep1[i])) {
-        (*W).End-=U8(strlen(SuffixesStep1[i]));
+      if (W->EndsWith(SuffixesStep1[i]) && SuffixInRn(W, R2, SuffixesStep1[i])) {
+        W->End-=U8(strlen(SuffixesStep1[i]));
         if (i==3 /*able*/)
-          (*W).Type|=French::Adjective;
+          W->Type|=French::Adjective;
         return true;
       }
     }
     for (; i<17; i++) {
-      if ((*W).EndsWith(SuffixesStep1[i]) && SuffixInRn(W, R2, SuffixesStep1[i])) {
-        (*W).End-=U8(strlen(SuffixesStep1[i]));
-        if ((*W).EndsWith("ic"))
-          (*W).ChangeSuffix("c", "qU");
+      if (W->EndsWith(SuffixesStep1[i]) && SuffixInRn(W, R2, SuffixesStep1[i])) {
+        W->End-=U8(strlen(SuffixesStep1[i]));
+        if (W->EndsWith("ic"))
+          W->ChangeSuffix("c", "qU");
         return true;
       }
     }
     for (; i<25;i++) {
-      if ((*W).EndsWith(SuffixesStep1[i]) && SuffixInRn(W, R2, SuffixesStep1[i])) {
-        (*W).End-=U8(strlen(SuffixesStep1[i]))-1-(i<19)*2;
+      if (W->EndsWith(SuffixesStep1[i]) && SuffixInRn(W, R2, SuffixesStep1[i])) {
+        W->End-=U8(strlen(SuffixesStep1[i]))-1-(i<19)*2;
         if (i>22) {
-          (*W).End+=2;
-          (*W).Letters[(*W).End]='t';
+          W->End+=2;
+          W->Letters[W->End]='t';
         }
         return true;
       }
     }
     for (; i<27; i++) {
-      if ((*W).EndsWith(SuffixesStep1[i]) && SuffixInRn(W, R1, SuffixesStep1[i]) && IsConsonant((*W).Letters[(*W).End-strlen(SuffixesStep1[i])])) {
-        (*W).End-=U8(strlen(SuffixesStep1[i]));
+      if (W->EndsWith(SuffixesStep1[i]) && SuffixInRn(W, R1, SuffixesStep1[i]) && IsConsonant((*W)((U8)strlen(SuffixesStep1[i])))) {
+        W->End-=U8(strlen(SuffixesStep1[i]));
         return true;
       }
     }
     for (; i<29; i++) {
-      if ((*W).EndsWith(SuffixesStep1[i]) && SuffixInRn(W, RV, SuffixesStep1[i])) {
-        (*W).End-=U8(strlen(SuffixesStep1[i]));
-        if ((*W).EndsWith("iv") && SuffixInRn(W, R2, "iv")) {
-          (*W).End-=2;
-          if ((*W).EndsWith("at") && SuffixInRn(W, R2, "at"))
-            (*W).End-=2;
+      if (W->EndsWith(SuffixesStep1[i]) && SuffixInRn(W, RV, SuffixesStep1[i])) {
+        W->End-=U8(strlen(SuffixesStep1[i]));
+        if (W->EndsWith("iv") && SuffixInRn(W, R2, "iv")) {
+          W->End-=2;
+          if (W->EndsWith("at") && SuffixInRn(W, R2, "at"))
+            W->End-=2;
         }
-        else if ((*W).EndsWith("eus")) {
+        else if (W->EndsWith("eus")) {
           if (SuffixInRn(W, R2, "eus"))
-            (*W).End-=3;
+            W->End-=3;
           else if (SuffixInRn(W, R1, "eus"))
-            (*W).Letters[(*W).End]='x';
+            W->Letters[W->End]='x';
         }
-        else if (((*W).EndsWith("abl") && SuffixInRn(W, R2, "abl")) || ((*W).EndsWith("iqU") && SuffixInRn(W, R2, "iqU")))
-          (*W).End-=3;
-        else if (((*W).EndsWith("i\xE8r") && SuffixInRn(W, RV, "i\xE8r")) || ((*W).EndsWith("I\xE8r") && SuffixInRn(W, RV, "I\xE8r"))){
-          (*W).End-=2;
-          (*W).Letters[(*W).End]='i';
+        else if ((W->EndsWith("abl") && SuffixInRn(W, R2, "abl")) || (W->EndsWith("iqU") && SuffixInRn(W, R2, "iqU")))
+          W->End-=3;
+        else if ((W->EndsWith("i\xE8r") && SuffixInRn(W, RV, "i\xE8r")) || (W->EndsWith("I\xE8r") && SuffixInRn(W, RV, "I\xE8r"))) {
+          W->End-=2;
+          W->Letters[W->End]='i';
         }
         return true;
       }
     }
     for (; i<31; i++) {
-      if ((*W).EndsWith(SuffixesStep1[i]) && SuffixInRn(W, R2, SuffixesStep1[i])) {
-        (*W).End-=U8(strlen(SuffixesStep1[i]));
-        if ((*W).EndsWith("abil")) {
+      if (W->EndsWith(SuffixesStep1[i]) && SuffixInRn(W, R2, SuffixesStep1[i])) {
+        W->End-=U8(strlen(SuffixesStep1[i]));
+        if (W->EndsWith("abil")) {
           if (SuffixInRn(W, R2, "abil"))
-            (*W).End-=4;
+            W->End-=4;
           else
-            (*W).End--, (*W).Letters[(*W).End]='l';
+            W->End--, W->Letters[W->End]='l';
         }
-        else if ((*W).EndsWith("ic")) {
+        else if (W->EndsWith("ic")) {
           if (SuffixInRn(W, R2, "ic"))
-            (*W).End-=2;
+            W->End-=2;
           else
-            (*W).ChangeSuffix("c", "qU");
+            W->ChangeSuffix("c", "qU");
         }
-        else if ((*W).EndsWith("iv") && SuffixInRn(W, R2, "iv"))
-          (*W).End-=2;
+        else if (W->EndsWith("iv") && SuffixInRn(W, R2, "iv"))
+          W->End-=2;
         return true;
       }
     }
     for (; i<35; i++) {
-      if ((*W).EndsWith(SuffixesStep1[i]) && SuffixInRn(W, R2, SuffixesStep1[i])) {
-        (*W).End-=U8(strlen(SuffixesStep1[i]));
-        if ((*W).EndsWith("at") && SuffixInRn(W, R2, "at")) {
-          (*W).End-=2;
-          if ((*W).EndsWith("ic")) {
+      if (W->EndsWith(SuffixesStep1[i]) && SuffixInRn(W, R2, SuffixesStep1[i])) {
+        W->End-=U8(strlen(SuffixesStep1[i]));
+        if (W->EndsWith("at") && SuffixInRn(W, R2, "at")) {
+          W->End-=2;
+          if (W->EndsWith("ic")) {
             if (SuffixInRn(W, R2, "ic"))
-              (*W).End-=2;
+              W->End-=2;
             else
-              (*W).ChangeSuffix("c", "qU");
+              W->ChangeSuffix("c", "qU");
           }
         }
         return true;
       }
     }
     for (; i<37; i++) {
-      if ((*W).EndsWith(SuffixesStep1[i])) {
+      if (W->EndsWith(SuffixesStep1[i])) {
         if (SuffixInRn(W, R2, SuffixesStep1[i])) {
-          (*W).End-=U8(strlen(SuffixesStep1[i]));
+          W->End-=U8(strlen(SuffixesStep1[i]));
           return true;
         }
         else if (SuffixInRn(W, R1, SuffixesStep1[i])) {
-          (*W).ChangeSuffix(SuffixesStep1[i], "eux");
+          W->ChangeSuffix(SuffixesStep1[i], "eux");
           return true;
         }
       }
     }
     for (; i<NUM_SUFFIXES_STEP1; i++) {
-      if ((*W).EndsWith(SuffixesStep1[i]) && SuffixInRn(W, RV+1, SuffixesStep1[i]) && IsVowel((*W).Letters[(*W).End-strlen(SuffixesStep1[i])])) {
-        (*W).End-=U8(strlen(SuffixesStep1[i]));
+      if (W->EndsWith(SuffixesStep1[i]) && SuffixInRn(W, RV+1, SuffixesStep1[i]) && IsVowel((*W)((U8)strlen(SuffixesStep1[i])))) {
+        W->End-=U8(strlen(SuffixesStep1[i]));
         (*ForceStep2a) = true;
         return true;
       }
     }
-    if ((*W).EndsWith("eaux") || (*W)=="eaux") {
-      (*W).End--;
-      (*W).Type|=French::Plural;
+    if (W->EndsWith("eaux") || (*W)=="eaux") {
+      W->End--;
+      W->Type|=French::Plural;
       return true;
     }
-    else if ((*W).EndsWith("aux") && SuffixInRn(W, R1, "aux")) {
-      (*W).End--, (*W).Letters[(*W).End] = 'l';
-      (*W).Type|=French::Plural;
+    else if (W->EndsWith("aux") && SuffixInRn(W, R1, "aux")) {
+      W->End--, W->Letters[W->End] = 'l';
+      W->Type|=French::Plural;
       return true;
     }
-    else if ((*W).EndsWith("amment") && SuffixInRn(W, RV, "amment")) {
-      (*W).ChangeSuffix("amment", "ant");
+    else if (W->EndsWith("amment") && SuffixInRn(W, RV, "amment")) {
+      W->ChangeSuffix("amment", "ant");
       (*ForceStep2a) = true;
       return true;
     }
-    else if ((*W).EndsWith("emment") && SuffixInRn(W, RV, "emment")) {
-      (*W).ChangeSuffix("emment", "ent");
+    else if (W->EndsWith("emment") && SuffixInRn(W, RV, "emment")) {
+      W->ChangeSuffix("emment", "ent");
       (*ForceStep2a) = true;
       return true;
     }
@@ -2266,10 +2279,10 @@ private:
   }
   bool Step2a(Word *W, const U32 RV) {
     for (int i=0; i<NUM_SUFFIXES_STEP2a; i++) {
-      if ((*W).EndsWith(SuffixesStep2a[i]) && SuffixInRn(W, RV+1, SuffixesStep2a[i]) && IsConsonant((*W).Letters[(*W).End-strlen(SuffixesStep2a[i])])) {
-        (*W).End-=U8(strlen(SuffixesStep2a[i]));
+      if (W->EndsWith(SuffixesStep2a[i]) && SuffixInRn(W, RV+1, SuffixesStep2a[i]) && IsConsonant((*W)((U8)strlen(SuffixesStep2a[i])))) {
+        W->End-=U8(strlen(SuffixesStep2a[i]));
         if (i==31 /*ir*/)
-          (*W).Type|=French::Verb;
+          W->Type|=French::Verb;
         return true;
       }
     }
@@ -2277,17 +2290,17 @@ private:
   }
   bool Step2b(Word *W, const U32 RV, const U32 R2) {
     for (int i=0; i<NUM_SUFFIXES_STEP2b; i++) {
-      if ((*W).EndsWith(SuffixesStep2b[i]) && SuffixInRn(W, RV, SuffixesStep2b[i])) {
+      if (W->EndsWith(SuffixesStep2b[i]) && SuffixInRn(W, RV, SuffixesStep2b[i])) {
         switch (SuffixesStep2b[i][0]) {
           case 'a': case '\xE2': {
-            (*W).End-=U8(strlen(SuffixesStep2b[i]));
-            if ((*W).EndsWith("e") && SuffixInRn(W, RV, "e"))
-              (*W).End--;
+            W->End-=U8(strlen(SuffixesStep2b[i]));
+            if (W->EndsWith("e") && SuffixInRn(W, RV, "e"))
+              W->End--;
             return true;
           }
           default: {
             if (i!=14 || SuffixInRn(W, R2, SuffixesStep2b[i])) {
-              (*W).End-=U8(strlen(SuffixesStep2b[i]));
+              W->End-=U8(strlen(SuffixesStep2b[i]));
               return true;
             }
           }
@@ -2297,7 +2310,7 @@ private:
     return false;
   }
   void Step3(Word *W) {
-    char *final = (char *)&(*W).Letters[(*W).End];
+    char *final = (char *)&W->Letters[W->End];
     if ((*final)=='Y')
       (*final) = 'i';
     else if ((*final)=='\xE7')
@@ -2305,34 +2318,34 @@ private:
   }
   bool Step4(Word *W, const U32 RV, const U32 R2) {
     bool res = false;
-    if ((*W).Length()>=2 && (*W).Letters[(*W).End]=='s' && !CharInArray((*W).Letters[(*W).End-1], SetStep4, NUM_SET_STEP4)) {
-      (*W).End--;
+    if (W->Length()>=2 && W->Letters[W->End]=='s' && !CharInArray((*W)(1), SetStep4, NUM_SET_STEP4)) {
+      W->End--;
       res = true;
     }
     for (int i=0; i<NUM_SUFFIXES_STEP4; i++) {
-      if ((*W).EndsWith(SuffixesStep4[i]) && SuffixInRn(W, RV, SuffixesStep4[i])) {
+      if (W->EndsWith(SuffixesStep4[i]) && SuffixInRn(W, RV, SuffixesStep4[i])) {
         switch (i) {
           case 2: { //ion
-            char prec = (*W).Letters[(*W).End-3];
+            char prec = (*W)(3);
             if (SuffixInRn(W, R2, SuffixesStep4[i]) && SuffixInRn(W, RV+1, SuffixesStep4[i]) && (prec=='s' || prec=='t')) {
-              (*W).End-=3;
+              W->End-=3;
               return true;
             }
             break;
           }
           case 5: { //e
-            (*W).End--;
+            W->End--;
             return true;
           }
           case 6: { //\xEB
-            if ((*W).EndsWith("gu\xEB")) {
-              (*W).End--;
+            if (W->EndsWith("gu\xEB")) {
+              W->End--;
               return true;
             }
             break;
           }
           default: {
-            (*W).ChangeSuffix(SuffixesStep4[i], "i");
+            W->ChangeSuffix(SuffixesStep4[i], "i");
             return true;
           }
         }
@@ -2342,18 +2355,18 @@ private:
   }
   bool Step5(Word *W) {
     for (int i=0; i<NUM_SUFFIXES_STEP5; i++) {
-      if ((*W).EndsWith(SuffixesStep5[i])) {
-        (*W).End--;
+      if (W->EndsWith(SuffixesStep5[i])) {
+        W->End--;
         return true;
       }
     }
     return false;
   }
   bool Step6(Word *W) {
-    for (int i=(*W).End; i>=(*W).Start; i--) {
-      if (IsVowel((*W).Letters[i])) {
-        if (i<(*W).End && ((*W).Letters[i]&0xFE)==0xE8) {
-          (*W).Letters[i] = 'e';
+    for (int i=W->End; i>=W->Start; i--) {
+      if (IsVowel(W->Letters[i])) {
+        if (i<W->End && (W->Letters[i]&0xFE)==0xE8) {
+          W->Letters[i] = 'e';
           return true;
         }
         return false;
@@ -2366,34 +2379,33 @@ public:
     return CharInArray(c, Vowels, NUM_VOWELS);
   }
   inline void Hash(Word *W) final {
-    (*W).Hash[2] = (*W).Hash[3] = ~0xeff1cace;
-    for (int i=(*W).Start; i<=(*W).End; i++) {
-      U8 l = (*W).Letters[i];
-      (*W).Hash[2]=(*W).Hash[2]*251*32 + l;
+    W->Hash[2] = W->Hash[3] = ~0xeff1cace;
+    for (int i=W->Start; i<=W->End; i++) {
+      U8 l = W->Letters[i];
+      W->Hash[2]=W->Hash[2]*251*32 + l;
       if (IsVowel(l))
-        (*W).Hash[3]=(*W).Hash[3]*997*16 + l;
+        W->Hash[3]=W->Hash[3]*997*16 + l;
       else if (l>='b' && l<='z')
-        (*W).Hash[3]=(*W).Hash[3]*271*32 + (l-97);
+        W->Hash[3]=W->Hash[3]*271*32 + (l-97);
       else
-        (*W).Hash[3]=(*W).Hash[3]*11*32 + l;
+        W->Hash[3]=W->Hash[3]*11*32 + l;
     }
   }
   bool Stem(Word *W) {
-    if ((*W).Length()<2){
+    ConvertUTF8(W);
+    if (W->Length()<2) {
       Hash(W);
       return false;
     }
-    else {
-      for (int i=0; i<NUM_EXCEPTIONS; i++){
-        if ((*W)==Exceptions[i][0]){
-          size_t len=strlen(Exceptions[i][1]);
-          memcpy(&(*W).Letters[(*W).Start], Exceptions[i][1], len);
-          (*W).End=(*W).Start+U8(len-1);
-          Hash(W);
-          (*W).Type|=TypesExceptions[i];
-          (*W).Language = Language::French;
-          return true;
-        }
+    for (int i=0; i<NUM_EXCEPTIONS; i++) {
+      if ((*W)==Exceptions[i][0]) {
+        size_t len=strlen(Exceptions[i][1]);
+        memcpy(&W->Letters[W->Start], Exceptions[i][1], len);
+        W->End=W->Start+U8(len-1);
+        Hash(W);
+        W->Type|=TypesExceptions[i];
+        W->Language = Language::French;
+        return true;
       }
     }
     MarkVowelsAsConsonants(W);
@@ -2412,12 +2424,188 @@ public:
       res|=Step4(W, RV, R2);
     res|=Step5(W);
     res|=Step6(W);
-    for (int i=(*W).Start; i<=(*W).End; i++)
-      (*W).Letters[i] = tolower((*W).Letters[i]);
+    for (int i=W->Start; i<=W->End; i++)
+      W->Letters[i] = tolower(W->Letters[i]);
     if (!res)
-      res=(*W).MatchesAny(CommonWords, NUM_COMMON_WORDS);
+      res=W->MatchesAny(CommonWords, NUM_COMMON_WORDS);
+    Hash(W);
     if (res)
-      (*W).Language = Language::French;
+      W->Language = Language::French;
+    return res;
+  }
+};
+
+/*
+  German suffix stemmer, based on the Porter stemmer.
+
+  Changelog:
+  (27/02/2018) v140: Initial release by Márcio Pais
+*/
+
+class GermanStemmer : public Stemmer {
+private:
+  static const int NUM_VOWELS = 9;
+  const char Vowels[NUM_VOWELS]={'a','e','i','o','u','y','\xE4','\xF6','\xFC'};
+  static const int NUM_COMMON_WORDS = 10;
+  const char *CommonWords[NUM_COMMON_WORDS]={"der","die","das","und","sie","ich","mit","sich","auf","nicht"};
+  static const int NUM_ENDINGS = 10;
+  const char Endings[NUM_ENDINGS]={'b','d','f','g','h','k','l','m','n','t'}; //plus 'r' for words ending in 's'
+  static const int NUM_SUFFIXES_STEP1 = 6;
+  const char *SuffixesStep1[NUM_SUFFIXES_STEP1]={"em","ern","er","e","en","es"};
+  static const int NUM_SUFFIXES_STEP2 = 3;
+  const char *SuffixesStep2[NUM_SUFFIXES_STEP2]={"en","er","est"};
+  static const int NUM_SUFFIXES_STEP3 = 7;
+  const char *SuffixesStep3[NUM_SUFFIXES_STEP3]={"end","ung","ik","ig","isch","lich","heit"};
+  void ConvertUTF8(Word *W) {
+    for (int i=W->Start; i<W->End; i++) {
+      U8 c = W->Letters[i+1]+((W->Letters[i+1]<0x9F)?0x60:0x40);
+      if (W->Letters[i]==0xC3 && (IsVowel(c) || c==0xDF)) {
+        W->Letters[i] = c;
+        if (i+1<W->End)
+          memcpy(&W->Letters[i+1], &W->Letters[i+2], W->End-i-1);
+        W->End--;
+      }
+    }
+  }
+  void ReplaceSharpS(Word *W) {
+    for (int i=W->Start; i<=W->End; i++) {
+      if (W->Letters[i]==0xDF) {
+        W->Letters[i]='s';
+        if (i+1<MAX_WORD_SIZE) {
+          memcpy(&W->Letters[i+2], &W->Letters[i+1], MAX_WORD_SIZE-i-2);
+          W->Letters[i+1]='s';
+          W->End+=(W->End<MAX_WORD_SIZE-1);
+        }
+      }
+    }
+  }    
+  void MarkVowelsAsConsonants(Word *W) {
+    for (int i=W->Start+1; i<W->End; i++) {
+      U8 c = W->Letters[i];
+      if ((c=='u' || c=='y') && IsVowel(W->Letters[i-1]) && IsVowel(W->Letters[i+1]))
+        W->Letters[i] = toupper(c);
+    }
+  }
+  inline bool IsValidEnding(const char c, const bool IncludeR = false) {
+    return CharInArray(c, Endings, NUM_ENDINGS) || (IncludeR && c=='r');
+  }
+  bool Step1(Word *W, const U32 R1) {
+    int i = 0;
+    for (; i<3; i++) {
+      if (W->EndsWith(SuffixesStep1[i]) && SuffixInRn(W, R1, SuffixesStep1[i])) {
+        W->End-=U8(strlen(SuffixesStep1[i]));
+        return true;
+      }
+    }
+    for (; i<NUM_SUFFIXES_STEP1; i++) {
+      if (W->EndsWith(SuffixesStep1[i]) && SuffixInRn(W, R1, SuffixesStep1[i])) {
+        W->End-=U8(strlen(SuffixesStep1[i]));
+        W->End-=U8(W->EndsWith("niss"));
+        return true;
+      }
+    }
+    if (W->EndsWith("s") && SuffixInRn(W, R1, "s") && IsValidEnding((*W)(1), true)) {
+      W->End--;
+      return true;
+    }
+    return false;
+  }
+  bool Step2(Word *W, const U32 R1) {
+    for (int i=0; i<NUM_SUFFIXES_STEP2; i++) {
+      if (W->EndsWith(SuffixesStep2[i]) && SuffixInRn(W, R1, SuffixesStep2[i])) {
+        W->End-=U8(strlen(SuffixesStep2[i]));
+        return true;
+      }
+    }
+    if (W->EndsWith("st") && SuffixInRn(W, R1, "st") && W->Length()>5 && IsValidEnding((*W)(2))) {
+      W->End-=2;
+      return true;
+    }
+    return false;
+  }
+  bool Step3(Word *W, const U32 R1, const U32 R2) {
+    int i = 0;
+    for (; i<2; i++) {
+      if (W->EndsWith(SuffixesStep3[i]) && SuffixInRn(W, R2, SuffixesStep3[i])) {
+        W->End-=U8(strlen(SuffixesStep3[i]));
+        if (W->EndsWith("ig") && (*W)(2)!='e' && SuffixInRn(W, R2, "ig"))
+          W->End-=2;
+        if (i)
+          W->Type|=German::Noun;
+        return true;
+      }
+    }
+    for (; i<5; i++) {
+      if (W->EndsWith(SuffixesStep3[i]) && SuffixInRn(W, R2, SuffixesStep3[i]) && (*W)((U8)strlen(SuffixesStep3[i]))!='e') {
+        W->End-=U8(strlen(SuffixesStep3[i]));
+        if (i>2)
+          W->Type|=German::Adjective;
+        return true;
+      }
+    }
+    for (; i<NUM_SUFFIXES_STEP3; i++) {
+      if (W->EndsWith(SuffixesStep3[i]) && SuffixInRn(W, R2, SuffixesStep3[i])) {
+        W->End-=U8(strlen(SuffixesStep3[i]));
+        if ((W->EndsWith("er") || W->EndsWith("en")) && SuffixInRn(W, R1, "e?"))
+          W->End-=2;
+        if (i>5)
+          W->Type|=German::Noun|German::Female;
+        return true;
+      }
+    }
+    if (W->EndsWith("keit") && SuffixInRn(W, R2, "keit")) {
+      W->End-=4;
+      if (W->EndsWith("lich") && SuffixInRn(W, R2, "lich"))
+        W->End-=4;
+      else if (W->EndsWith("ig") && SuffixInRn(W, R2, "ig"))
+        W->End-=2;
+      W->Type|=German::Noun|German::Female;
+      return true;
+    }
+    return false;
+  }
+public:
+  inline bool IsVowel(const char c) final {
+    return CharInArray(c, Vowels, NUM_VOWELS);
+  }
+  inline void Hash(Word *W) final {
+    W->Hash[2] = W->Hash[3] = ~0xbea7ab1e;
+    for (int i=W->Start; i<=W->End; i++) {
+      U8 l = W->Letters[i];
+      W->Hash[2]=W->Hash[2]*263*32 + l;
+      if (IsVowel(l))
+        W->Hash[3]=W->Hash[3]*997*16 + l;
+      else if (l>='b' && l<='z')
+        W->Hash[3]=W->Hash[3]*251*32 + (l-97);
+      else
+        W->Hash[3]=W->Hash[3]*11*32 + l;
+    }
+  }
+  bool Stem(Word *W) {
+    ConvertUTF8(W);
+    if (W->Length()<2) {
+      Hash(W);
+      return false;
+    }
+    ReplaceSharpS(W);
+    MarkVowelsAsConsonants(W);
+    U32 R1=GetRegion(W, 0), R2=GetRegion(W, R1);
+    R1 = min(3, R1);
+    bool res = Step1(W, R1);
+    res|=Step2(W, R1);
+    res|=Step3(W, R1, R2);
+    for (int i=W->Start; i<=W->End; i++) {
+      switch (W->Letters[i]) {
+        case 0xE4: { W->Letters[i] = 'a'; break; }
+        case 0xF6: case 0xFC: { W->Letters[i]-=0x87; break; }
+        default: W->Letters[i] = tolower(W->Letters[i]);
+      }
+    }
+    if (!res)
+      res=W->MatchesAny(CommonWords, NUM_COMMON_WORDS);
+    Hash(W);
+    if (res)
+      W->Language = Language::German;
     return res;
   }
 };
@@ -2457,6 +2645,8 @@ public:
   (04/02/2018) v135: Initial release by Márcio Pais
   (11/02/2018) v136: Uses 16 contexts, sets 3 mixer contexts
   (15/02/2018) v138: Uses 21 contexts, sets 4 mixer contexts
+  (25/02/2018) v139: Uses 26 contexts
+  (27/02/2018) v140: Sets 6 mixer contexts
 */
 
 class TextModel {
@@ -2525,11 +2715,13 @@ private:
   void Update(Buf& buffer, ModelStats *Stats = nullptr);
   void SetContexts(Buf& buffer, ModelStats *Stats = nullptr);
 public:
-  TextModel(const U32 Size) : Map(Size, 21), Stemmers(Language::Count-1), Languages(Language::Count-1), WordPos(0x10000), State(Parse::Unknown), pState(State), Lang{ 0, 0, Language::Unknown, Language::Unknown }, Info{ 0 }, ParseCtx(0) {
+  TextModel(const U32 Size) : Map(Size, 26), Stemmers(Language::Count-1), Languages(Language::Count-1), WordPos(0x10000), State(Parse::Unknown), pState(State), Lang{ 0, 0, Language::Unknown, Language::Unknown }, Info{ 0 }, ParseCtx(0) {
     Stemmers[Language::English-1] = new EnglishStemmer();
     Stemmers[Language::French-1] = new FrenchStemmer();
+    Stemmers[Language::German-1] = new GermanStemmer();
     Languages[Language::English-1] = new English();
     Languages[Language::French-1] = new French();
+    Languages[Language::German-1] = new German();
     cWord = &Words[Lang.Id](0);
     pWord = &Words[Lang.Id](1);
     cSegment = &Segments(0);
@@ -2558,6 +2750,8 @@ public:
       ((Info.lastPunct<Info.wordLength[0]+Info.wordGap)<<3)|
       ((Info.lastPunct<Info.lastLetter+Info.wordLength[1]+Info.wordGap)<<4)
     )&0x7FF, 2048);
+    mixer.set(hash(Info.firstLetter*(Info.wordLength[0]<4), min(6, Info.wordLength[0]), c0)&0x7FF, 2048);
+    mixer.set(hash((*pWord)[0], (*pWord)(0), min(4, Info.wordLength[0]), Info.lastPunct<Info.lastLetter)&0x7FF, 2048);
   }
 };
 
@@ -2654,7 +2848,7 @@ void TextModel::Update(Buf& buffer, ModelStats *Stats) {
       Info.quoteLength+=(Info.quoteLength>0);
       if (Info.quoteLength>0x1F)
         Info.quoteLength = 0;
-      cSentence->VerbIndex++, cSentence->NounIndex++;
+      cSentence->VerbIndex++, cSentence->NounIndex++, cSentence->CapitalIndex++;
       if ((pWord->Type&Language::Verb)!=0) {
         cSentence->VerbIndex = 0;
         memcpy(&cSentence->lastVerb, pWord, sizeof(Word));
@@ -2662,6 +2856,10 @@ void TextModel::Update(Buf& buffer, ModelStats *Stats) {
       if ((pWord->Type&Language::Noun)!=0) {
         cSentence->NounIndex = 0;
         memcpy(&cSentence->lastNoun, pWord, sizeof(Word));
+      }
+      if (cSentence->WordCount>1 && Info.lastUpper<Info.wordLength[1]) {
+        cSentence->CapitalIndex = 0;
+        memcpy(&cSentence->lastCapital, pWord, sizeof(Word));
       }
     }
     bool skip = false;
@@ -2850,6 +3048,22 @@ void TextModel::SetContexts(Buf& buffer, ModelStats *Stats) {
   Map.set(hash(i++, w, c, Info.TopicDescriptor.Hash[1]&0x7FFF));
   Map.set(hash(i++, Info.numLength[0], c, Info.TopicDescriptor.Hash[1]&0x7FFF));
   Map.set(hash(i++, (Info.lastLetter>0)?c:0x100, Info.masks[1]&0xFFC, Info.nestHash&0x7FF));
+  Map.set(hash(i++, w*17+c, Info.masks[3]&0x1FF,
+    ((cSentence->VerbIndex==0 && cSentence->lastVerb.Length()>0)<<6)|
+    ((Info.wordLength[1]>3)<<5)|
+    ((cSegment->WordCount==0)<<4)|
+    ((cSentence->SegmentCount==0 && cSentence->WordCount<2)<<3)|
+    ((Info.lastPunct>=Info.lastLetter+Info.wordLength[1]+Info.wordGap)<<2)|
+    ((Info.lastUpper<Info.lastLetter+Info.wordLength[1])<<1)|
+    (Info.lastUpper<Info.wordLength[0]+Info.wordGap+Info.wordLength[1])
+  ));
+  Map.set(hash(i++, c, pWord->Hash[2], Info.firstLetter*(Info.wordLength[0]<6),
+    ((Info.lastPunct<Info.wordLength[0]+Info.wordGap)<<1)|
+    (Info.lastPunct>=Info.lastLetter+Info.wordLength[1]+Info.wordGap)
+  ));
+  Map.set(hash(i++, w*23+c, Words[Lang.pId](1+(Info.wordLength[0]==0)).Letters[Words[Lang.pId](1+(Info.wordLength[0]==0)).Start], Info.firstLetter*(Info.wordLength[0]<7)));
+  Map.set(hash(i++, column, Info.spaces&7, Info.nestHash&0x7FF));
+  Map.set(hash(i++, cWord->Hash[1], (Info.lastUpper<column)|((Info.lastUpper<Info.wordLength[0])<<1), min(5, Info.wordLength[0])));
 }
 
 int matchModel(Mixer& m) {
@@ -6508,7 +6722,7 @@ int contextModel2() {
   static ContextMap2 cm(MEM()*31, 9);
   static TextModel textModel(MEM()*16);
   static RunContextMap rcm7(MEM()), rcm9(MEM()), rcm10(MEM());
-  static Mixer m(NUM_INPUTS, 10800+1024*11, NUM_SETS, 32);
+  static Mixer m(NUM_INPUTS, 10800+1024*15, NUM_SETS, 32);
   static U32 cxt[16];
   static Filetype ft2,filetype=preprocessor::DEFAULT;
   static int size=0;  // bytes remaining in block
