@@ -17,7 +17,6 @@ class LstmLayer {
   static inline float Rand() {
     return static_cast <float> (rand()) / static_cast <float> (RAND_MAX);
   }
-  static inline float Logistic(float val) { return 1 / (1 + exp(-val)); }
 
  private:
   std::valarray<float> state_, output_gate_error_, state_error_,

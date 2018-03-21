@@ -23,7 +23,7 @@
 #include <stdio.h>
 
 Predictor::Predictor(const std::vector<bool>& vocab) : manager_(),
-    logistic_(10000), vocab_(vocab) {
+    sigmoid_(10000), vocab_(vocab) {
   srand(0xDEADBEEF);
 
   AddBracket();
@@ -277,7 +277,7 @@ void Predictor::AddMixers() {
   AddAuxiliary();
 
   for (int i = 0; i < 3; ++i) {
-    layers_.push_back(std::unique_ptr<MixerInput>(new MixerInput(logistic_,
+    layers_.push_back(std::unique_ptr<MixerInput>(new MixerInput(sigmoid_,
         1.0e-4)));
     mixers_.push_back(std::vector<std::unique_ptr<Mixer>>());
   }
@@ -293,23 +293,23 @@ void Predictor::AddMixers() {
     const BitContext& bit_context = manager_.AddBitContext(std::unique_ptr
         <BitContext>(new BitContext(manager_.long_bit_context_,
         context.GetContext(), context.Size())));
-    AddMixer(0, new Mixer(layers_[0]->Inputs(), logistic_,
-        bit_context.GetContext(), params[2], input_size));
+    AddMixer(0, new Mixer(layers_[0]->Inputs(), bit_context.GetContext(),
+        params[2], input_size));
   }
 
   model_params = {{0, 0.001}, {2, 0.002}, {3, 0.005}};
   for (const auto& params : model_params) {
-    AddMixer(0, new Mixer(layers_[0]->Inputs(), logistic_,
+    AddMixer(0, new Mixer(layers_[0]->Inputs(),
         manager_.recent_bytes_[params[0]], params[1], input_size));
   }
-  AddMixer(0, new Mixer(layers_[0]->Inputs(), logistic_, manager_.zero_context_,
-      0.00005, input_size));
-  AddMixer(0, new Mixer(layers_[0]->Inputs(), logistic_, manager_.line_break_,
-      0.0007, input_size));
-  AddMixer(0, new Mixer(layers_[0]->Inputs(), logistic_,
-      manager_.longest_match_, 0.0005, input_size));
-  AddMixer(0, new Mixer(layers_[0]->Inputs(), logistic_,
-      manager_.auxiliary_context_, 0.0005, input_size));
+  AddMixer(0, new Mixer(layers_[0]->Inputs(), manager_.zero_context_, 0.00005,
+      input_size));
+  AddMixer(0, new Mixer(layers_[0]->Inputs(), manager_.line_break_, 0.0007,
+      input_size));
+  AddMixer(0, new Mixer(layers_[0]->Inputs(), manager_.longest_match_, 0.0005,
+      input_size));
+  AddMixer(0, new Mixer(layers_[0]->Inputs(), manager_.auxiliary_context_,
+      0.0005, input_size));
 
   std::vector<int> map(256, 0);
   for (int i = 0; i < 256; ++i) {
@@ -318,8 +318,8 @@ void Predictor::AddMixers() {
   }
   const Context& interval1 = manager_.AddContext(std::unique_ptr<Context>(
       new Interval(manager_.bit_context_, map, 8)));
-  AddMixer(0, new Mixer(layers_[0]->Inputs(), logistic_, interval1.GetContext(),
-      0.001, input_size));
+  AddMixer(0, new Mixer(layers_[0]->Inputs(), interval1.GetContext(), 0.001,
+      input_size));
 
   for (int i = 0; i < 256; ++i) {
     map[i] = (i < 41) + (i < 92) + (i < 124) + (i < 58) +
@@ -329,8 +329,8 @@ void Predictor::AddMixers() {
   }
   const Context& interval2 = manager_.AddContext(std::unique_ptr<Context>(
       new Interval(manager_.bit_context_, map, 8)));
-  AddMixer(0, new Mixer(layers_[0]->Inputs(), logistic_, interval2.GetContext(),
-      0.001, input_size));
+  AddMixer(0, new Mixer(layers_[0]->Inputs(), interval2.GetContext(), 0.001,
+      input_size));
 
   for (int i = 0; i < 256; ++i) map[i] = 0;
   for (int i = 'a'; i <= 'z'; ++i) map[i] = 1;
@@ -339,13 +339,13 @@ void Predictor::AddMixers() {
   for (int i = 0x80; i < 256; ++i) map[i] = 1;
   const Context& interval3 = manager_.AddContext(std::unique_ptr<Context>(
       new Interval(manager_.bit_context_, map, 7)));
-  AddMixer(0, new Mixer(layers_[0]->Inputs(), logistic_, interval3.GetContext(),
-      0.001, input_size));
+  AddMixer(0, new Mixer(layers_[0]->Inputs(), interval3.GetContext(), 0.001,
+      input_size));
   const BitContext& bit_context5 = manager_.AddBitContext(std::unique_ptr
       <BitContext>(new BitContext(manager_.long_bit_context_,
       interval3.GetContext(), interval3.Size())));
-  AddMixer(0, new Mixer(layers_[0]->Inputs(), logistic_,
-      bit_context5.GetContext(), 0.005, input_size));
+  AddMixer(0, new Mixer(layers_[0]->Inputs(), bit_context5.GetContext(), 0.005,
+      input_size));
 
   for (int i = 0; i < 256; ++i) map[i] = 0;
   for (int i = 0x30; i < 0x60; ++i) map[i] = 1;
@@ -353,19 +353,19 @@ void Predictor::AddMixers() {
   for (int i = 0xD0; i < 256; ++i) map[i] = 3;
   const Context& interval4 = manager_.AddContext(std::unique_ptr<Context>(
       new Interval(manager_.bit_context_, map, 10)));
-  AddMixer(0, new Mixer(layers_[0]->Inputs(), logistic_, interval4.GetContext(),
-      0.001, input_size));
+  AddMixer(0, new Mixer(layers_[0]->Inputs(), interval4.GetContext(), 0.001,
+      input_size));
   const Context& interval5 = manager_.AddContext(std::unique_ptr<Context>(
       new Interval(manager_.bit_context_, map, 15)));
-  AddMixer(0, new Mixer(layers_[0]->Inputs(), logistic_, interval5.GetContext(),
-      0.001, input_size));
+  AddMixer(0, new Mixer(layers_[0]->Inputs(), interval5.GetContext(), 0.001,
+      input_size));
   const Context& interval8 = manager_.AddContext(std::unique_ptr<Context>(
       new Interval(manager_.bit_context_, map, 7)));
   const BitContext& bit_context4 = manager_.AddBitContext(std::unique_ptr
       <BitContext>(new BitContext(manager_.long_bit_context_,
       interval8.GetContext(), interval8.Size())));
-  AddMixer(0, new Mixer(layers_[0]->Inputs(), logistic_,
-      bit_context4.GetContext(), 0.005, input_size));
+  AddMixer(0, new Mixer(layers_[0]->Inputs(), bit_context4.GetContext(), 0.005,
+      input_size));
 
   for (int i = 0; i < 256; ++i) map[i] = 0;
   for (int i = 0x20; i <= 0x7E; ++i) map[i] = 1;
@@ -377,84 +377,84 @@ void Predictor::AddMixers() {
   map[' '] = 7;
   const Context& interval6 = manager_.AddContext(std::unique_ptr<Context>(
       new Interval(manager_.bit_context_, map, 9)));
-  AddMixer(0, new Mixer(layers_[0]->Inputs(), logistic_, interval6.GetContext(),
-      0.001, input_size));
+  AddMixer(0, new Mixer(layers_[0]->Inputs(), interval6.GetContext(), 0.001,
+      input_size));
   const Context& interval7 = manager_.AddContext(std::unique_ptr<Context>(
       new IntervalHash(manager_.bit_context_, map, 8, 7, 2)));
-  AddMixer(0, new Mixer(layers_[0]->Inputs(), logistic_, interval7.GetContext(),
-      0.001, input_size));
+  AddMixer(0, new Mixer(layers_[0]->Inputs(), interval7.GetContext(), 0.001,
+      input_size));
   const Context& interval9 = manager_.AddContext(std::unique_ptr<Context>(
       new Interval(manager_.bit_context_, map, 7)));
   const BitContext& bit_context6 = manager_.AddBitContext(std::unique_ptr
       <BitContext>(new BitContext(manager_.long_bit_context_,
       interval9.GetContext(), interval9.Size())));
-  AddMixer(0, new Mixer(layers_[0]->Inputs(), logistic_,
-      bit_context6.GetContext(), 0.005, input_size));
+  AddMixer(0, new Mixer(layers_[0]->Inputs(), bit_context6.GetContext(), 0.005,
+      input_size));
 
   const BitContext& bit_context1 = manager_.AddBitContext(std::unique_ptr
       <BitContext>(new BitContext(manager_.long_bit_context_,
       manager_.recent_bytes_[1], 256)));
-  AddMixer(0, new Mixer(layers_[0]->Inputs(), logistic_,
-      bit_context1.GetContext(), 0.005, input_size));
+  AddMixer(0, new Mixer(layers_[0]->Inputs(), bit_context1.GetContext(), 0.005,
+      input_size));
 
   const Context& combined1 = manager_.AddContext(std::unique_ptr
       <Context>(new CombinedContext(manager_.recent_bytes_[1],
       manager_.recent_bytes_[0], 256, 256)));
-  AddMixer(0, new Mixer(layers_[0]->Inputs(), logistic_,
-      combined1.GetContext(), 0.005, input_size));
+  AddMixer(0, new Mixer(layers_[0]->Inputs(), combined1.GetContext(), 0.005,
+      input_size));
 
   const Context& combined2 = manager_.AddContext(std::unique_ptr
       <Context>(new CombinedContext(manager_.recent_bytes_[2],
       manager_.recent_bytes_[1], 256, 256)));
-  AddMixer(0, new Mixer(layers_[0]->Inputs(), logistic_,
-      combined2.GetContext(), 0.003, input_size));
+  AddMixer(0, new Mixer(layers_[0]->Inputs(), combined2.GetContext(), 0.003,
+      input_size));
 
   input_size = mixers_[0].size() + auxiliary_.size();
   layers_[1]->SetNumModels(input_size);
 
-  AddMixer(1, new Mixer(layers_[1]->Inputs(), logistic_, manager_.zero_context_,
-      0.005, input_size));
-  AddMixer(1, new Mixer(layers_[1]->Inputs(), logistic_, manager_.zero_context_,
+  AddMixer(1, new Mixer(layers_[1]->Inputs(), manager_.zero_context_, 0.005,
+      input_size));
+  AddMixer(1, new Mixer(layers_[1]->Inputs(), manager_.zero_context_, 0.0005,
+      input_size));
+  AddMixer(1, new Mixer(layers_[1]->Inputs(), manager_.long_bit_context_, 0.005,
+      input_size));
+  AddMixer(1, new Mixer(layers_[1]->Inputs(), manager_.long_bit_context_,
       0.0005, input_size));
-  AddMixer(1, new Mixer(layers_[1]->Inputs(), logistic_,
-      manager_.long_bit_context_, 0.005, input_size));
-  AddMixer(1, new Mixer(layers_[1]->Inputs(), logistic_,
-      manager_.long_bit_context_, 0.0005, input_size));
-  AddMixer(1, new Mixer(layers_[1]->Inputs(), logistic_,
-      manager_.long_bit_context_, 0.00001, input_size));
-  AddMixer(1, new Mixer(layers_[1]->Inputs(), logistic_,
-      manager_.recent_bytes_[0], 0.005, input_size));
-  AddMixer(1, new Mixer(layers_[1]->Inputs(), logistic_,
-      manager_.recent_bytes_[1], 0.005, input_size));
-  AddMixer(1, new Mixer(layers_[1]->Inputs(), logistic_,
-      manager_.recent_bytes_[2], 0.005, input_size));
-  AddMixer(1, new Mixer(layers_[1]->Inputs(), logistic_,
-      manager_.longest_match_, 0.0005, input_size));
-  AddMixer(1, new Mixer(layers_[1]->Inputs(), logistic_, interval1.GetContext(),
-      0.001, input_size));
-  AddMixer(1, new Mixer(layers_[1]->Inputs(), logistic_, interval2.GetContext(),
-      0.001, input_size));
-  AddMixer(1, new Mixer(layers_[1]->Inputs(), logistic_, interval3.GetContext(),
-      0.001, input_size));
-  AddMixer(1, new Mixer(layers_[1]->Inputs(), logistic_, interval4.GetContext(),
-      0.001, input_size));
-  AddMixer(1, new Mixer(layers_[1]->Inputs(), logistic_, interval5.GetContext(),
-      0.001, input_size));
-  AddMixer(1, new Mixer(layers_[1]->Inputs(), logistic_, interval6.GetContext(),
-      0.001, input_size));
-  AddMixer(1, new Mixer(layers_[1]->Inputs(), logistic_, interval7.GetContext(),
-      0.001, input_size));
-  AddMixer(1, new Mixer(layers_[1]->Inputs(), logistic_,
-      bit_context4.GetContext(), 0.001, input_size));
-  AddMixer(1, new Mixer(layers_[1]->Inputs(), logistic_,
-      bit_context5.GetContext(), 0.001, input_size));
-  AddMixer(1, new Mixer(layers_[1]->Inputs(), logistic_,
-      bit_context6.GetContext(), 0.001, input_size));
+  AddMixer(1, new Mixer(layers_[1]->Inputs(), manager_.long_bit_context_,
+      0.00001, input_size));
+  AddMixer(1, new Mixer(layers_[1]->Inputs(), manager_.recent_bytes_[0], 0.005,
+      input_size));
+  AddMixer(1, new Mixer(layers_[1]->Inputs(), manager_.recent_bytes_[1], 0.005,
+      input_size));
+  AddMixer(1, new Mixer(layers_[1]->Inputs(), manager_.recent_bytes_[2], 0.005,
+      input_size));
+  AddMixer(1, new Mixer(layers_[1]->Inputs(), manager_.longest_match_, 0.0005,
+      input_size));
+  AddMixer(1, new Mixer(layers_[1]->Inputs(), interval1.GetContext(), 0.001,
+      input_size));
+  AddMixer(1, new Mixer(layers_[1]->Inputs(), interval2.GetContext(), 0.001,
+      input_size));
+  AddMixer(1, new Mixer(layers_[1]->Inputs(), interval3.GetContext(), 0.001,
+      input_size));
+  AddMixer(1, new Mixer(layers_[1]->Inputs(), interval4.GetContext(), 0.001,
+      input_size));
+  AddMixer(1, new Mixer(layers_[1]->Inputs(), interval5.GetContext(), 0.001,
+      input_size));
+  AddMixer(1, new Mixer(layers_[1]->Inputs(), interval6.GetContext(), 0.001,
+      input_size));
+  AddMixer(1, new Mixer(layers_[1]->Inputs(), interval7.GetContext(), 0.001,
+      input_size));
+  AddMixer(1, new Mixer(layers_[1]->Inputs(), bit_context4.GetContext(), 0.001,
+      input_size));
+  AddMixer(1, new Mixer(layers_[1]->Inputs(), bit_context5.GetContext(), 0.001,
+      input_size));
+  AddMixer(1, new Mixer(layers_[1]->Inputs(), bit_context6.GetContext(), 0.001,
+      input_size));
 
   input_size = mixers_[0].size() + mixers_[1].size() + auxiliary_.size();
   layers_[2]->SetNumModels(input_size);
-  AddMixer(2, new Mixer(layers_[2]->Inputs(), logistic_, manager_.zero_context_,
-      0.0003, input_size));
+  AddMixer(2, new Mixer(layers_[2]->Inputs(), manager_.zero_context_, 0.0003,
+      input_size));
 }
 
 float Predictor::Predict() {
@@ -486,7 +486,7 @@ float Predictor::Predict() {
   }
   float auxiliary_average = 0;
   for (unsigned int i = 0; i < auxiliary_.size(); ++i) {
-    auxiliary_average += logistic_.Squash(layers_[0]->Inputs()[auxiliary_[i]]);
+    auxiliary_average += Sigmoid::Logistic(layers_[0]->Inputs()[auxiliary_[i]]);
   }
   auxiliary_average /= auxiliary_.size();
   manager_.auxiliary_context_ = auxiliary_average * 15;
@@ -505,7 +505,7 @@ float Predictor::Predict() {
     float p = mixers_[1][i]->Mix();
     layers_[2]->SetStretchedInput(mixers_[0].size() + i, p);
   }
-  float p = logistic_.Squash(mixers_[2][0]->Mix());
+  float p = Sigmoid::Logistic(mixers_[2][0]->Mix());
   p = sse_.Predict(p);
   if (byte_mixer_override >= 0) {
     return byte_mixer_override;

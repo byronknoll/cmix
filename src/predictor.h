@@ -1,7 +1,7 @@
 #ifndef PREDICTOR_H
 #define PREDICTOR_H
 
-#include "mixer/logistic.h"
+#include "mixer/sigmoid.h"
 #include "mixer/mixer-input.h"
 #include "mixer/mixer.h"
 #include "mixer/byte-mixer.h"
@@ -51,7 +51,7 @@ class Predictor {
   std::vector<std::vector<std::unique_ptr<Mixer>>> mixers_;
   std::vector<unsigned int> auxiliary_;
   ContextManager manager_;
-  Logistic logistic_;
+  Sigmoid sigmoid_;
   std::vector<std::unique_ptr<ByteMixer>> byte_mixers_;
   std::vector<bool> vocab_;
 };

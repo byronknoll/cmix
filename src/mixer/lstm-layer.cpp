@@ -1,5 +1,7 @@
 #include "lstm-layer.h"
 
+#include "sigmoid.h"
+
 #include <math.h>
 #include <algorithm>
 #include <numeric>
@@ -44,16 +46,16 @@ void LstmLayer::ForwardPass(const std::valarray<float>& input, int input_symbol,
     std::valarray<float>* hidden, int hidden_start) {
   last_state_[epoch_] = state_;
   for (unsigned int i = 0; i < num_cells_; ++i) {
-    forget_gate_state_[epoch_][i] = Logistic(std::inner_product(
+    forget_gate_state_[epoch_][i] = Sigmoid::Logistic(std::inner_product(
         &input[0], &input[input.size()],
         &forget_gate_[i][output_size_], forget_gate_[i][input_symbol]));
     input_node_state_[epoch_][i] = tanh(std::inner_product(&input[0],
         &input[input.size()], &input_node_[i][output_size_],
         input_node_[i][input_symbol]));
-    input_gate_state_[epoch_][i] = Logistic(std::inner_product(
+    input_gate_state_[epoch_][i] = Sigmoid::Logistic(std::inner_product(
         &input[0], &input[input.size()],
         &input_gate_[i][output_size_], input_gate_[i][input_symbol]));
-    output_gate_state_[epoch_][i] = Logistic(std::inner_product(
+    output_gate_state_[epoch_][i] = Sigmoid::Logistic(std::inner_product(
         &input[0], &input[input.size()],
         &output_gate_[i][output_size_], output_gate_[i][input_symbol]));
   }
