@@ -23,7 +23,7 @@
 #include <stdio.h>
 
 Predictor::Predictor(const std::vector<bool>& vocab) : manager_(),
-    sigmoid_(10000), vocab_(vocab) {
+    sigmoid_(100001), vocab_(vocab) {
   srand(0xDEADBEEF);
 
   AddBracket();
