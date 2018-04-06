@@ -38,5 +38,8 @@ void Mixer::Perceive(int bit) {
     max_steps_ = data->steps;
   }
   data->weights += update * inputs_;
+  if (steps_ % 1000 == 0) {
+    data->weights *= 1.0 - 5.0e-6;
+  }
 }
 
