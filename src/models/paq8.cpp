@@ -474,9 +474,17 @@ void train(short *t, short *w, int n, int err) {
 #define NUM_INPUTS 1607
 #define NUM_SETS 19
 
-std::valarray<float> model_predictions(0.5, NUM_INPUTS + NUM_SETS + 1);
+std::valarray<float> model_predictions(0.5, NUM_INPUTS + NUM_SETS + 11);
 unsigned int prediction_index = 0;
 float conversion_factor = 1.0 / 4095;
+
+void AddPrediction(int x) {
+  model_predictions[prediction_index++] = x * conversion_factor;
+}
+
+void ResetPredictions() {
+  prediction_index = 0;
+}
 
 class Mixer {
   const int N, M, S;
@@ -500,8 +508,7 @@ public:
   }
 
   void add(int x) {
-    model_predictions[prediction_index] = squash(x) * conversion_factor;
-    ++prediction_index;
+    AddPrediction(squash(x));
     tx[nx++]=x;
   }
 
@@ -513,7 +520,6 @@ public:
   int p() {
     while (nx&7) tx[nx++]=0;
     if (mp) {
-      prediction_index = 0;
       mp->update();
       for (int i=0; i<ncxt; ++i) {
         pr[i]=squash((dot_product(&tx[0], &wx[cxt[i]*N], nx) * 9)>>9);
@@ -6858,25 +6864,36 @@ void Predictor::update() {
   bpos=(bpos+1)&7;
 
   int pr0=contextModel2();
+  AddPrediction(pr0);
 
   pr=a.p(pr0, c0);
+  AddPrediction(pr);
 
   int pr1=a1.p(pr0, c0+256*buf(1));
+  AddPrediction(pr1);
   int pr2=a2.p(pr0, c0^(hash(buf(1), buf(2))&0xffff));
+  AddPrediction(pr2);
   int pr3=a3.p(pr0, c0^(hash(buf(1), buf(2), buf(3))&0xffff));
+  AddPrediction(pr3);
   pr0=(pr0+pr1+pr2+pr3+2)>>2;
+  AddPrediction(pr0);
 
   pr1=a4.p(pr, c0+256*buf(1));
+  AddPrediction(pr1);
   pr2=a5.p(pr, c0^(hash(buf(1), buf(2))&0xffff));
+  AddPrediction(pr2);
   pr3=a6.p(pr, c0^(hash(buf(1), buf(2), buf(3))&0xffff));
+  AddPrediction(pr3);
   pr=(pr+pr1+pr2+pr3+2)>>2;
+  AddPrediction(pr);
 
   pr=(pr+pr0+1)>>1;
+  AddPrediction(pr);
+  ResetPredictions();
   last_prediction = pr;
 }
 
 Predictor paq8;
-
 }
 
 PAQ8::PAQ8(int memory) {
@@ -6885,8 +6902,6 @@ PAQ8::PAQ8(int memory) {
 }
 
 const std::valarray<float>& PAQ8::Predict() {
-  model_predictions[model_predictions.size() - 1] = paq8.p() *
-      conversion_factor;
   return model_predictions;
 }
 
