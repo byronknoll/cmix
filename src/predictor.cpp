@@ -4,7 +4,6 @@
 #include "models/indirect.h"
 #include "models/byte-run.h"
 #include "models/match.h"
-#include "models/dmc.h"
 #include "models/ppmd.h"
 #include "models/bracket.h"
 #include "models/paq8.h"
@@ -30,16 +29,10 @@ Predictor::Predictor(const std::vector<bool>& vocab) : manager_(),
   AddPAQ8HP();
   AddPAQ8();
   AddPPMD();
-  AddDMC();
-  AddByteRun();
-  AddNonstationary();
   AddWord();
-  AddSparse();
   AddDirect();
-  AddRunMap();
   AddMatch();
   AddDoubleIndirect();
-  AddInterval();
   AddMixers();
 }
 
@@ -105,36 +98,6 @@ void Predictor::AddPPMD() {
   AddByteModel(new PPMD::PPMD(16, 1200, manager_.bit_context_, vocab_));
 }
 
-void Predictor::AddDMC() {
-  AddModel(new DMC(0.02, 10000000));
-}
-
-void Predictor::AddByteRun() {
-  unsigned long long max_size = 10000000;
-  float delta = 200;
-  std::vector<std::vector<unsigned int>> model_params = {{0, 8}, {1, 5}, {1, 8},
-      {2, 8}};
-
-  for (const auto& params : model_params) {
-    const Context& context = manager_.AddContext(std::unique_ptr<Context>(
-        new ContextHash(manager_.bit_context_, params[0], params[1])));
-    AddModel(new ByteRun(context.GetContext(), manager_.bit_context_, delta,
-        std::min(max_size, context.Size())));
-  }
-}
-
-void Predictor::AddNonstationary() {
-  float delta = 500;
-  std::vector<std::vector<unsigned int>> model_params = {{0, 8}, {2, 8}, {4, 7},
-      {8, 3}, {12, 1}, {16, 1}};
-  for (const auto& params : model_params) {
-    const Context& context = manager_.AddContext(std::unique_ptr<Context>(
-        new ContextHash(manager_.bit_context_, params[0], params[1])));
-    AddModel(new Indirect(manager_.nonstationary_, context.GetContext(),
-        manager_.bit_context_, delta, manager_.shared_map_));
-  }
-}
-
 void Predictor::AddWord() {
   float delta = 200;
   std::vector<std::vector<unsigned int>> model_params = {{0}, {0, 1}, {7, 2},
@@ -166,29 +129,6 @@ void Predictor::AddWord() {
   }
 }
 
-void Predictor::AddSparse() {
-  float delta = 300;
-  std::vector<std::vector<unsigned int>> model_params = {{1}, {2}, {3}, {4},
-      {5}, {0, 2}, {0, 3}, {0, 4}, {0, 5}, {0, 6}, {0, 7}, {1, 2},
-      {1, 3}, {2, 3}, {2, 5}, {3, 4}, {3, 5}, {3, 7}};
-  for (const auto& params : model_params) {
-    std::unique_ptr<Context> hash(new Sparse(manager_.recent_bytes_, params));
-    const Context& context = manager_.AddContext(std::move(hash));
-    AddModel(new Indirect(manager_.nonstationary_, context.GetContext(),
-        manager_.bit_context_, delta, manager_.shared_map_));
-  }
-  std::vector<std::vector<unsigned int>> model_params2 = {{1}, {0, 2}, {0, 4},
-      {1, 2}, {2, 3}, {3, 4}, {3, 7}};
-  for (const auto& params : model_params2) {
-    std::unique_ptr<Context> hash(new Sparse(manager_.recent_bytes_, params));
-    const Context& context = manager_.AddContext(std::move(hash));
-    AddModel(new Match(manager_.history_, context.GetContext(),
-        manager_.bit_context_, 200, 0.5, 10000000, &(manager_.longest_match_)));
-    AddModel(new ByteRun(context.GetContext(), manager_.bit_context_, 100,
-        10000000));
-  }
-}
-
 void Predictor::AddDirect() {
   float delta = 0;
   int limit = 30;
@@ -203,18 +143,6 @@ void Predictor::AddDirect() {
       AddModel(new DirectHash(context.GetContext(), manager_.bit_context_,
           limit, delta, 100000));
     }
-  }
-}
-
-void Predictor::AddRunMap() {
-  float delta = 200;
-  std::vector<std::vector<unsigned int>> model_params = {{0, 8}, {1, 5}, {1, 7},
-      {1, 8}};
-  for (const auto& params : model_params) {
-    const Context& context = manager_.AddContext(std::unique_ptr<Context>(
-        new ContextHash(manager_.bit_context_, params[0], params[1])));
-    AddModel(new Indirect(manager_.run_map_, context.GetContext(),
-        manager_.bit_context_, delta, manager_.shared_map_));
   }
 }
 
@@ -244,25 +172,6 @@ void Predictor::AddDoubleIndirect() {
         new IndirectHash(manager_.bit_context_, params[0], params[1],
         params[2], params[3])));
     AddModel(new Indirect(manager_.nonstationary_, context.GetContext(),
-        manager_.bit_context_, delta, manager_.shared_map_));
-  }
-}
-
-void Predictor::AddInterval() {
-  std::vector<int> map(256, 0);
-  for (int i = 0; i < 256; ++i) {
-    map[i] = (i < 41) + (i < 92) + (i < 124) + (i < 58) +
-        (i < 11) + (i < 46) + (i < 36) + (i < 47) +
-        (i < 64) + (i < 4) + (i < 61) + (i < 97) +
-        (i < 125) + (i < 45) + (i < 48);
-  }
-  std::vector<std::vector<unsigned int>> model_params = {{2, 8}, {4, 7}, {8, 3},
-      {12, 1}, {16, 1}};
-  float delta = 400;
-  for (const auto& params : model_params) {
-    const Context& interval = manager_.AddContext(std::unique_ptr<Context>(
-        new IntervalHash(manager_.bit_context_, map, 8, params[0], params[1])));
-    AddModel(new Indirect(manager_.nonstationary_, interval.GetContext(),
         manager_.bit_context_, delta, manager_.shared_map_));
   }
 }

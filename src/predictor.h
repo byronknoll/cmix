@@ -32,16 +32,10 @@ class Predictor {
   void AddPAQ8HP();
   void AddPPMD();
   void AddBracket();
-  void AddDMC();
-  void AddByteRun();
-  void AddNonstationary();
   void AddWord();
-  void AddSparse();
   void AddDirect();
-  void AddRunMap();
   void AddMatch();
   void AddDoubleIndirect();
-  void AddInterval();
   void AddMixers();
 
   std::vector<std::unique_ptr<Model>> models_;
