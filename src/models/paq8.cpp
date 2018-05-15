@@ -1284,6 +1284,7 @@ public:
     German,
     Count
   };
+  virtual ~Language() {};
   virtual bool IsAbbreviation(Word *W) = 0;
 };
 
@@ -1365,6 +1366,7 @@ protected:
     return (W->Start!=W->End && Rn<=W->Length()-strlen(Suffix));
   }
 public:
+  virtual ~Stemmer() {};
   virtual bool IsVowel(const char c) = 0;
   virtual void Hash(Word *W) = 0;
   virtual bool Stem(Word *W) = 0;
