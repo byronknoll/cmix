@@ -434,9 +434,17 @@ void train(short *t, short *w, int n, int err) {
 }
 #endif
 
-std::valarray<float> model_predictions(0.5, 461);
+std::valarray<float> model_predictions(0.5, 468);
 unsigned int prediction_index = 0;
 float conversion_factor = 1.0 / 4095;
+
+void AddPrediction(int x) {
+  model_predictions[prediction_index++] = x * conversion_factor;
+}
+
+void ResetPredictions() {
+  prediction_index = 0;
+}
 
 class Mixer {
   const int N, M, S;
@@ -465,8 +473,7 @@ public:
   }
 
   void add(int x) {
-    model_predictions[prediction_index] = squash(x) * conversion_factor;
-    ++prediction_index;
+    AddPrediction(squash(x));
     tx[nx++]=x;
   }
 
@@ -484,8 +491,6 @@ public:
   int p() {
     while (nx&7) tx[nx++]=0;
     if (mp) {
-
-      prediction_index = 0;
       mp->update2();
       for (int i=0; i<ncxt; ++i) {
         int dp=dot_product(&tx[0], &wx[cxt[i]*N], nx);
@@ -1135,6 +1140,7 @@ void Predictor::update() {
         if (pr>= 848) ++failz;
 
   pr=contextModel2();
+  AddPrediction(pr);
 
   int rate=6 + (pos>14*256*1024) + (pos>28*512*1024);
   int pt, pu=(a1.p(pr, c0, 3)+7*pr+4)>>3, pv, pz=failcount+1;
@@ -1143,19 +1149,26 @@ void Predictor::update() {
         pz+=trj[(fails>>1)&3];
         if (fails&1) pz+=8;
         pz=pz/2;
+  AddPrediction(pu);
 
   pu=a4.p(pu, (c0*2)^(hash(b1, (x5>>8)&255, (x5>>16)&0x80ff)&0x1ffff), rate);
+  AddPrediction(pu);
   pv=a2.p(pr, (c0*8)^(hash(29,failz&2047)&0x7fff), rate+1);
+  AddPrediction(pv);
   pv=a5.p(pv, hash(c0,w5&0xfffff)&0xffff, rate);
+  AddPrediction(pv);
   pt=a3.p(pr, (c0*32)^(hash(19, x5&0x80ffff)&0x7fff), rate);
+  AddPrediction(pt);
   pz=a6.p(pu, (c0*4)^(hash(min(9,pz),x5&0x80ff)&0xffff), rate);
+  AddPrediction(pz);
 
   if (fails&255) pr =(pt*6+pu +pv*11+pz*14 +16)>>5;
   else pr =(pt*4+pu*5+pv*12+pz*11 +16)>>5;
+  AddPrediction(pr);
+  ResetPredictions();
 }
 
 Predictor paq8;
-
 }
 
 PAQ8HP::PAQ8HP(int memory) {
@@ -1164,8 +1177,6 @@ PAQ8HP::PAQ8HP(int memory) {
 }
 
 const std::valarray<float>& PAQ8HP::Predict() {
-  model_predictions[model_predictions.size() - 1] = paq8.p() *
-      conversion_factor;
   return model_predictions;
 }
 
