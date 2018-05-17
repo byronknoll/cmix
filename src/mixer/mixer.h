@@ -21,6 +21,7 @@ class Mixer {
   void Perceive(int bit);
 
  private:
+  ContextData* GetContextData();
   const std::valarray<float>& inputs_;
   float p_, learning_rate_;
   const unsigned long long& context_;

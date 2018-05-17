@@ -11,24 +11,24 @@ Mixer::Mixer(const std::valarray<float>& inputs,
     learning_rate_(learning_rate), context_(context), max_steps_(1), steps_(0),
     input_size_(input_size) {}
 
-float Mixer::Mix() {
+ContextData* Mixer::GetContextData() {
   ContextData* data = context_map_[context_].get();
   if (data == nullptr) {
     context_map_[context_] = std::unique_ptr<ContextData>(
         new ContextData(input_size_));
     data = context_map_[context_].get();
   }
+  return data;
+}
+
+float Mixer::Mix() {
+  ContextData* data = GetContextData();
   p_ = (inputs_ * data->weights).sum();
   return p_;
 }
 
 void Mixer::Perceive(int bit) {
-  ContextData* data = context_map_[context_].get();
-  if (data == nullptr) {
-    context_map_[context_] = std::unique_ptr<ContextData>(
-        new ContextData(input_size_));
-    data = context_map_[context_].get();
-  }
+  ContextData* data = GetContextData();
   float decay = 0.9 / pow(0.0000001 * steps_ + 0.8, 0.8);
   decay *= 1.5 - ((1.0 * data->steps) / max_steps_);
   float update = decay * learning_rate_ * (bit - Sigmoid::Logistic(p_));
