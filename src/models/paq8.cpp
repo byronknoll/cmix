@@ -472,7 +472,7 @@ void train(short *t, short *w, int n, int err) {
 #endif
 
 #define NUM_INPUTS 1607
-#define NUM_SETS 20
+#define NUM_SETS 22
 
 std::valarray<float> model_predictions(0.5, NUM_INPUTS + NUM_SETS + 11);
 unsigned int prediction_index = 0;
@@ -6339,7 +6339,9 @@ bool exeModel(Mixer& m, bool Forced = false, ModelStats *Stats = NULL) {
 
   m.set(Context*4+(s>>4), 1024);
   m.set(State*64+bpos*8+(Op.BytesRead>0)*4+(s>>4), 1024);
-  m.set( (BrkCtx&0x1FF)|((s&0x20)<<4), 1024 );
+  m.set((BrkCtx&0x1FF)|((s&0x20)<<4), 1024);
+  m.set(hash(Op.Code, State, OpN(Cache, 1)&CodeMask)&0x1FFF, 8192);
+  m.set(hash(State, bpos, Op.Code, Op.BytesRead)&0x1FFF, 8192);
 
   if (Stats)
     (*Stats).x86_64 = Valid|(Context<<1)|(s<<9);
@@ -6741,7 +6743,7 @@ int contextModel2() {
   static ContextMap2 cm(MEM()*31, 9);
   static TextModel textModel(MEM()*16);
   static RunContextMap rcm7(MEM()), rcm9(MEM()), rcm10(MEM());
-  static Mixer m(NUM_INPUTS, 10800+1024*21, NUM_SETS, 32);
+  static Mixer m(NUM_INPUTS, 10800+1024*21+16384, NUM_SETS, 32);
   static U32 cxt[16];
   static Filetype ft2,filetype=preprocessor::DEFAULT;
   static int size=0;  // bytes remaining in block
