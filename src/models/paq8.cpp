@@ -2642,7 +2642,9 @@ public:
     Index--;
   }
   T& Next() {
-    return Index++, *((T*)memset(&Data[Index&(Size-1)], 0, sizeof(T)));
+    Index++;
+    Data[Index&(Size-1)] = T();
+    return Data[Index&(Size-1)];
   }
 };
 
@@ -2801,7 +2803,7 @@ void TextModel::Update(Buf& buffer, ModelStats *Stats) {
         for (int i=Language::Unknown; i<Language::Count; i++)
           Words[i]--;
         cWord = pWord, pWord = &Words[Lang.pId](1);
-        memset(cWord, 0, sizeof(Word));
+        *cWord = Word();
         for (U32 i=0; i<Info.wordLength[0]; i++)
           (*cWord)+=buffer(Info.wordLength[0]-i+Info.lastLetter);
         Info.wordLength[1] = (*pWord).Length();
@@ -2855,7 +2857,7 @@ void TextModel::Update(Buf& buffer, ModelStats *Stats) {
       Words[Language::Unknown]++;
       Lang.pId = Lang.Id;
       pWord = &Words[Lang.Id](1), cWord = &Words[Lang.Id](0);
-      memset(cWord, 0, sizeof(Word));
+      *cWord = Word();
       WordPos[pWord->Hash[1]&(WordPos.size()-1)] = pos;
       if (cSegment->WordCount==0)
         memcpy(&cSegment->FirstWord, pWord, sizeof(Word));
@@ -3186,7 +3188,7 @@ void wordModel(Mixer& m) {
            StemIndex=(StemIndex+1)&3;
            pWord=cWord;
            cWord=&StemWords[StemIndex];
-           memset(cWord, 0, sizeof(Word));
+           *cWord = Word();
         }
         if ((c>='a' && c<='z') ||  ((c>=128 &&(b3!=3)) || (c>0 && c<4 ))) { //4
             if (!wordlen){
@@ -3204,7 +3206,7 @@ void wordModel(Mixer& m) {
                        StemIndex=(StemIndex-1)&3;
                        cWord=pWord;
                        pWord=&StemWords[(StemIndex-1)&3];
-                       memset(cWord, 0, sizeof(Word));
+                       *cWord = Word();
                        for (U32 i=0;i<=wordlen;i++)
                            (*cWord)+=tolower(buf(wordlen-i+1+2*(i!=wordlen)));
                     }
