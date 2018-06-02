@@ -46,8 +46,8 @@ std::valarray<float>& Lstm::Perceive(unsigned int input) {
         int offset = layer * num_cells_;
         for (unsigned int i = 0; i < output_size_; ++i) {
           float error = 0;
-          if (i == input_history_[epoch]) error = (1 - output_[epoch][i]);
-          else error = -output_[epoch][i];
+          if (i == input_history_[epoch]) error = output_[epoch][i] - 1;
+          else error = output_[epoch][i];
           for (unsigned int j = 0; j < hidden_error_.size(); ++j) {
             hidden_error_[j] += output_layer_[epoch][i][j + offset] * error;
           }
@@ -65,9 +65,9 @@ std::valarray<float>& Lstm::Perceive(unsigned int input) {
   output_layer_[epoch_] = output_layer_[last_epoch];
   for (unsigned int i = 0; i < output_size_; ++i) {
     float error = 0;
-    if (i == input) error = (1 - output_[last_epoch][i]);
-    else error = -output_[last_epoch][i];
-    output_layer_[epoch_][i] += learning_rate_ * error * hidden_;
+    if (i == input) error = output_[last_epoch][i] - 1;
+    else error = output_[last_epoch][i];
+    output_layer_[epoch_][i] -= learning_rate_ * error * hidden_;
   }
   return Predict(input);
 }

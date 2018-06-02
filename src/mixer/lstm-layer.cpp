@@ -26,6 +26,14 @@ LstmLayer::LstmLayer(unsigned int input_size, unsigned int auxiliary_input_size,
     input_node_update_(std::valarray<float>(input_size), num_cells),
     input_gate_update_(std::valarray<float>(input_size), num_cells),
     output_gate_update_(std::valarray<float>(input_size), num_cells),
+    forget_gate_m_(std::valarray<float>(input_size), num_cells),
+    input_node_m_(std::valarray<float>(input_size), num_cells),
+    input_gate_m_(std::valarray<float>(input_size), num_cells),
+    output_gate_m_(std::valarray<float>(input_size), num_cells),
+    forget_gate_v_(std::valarray<float>(input_size), num_cells),
+    input_node_v_(std::valarray<float>(input_size), num_cells),
+    input_gate_v_(std::valarray<float>(input_size), num_cells),
+    output_gate_v_(std::valarray<float>(input_size), num_cells),
     learning_rate_(learning_rate), gradient_clip_(gradient_clip),
     num_cells_(num_cells), epoch_(0), horizon_(horizon),
     input_size_(auxiliary_input_size), output_size_(output_size) {
@@ -73,6 +81,17 @@ void LstmLayer::ClipGradients(std::valarray<float>* arr) {
     if ((*arr)[i] < -gradient_clip_) (*arr)[i] = -gradient_clip_;
     else if ((*arr)[i] > gradient_clip_) (*arr)[i] = gradient_clip_;
   }
+}
+
+void Adam(std::valarray<float>* g, std::valarray<float>* m,
+    std::valarray<float>* v, std::valarray<float>* t) {
+  float beta1 = 0.9, beta2 = 0.999, alpha = 0.002, eps = 1e-8;
+  (*m) *= beta1;
+  (*m) += (1 - beta1) * (*g);
+  (*v) *= beta2;
+  (*v) += (1 - beta2) * (*g) * (*g);
+  (*g) = ((*m) / (1 - beta1)) / (sqrt((*v) / (1 - beta2)) + eps);
+  (*t) -= alpha * (*g);
 }
 
 void LstmLayer::BackwardPass(const std::valarray<float>&input, int epoch,
@@ -134,29 +153,25 @@ void LstmLayer::BackwardPass(const std::valarray<float>&input, int epoch,
 
   std::slice slice = std::slice(output_size_, input.size(), 1);
   for (unsigned int i = 0; i < num_cells_; ++i) {
-    forget_gate_update_[i][slice] += (learning_rate_ * forget_gate_error_[i]) *
-        input;
-    input_node_update_[i][slice] += (learning_rate_ * input_node_error_[i]) *
-        input;
-    input_gate_update_[i][slice] += (learning_rate_ * input_gate_error_[i]) *
-        input;
-    output_gate_update_[i][slice] += (learning_rate_ * output_gate_error_[i]) *
-        input;
-    forget_gate_update_[i][input_symbol] += learning_rate_ *
-        forget_gate_error_[i];
-    input_node_update_[i][input_symbol] += learning_rate_ *
-        input_node_error_[i];
-    input_gate_update_[i][input_symbol] += learning_rate_ *
-        input_gate_error_[i];
-    output_gate_update_[i][input_symbol] += learning_rate_ *
-        output_gate_error_[i];
+    forget_gate_update_[i][slice] += forget_gate_error_[i] * input;
+    input_node_update_[i][slice] += input_node_error_[i] * input;
+    input_gate_update_[i][slice] += input_gate_error_[i] * input;
+    output_gate_update_[i][slice] += output_gate_error_[i] * input;
+    forget_gate_update_[i][input_symbol] += forget_gate_error_[i];
+    input_node_update_[i][input_symbol] += input_node_error_[i];
+    input_gate_update_[i][input_symbol] += input_gate_error_[i];
+    output_gate_update_[i][input_symbol] += output_gate_error_[i];
   }
   if (epoch == 0) {
     for (unsigned int i = 0; i < num_cells_; ++i) {
-        forget_gate_[i] += forget_gate_update_[i];
-        input_node_[i] += input_node_update_[i];
-        input_gate_[i] += input_gate_update_[i];
-        output_gate_[i] += output_gate_update_[i];
+      Adam(&forget_gate_update_[i], &forget_gate_m_[i], &forget_gate_v_[i],
+          &forget_gate_[i]);
+      Adam(&input_node_update_[i], &input_node_m_[i], &input_node_v_[i],
+          &input_node_[i]);
+      Adam(&input_gate_update_[i], &input_gate_m_[i], &input_gate_v_[i],
+          &input_gate_[i]);
+      Adam(&output_gate_update_[i], &output_gate_m_[i], &output_gate_v_[i],
+          &output_gate_[i]);
     }
   }
 }

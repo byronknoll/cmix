@@ -24,7 +24,9 @@ class LstmLayer {
   std::valarray<std::valarray<float>> tanh_state_, output_gate_state_,
       input_node_state_, input_gate_state_, forget_gate_state_, last_state_,
       forget_gate_, input_node_, input_gate_, output_gate_, forget_gate_update_,
-      input_node_update_, input_gate_update_, output_gate_update_;
+      input_node_update_, input_gate_update_, output_gate_update_,
+      forget_gate_m_, input_node_m_, input_gate_m_, output_gate_m_,
+      forget_gate_v_, input_node_v_, input_gate_v_, output_gate_v_;
   float learning_rate_, gradient_clip_;
   unsigned int num_cells_, epoch_, horizon_, input_size_, output_size_;
 
