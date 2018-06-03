@@ -6,12 +6,27 @@
 #include <algorithm>
 #include <numeric>
 
+namespace {
+
+void Adam(std::valarray<float>* g, std::valarray<float>* m,
+    std::valarray<float>* v, std::valarray<float>* t) {
+  float beta1 = 0.9, beta2 = 0.999, alpha = 0.002, eps = 1e-8;
+  (*m) *= beta1;
+  (*m) += (1 - beta1) * (*g);
+  (*v) *= beta2;
+  (*v) += (1 - beta2) * (*g) * (*g);
+  (*g) = ((*m) / (1 - beta1)) / (sqrt((*v) / (1 - beta2)) + eps);
+  (*t) -= alpha * (*g);
+}
+
+}
+
 LstmLayer::LstmLayer(unsigned int input_size, unsigned int auxiliary_input_size,
     unsigned int output_size, unsigned int num_cells, int horizon,
-    float learning_rate, float gradient_clip) : state_(num_cells),
-    output_gate_error_(num_cells), state_error_(num_cells),
-    input_node_error_(num_cells), input_gate_error_(num_cells),
-    forget_gate_error_(num_cells), stored_error_(num_cells),
+    float gradient_clip) : state_(num_cells), output_gate_error_(num_cells),
+    state_error_(num_cells), input_node_error_(num_cells),
+    input_gate_error_(num_cells), forget_gate_error_(num_cells),
+    stored_error_(num_cells),
     tanh_state_(std::valarray<float>(num_cells), horizon),
     output_gate_state_(std::valarray<float>(num_cells), horizon),
     input_node_state_(std::valarray<float>(num_cells), horizon),
@@ -34,9 +49,9 @@ LstmLayer::LstmLayer(unsigned int input_size, unsigned int auxiliary_input_size,
     input_node_v_(std::valarray<float>(input_size), num_cells),
     input_gate_v_(std::valarray<float>(input_size), num_cells),
     output_gate_v_(std::valarray<float>(input_size), num_cells),
-    learning_rate_(learning_rate), gradient_clip_(gradient_clip),
-    num_cells_(num_cells), epoch_(0), horizon_(horizon),
-    input_size_(auxiliary_input_size), output_size_(output_size) {
+    gradient_clip_(gradient_clip), num_cells_(num_cells), epoch_(0),
+    horizon_(horizon), input_size_(auxiliary_input_size),
+    output_size_(output_size) {
   float low = -0.2;
   float range = 0.4;
   for (unsigned int i = 0; i < num_cells_; ++i) {
@@ -81,17 +96,6 @@ void LstmLayer::ClipGradients(std::valarray<float>* arr) {
     if ((*arr)[i] < -gradient_clip_) (*arr)[i] = -gradient_clip_;
     else if ((*arr)[i] > gradient_clip_) (*arr)[i] = gradient_clip_;
   }
-}
-
-void Adam(std::valarray<float>* g, std::valarray<float>* m,
-    std::valarray<float>* v, std::valarray<float>* t) {
-  float beta1 = 0.9, beta2 = 0.999, alpha = 0.002, eps = 1e-8;
-  (*m) *= beta1;
-  (*m) += (1 - beta1) * (*g);
-  (*v) *= beta2;
-  (*v) += (1 - beta2) * (*g) * (*g);
-  (*g) = ((*m) / (1 - beta1)) / (sqrt((*v) / (1 - beta2)) + eps);
-  (*t) -= alpha * (*g);
 }
 
 void LstmLayer::BackwardPass(const std::valarray<float>&input, int epoch,
