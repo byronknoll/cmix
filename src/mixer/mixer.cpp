@@ -31,13 +31,13 @@ void Mixer::Perceive(int bit) {
   ContextData* data = GetContextData();
   float decay = 0.9 / pow(0.0000001 * steps_ + 0.8, 0.8);
   decay *= 1.5 - ((1.0 * data->steps) / max_steps_);
-  float update = decay * learning_rate_ * (bit - Sigmoid::Logistic(p_));
+  float update = decay * learning_rate_ * (Sigmoid::Logistic(p_) - bit);
   ++steps_;
   ++data->steps;
   if (data->steps > max_steps_) {
     max_steps_ = data->steps;
   }
-  data->weights += update * inputs_;
+  data->weights -= update * inputs_;
   if (steps_ % 1000 == 0) {
     data->weights *= 1.0 - 5.0e-6;
   }
