@@ -15,8 +15,7 @@ void Adam(std::valarray<float>* g, std::valarray<float>* m,
   (*m) += (1 - beta1) * (*g);
   (*v) *= beta2;
   (*v) += (1 - beta2) * (*g) * (*g);
-  (*g) = ((*m) / (1 - beta1)) / (sqrt((*v) / (1 - beta2)) + eps);
-  (*t) -= alpha * (*g);
+  (*t) -= alpha * (((*m) / (1 - beta1)) / (sqrt((*v) / (1 - beta2)) + eps));
 }
 
 }
