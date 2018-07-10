@@ -17,6 +17,7 @@ class LstmLayer {
   static inline float Rand() {
     return static_cast <float> (rand()) / static_cast <float> (RAND_MAX);
   }
+  static void Decay(std::valarray<std::valarray<float>>* arr);
 
  private:
   std::valarray<float> state_, output_gate_error_, state_error_,
@@ -28,6 +29,7 @@ class LstmLayer {
       output_gate_m_, forget_gate_v_, input_node_v_, output_gate_v_;
   float gradient_clip_;
   unsigned int num_cells_, epoch_, horizon_, input_size_, output_size_;
+  unsigned long long steps_ = 0;
 
   void ClipGradients(std::valarray<float>* arr);
 };
