@@ -472,7 +472,7 @@ void train(short *t, short *w, int n, int err) {
 #endif
 
 #define NUM_INPUTS 1607
-#define NUM_SETS 22
+#define NUM_SETS 23
 
 std::valarray<float> model_predictions(0.5, NUM_INPUTS + NUM_SETS + 11);
 unsigned int prediction_index = 0;
@@ -725,7 +725,7 @@ inline int mix2(Mixer& m, int s, StateMap& sm) {
   p1>>=4;
   int p0=255-p1;
   m.add(p1-p0);
-  m.add(st*(n1-n0));
+  m.add(st*abs(n1-n0));
   m.add((p1&n0)-(p0&n1));
   m.add((p1&n1)-(p0&n0));
   return s>0;
@@ -1138,7 +1138,7 @@ public:
       m.add((p1-2047)>>3);
       p1>>=4;
       int p0 = 255-p1;
-      m.add((st*(n1-n0)));
+      m.add((st*abs(n1-n0)));
       m.add((p1&n0)-(p0&n1));
       m.add((p1&n1)-(p0&n0));
       m.add(stretch(Maps12b[i]->p((state<<9)|(bitPos<<6)|k))>>2);
@@ -3469,8 +3469,11 @@ inline U8 Clamp4( int Px, U8 n1, U8 n2, U8 n3, U8 n4){
   return min( max(n1,max(n2,max(n3,n4))), max( min(n1,min(n2,min(n3,n4))), Px ));
 }
 
-inline U8 LogMeanDiffQt(U8 a, U8 b){
-  return (a!=b)?((a>b)<<3)|ilog2((a+b)/max(2,abs(a-b)*2)+1):0;
+inline U8 LogMeanDiffQt(const U8 a, const U8 b, const U8 limit = 7){
+  return (a!=b)?((a>b)<<3)|min(limit,ilog2((a+b)/max(2,abs(a-b)*2)+1)):0;
+}
+inline U32 LogQt(const U8 Px, const U8 bits){
+  return (U32(0x100|Px))>>max(0,(int)(ilog2(Px)-bits));
 }
 
 struct dBASE {
@@ -4113,13 +4116,31 @@ void im8bitModel(Mixer& m, int w, int gray = 0) {
 }
 
 void im24bitModel(Mixer& m, int w, int alpha=0) {
-  const int SC=0x20000;
-  const int nMaps = 38;
-  static SmallStationaryContextMap scm1(SC), scm2(SC),
-    scm3(SC), scm4(SC), scm5(SC), scm6(SC), scm7(SC), scm8(SC), scm9(SC*2), scm10(512);
-  static ContextMap cm(MEM()*4, 15+32);
-  static StationaryMap Map[nMaps] = { {12,8}, {12,8}, {12,8}, {12,8}, {10,8}, {8,8}, {8,8}, {8,8}, {8,8}, {8,8}, {8,8}, {8,8}, {8,8}, {8,8}, {8,8}, {8,8}, {8,8}, {8,8}, {8,8}, {8,8}, {8,8}, {8,8}, {8,8}, {8,8}, {8,8}, {8,8}, {8,8}, {8,8}, {8,8}, {8,8}, {8,8}, {8,8}, {8,8}, {8,8}, {8,8}, {8,8}, {8,8}, {0,8} };
+  const int SCM=0x20000;
+  const int nMaps = 94;
+  const int nSCMaps = 59;
+  static ContextMap cm(MEM()*4, 47);
+  static SmallStationaryContextMap SCMap[nSCMaps] = { {SCM}, {SCM}, {SCM}, {SCM}, {SCM}, {SCM}, {SCM}, {SCM},
+                                                      {SCM}, {SCM}, {SCM}, {SCM}, {SCM}, {SCM}, {SCM}, {SCM},
+                                                      {SCM}, {SCM}, {SCM}, {SCM}, {SCM}, {SCM}, {SCM}, {SCM},
+                                                      {SCM}, {SCM}, {SCM}, {SCM}, {SCM}, {SCM}, {SCM}, {SCM},
+                                                      {SCM}, {SCM}, {SCM}, {SCM}, {SCM}, {SCM}, {SCM}, {SCM},
+                                                      {SCM}, {SCM}, {SCM}, {SCM}, {SCM}, {SCM}, {SCM}, {SCM},
+                                                      {SCM}, {SCM}, {SCM}, {SCM}, {SCM}, {SCM}, {SCM}, {SCM},
+                                                      {SCM}, {SCM}, {512}};
+  static StationaryMap Map[nMaps] = { {12,8}, {12,8}, {12,8}, {12,8}, {12,8}, {12,8}, {12,8}, {12,8}, {12,8}, {10,8},
+                                      {10,8}, {10,8}, {10,8}, { 8,8}, { 8,8}, { 8,8}, { 8,8}, { 8,8}, { 8,8}, { 8,8},
+                                      { 8,8}, { 8,8}, { 8,8}, { 8,8}, { 8,8}, { 8,8}, { 8,8}, { 8,8}, { 8,8}, { 8,8},
+                                      { 8,8}, { 8,8}, { 8,8}, { 8,8}, { 8,8}, { 8,8}, { 8,8}, { 8,8}, { 8,8}, { 8,8},
+                                      { 8,8}, { 8,8}, { 8,8}, { 8,8}, { 8,8}, { 8,8}, { 8,8}, { 8,8}, { 8,8}, { 8,8},
+                                      { 8,8}, { 8,8}, { 8,8}, { 8,8}, { 8,8}, { 8,8}, { 8,8}, { 8,8}, { 8,8}, { 8,8},
+                                      { 8,8}, { 8,8}, { 8,8}, { 8,8}, { 8,8}, { 8,8}, { 8,8}, { 8,8}, { 8,8}, { 8,8},
+                                      { 8,8}, { 8,8}, { 8,8}, { 8,8}, { 8,8}, { 8,8}, { 8,8}, { 8,8}, { 8,8}, { 8,8},
+                                      { 8,8}, { 8,8}, { 8,8}, { 8,8}, { 8,8}, { 8,8}, { 8,8}, { 8,8}, { 8,8}, { 8,8},
+                                      { 8,8}, { 8,8}, { 8,8}, { 0,8}};
   static U8 WWW, WW, W, NWW, NW, N, NE, NEE, NNWW, NNW, NN, NNE, NNEE, NNN; //pixel neighborhood
+  static U8 WWp1, Wp1, p1, NWp1, Np1, NEp1, NNp1;
+  static U8 WWp2, Wp2, p2, NWp2, Np2, NEp2, NNp2;
   static int color = -1, stride = 3;
   static int ctx[2], padding, lastPos, x = 0;
   static int columns[2] = {1,1}, column[2];
@@ -4145,6 +4166,8 @@ void im24bitModel(Mixer& m, int w, int alpha=0) {
     column[1]=x/columns[1];
 
     WWW=buf(3*stride), WW=buf(2*stride), W=buf(stride), NWW=buf(w+2*stride), NW=buf(w+stride), N=buf(w), NE=buf(w-stride), NEE=buf(w-2*stride), NNWW=buf((w+stride)*2), NNW=buf(w*2+stride), NN=buf(w*2), NNE=buf(w*2-stride), NNEE=buf((w-stride)*2), NNN=buf(w*3);
+    WWp1=buf(stride*2+1), Wp1=buf(stride+1), p1=buf(1), NWp1=buf(w+stride+1), Np1=buf(w+1), NEp1=buf(w-stride+1), NNp1=buf(w*2+1);
+    WWp2=buf(stride*2+2), Wp2=buf(stride+2), p2=buf(2), NWp2=buf(w+stride+2), Np2=buf(w+2), NEp2=buf(w-stride+2), NNp2=buf(w*2+2);
     int mean=W+NW+N+NE;
     const int var=(W*W+NW*NW+N*N+NE*NE-mean*mean/4)>>2;
     mean>>=2;
@@ -4201,69 +4224,174 @@ void im24bitModel(Mixer& m, int w, int alpha=0) {
     cm.set(hash(++i, buf(w*3-stride), buf(w*3-2*stride)));
     cm.set(hash(++i, buf(w*3+stride), buf(w*3+2*stride)));
     cm.set(hash(++i, mean, logvar>>4));
-    scm1.set(W+N-NW);
-    scm2.set(W+NE-N);
-    scm3.set(W*2-WW);
-    scm4.set(N*2-NN);
-    scm5.set(NW*2-NNWW);
-    scm6.set(NE*2-NNEE);
-    scm7.set(NE+buf(1)-buf(w-stride+1));
-    scm8.set(N+NE-NNE);
-    scm9.set(mean>>1|(logvar<<1&0x180));
 
-    Map[0].set( ((U8)Clip(W+N-NW))|(LogMeanDiffQt(Clip(N+NE-NNE),Clip(N+NW-NNW))<<8) );
-    Map[1].set( ((U8)Clip(N*2-NN))|(LogMeanDiffQt(W,Clip(NW*2-NNW))<<8) );
-    Map[2].set( ((U8)Clip(W*2-WW))|(LogMeanDiffQt(N,Clip(NW*2-NWW))<<8) );
-    Map[3].set( ((U8)Clip(W+N-NW))|(LogMeanDiffQt(buf(1),Clip(buf(stride+1)+buf(w+1)-buf(w+stride+1)))<<8) );
-    Map[4].set( (min(color,stride-1)<<8)|Clip(N+buf(1)-buf(w+1)) );
-    Map[5].set( Clip((-buf(4*stride)+5*WWW-10*WW+10*W+Clamp4(NE*4-NNE*6+buf(w*3-stride)*4-buf(w*4-stride),N,NE,buf(w-2*stride),buf(w-3*stride)))/5));
-    Map[6].set((W+Clamp4(NE*3-NNE*3+buf(w*3-stride),W,N,NE,NEE))/2);
-    Map[7].set( Clip((buf(w*5)-6*buf(w*4)+15*NNN-20*NN+15*N+Clamp4(W*4-NWW*6+buf(w*2+3*stride)*4-buf(w*3+4*stride),W,NW,N,NN))/6) );
-    Map[8].set( Clip((-3*WW+8*W+Clamp4(NEE*3-NNEE*3+buf(w*3-stride*2),NE,NEE,buf(w-3*stride),buf(w-4*stride)))/6) );
-    Map[9].set( Clip((buf(w*3-3*stride)-4*NNEE+6*NE+Clip(W*4-NW*6+NNW*4-buf(w*3+stride)))/4) );
-    Map[10].set( Clip(W+N-NW+buf(1)-Clip(buf(stride+1)+buf(w+1)-buf(w+stride+1))) );
-    Map[11].set( Clip(W+N-NW+buf(2)-Clip(buf(stride+2)+buf(w+2)-buf(w+stride+2))) );
-    Map[12].set( Clip(N*2-NN + buf(1) - Clip(buf(w+1)*2-buf(w*2+1))) );
-    Map[13].set( Clip(W*2-WW + buf(1) - Clip(buf(stride+1)*2-buf(stride*2+1))) );
-    Map[14].set( Clip(N+NN-NNN));
-    Map[15].set( Clip(W+WW-WWW));
-    Map[16].set(Clip(W+NEE-NE));
-    Map[17].set(Clip(NN+W-NNW));
-    Map[18].set(Clip(NN+NW-buf(w*3+stride)));
-    Map[19].set(Clip(NN+NE-buf(w*3-stride)));
-    Map[20].set(Clip(NN+buf(w*4)-buf(w*6)));
-    Map[21].set(Clip(WW+buf(stride*4)-buf(stride*6)));
-    Map[22].set(Clip(WW+NEE-N+buf(1)-Clip(buf(stride*2+1)+buf(w-stride*2+1)-buf(w+1))));
-    Map[23].set(Clip(W+N-NW));
-    Map[24].set(buf(1));
-    Map[25].set((W+NEE)/2);
-    Map[26].set(Clip(N*3-NN*3+NNN));
-    Map[27].set(Clip(N+NW-NNW));
-    Map[28].set(Clip(N+NE-NNE));
-    Map[29].set(Clip(((N+3*NW)/4)*3-((NNW+NNWW)/2)*3+(buf(w*3+2*stride)*3+buf(w*3+3*stride))/4));
-    Map[30].set(buf(w*6));
-    Map[31].set((buf(w-4*stride)+buf(w-6*stride))/2);
-    Map[32].set((Clip(W*2-NW)+Clip(W*2-NWW)+N+NE)/4);
-    Map[33].set((buf(stride*6)+buf(stride*4))/2);
-    Map[34].set(Clip((-4*WW+15*W+10*Clip(NE*3-NNE*3+buf(w*3-stride))-Clip(buf(w-3*stride)*3-buf(w*2-3*stride)*3+buf(w*3-3*stride)))/20));
-    Map[35].set(((W+N)*3-NW*2)/4);
-    Map[36].set(Clip((WWW-4*WW+6*W+Clip(NE*4-NNE*6+buf(w*3-stride)*4-buf(w*4-stride)))/4));
+    i=0;
+    Map[i++].set(((U8)(Clip(W+N-NW)))|(LogMeanDiffQt(Clip(N+NE-NNE),Clip(N+NW-NNW))<<8));
+    Map[i++].set(((U8)(Clip(N*2-NN)))|(LogMeanDiffQt(W,Clip(NW*2-NNW))<<8));
+    Map[i++].set(((U8)(Clip(W*2-WW)))|(LogMeanDiffQt(N,Clip(NW*2-NWW))<<8));
+    Map[i++].set(((U8)(Clip(W+N-NW)))|(LogMeanDiffQt(p1,Clip(Wp1+Np1-NWp1))<<8));
+    Map[i++].set(((U8)(Clip(W+N-NW)))|(LogMeanDiffQt(p2,Clip(Wp2+Np2-NWp2))<<8));
+    Map[i++].set(hash(W,N));
+    Map[i++].set(hash(W,WW));
+    Map[i++].set(hash(N,NN));
+    Map[i++].set(hash(Clip(N+NE-NNE), Clip(N+NW-NNW)));
+    Map[i++].set((min(color,stride-1)<<8)|((U8)( Clip(N+p1-Np1) )));
+    Map[i++].set((min(color,stride-1)<<8)|((U8)( Clip(N+p2-Np2) )));
+    Map[i++].set((min(color,stride-1)<<8)|((U8)( Clip(W+p1-Wp1) )));
+    Map[i++].set((min(color,stride-1)<<8)|((U8)( Clip(W+p2-Wp2) )));
+    Map[i++].set(Clamp4(N+p1-Np1,W,NW,N,NE));
+    Map[i++].set(Clamp4(N+p2-Np2,W,NW,N,NE));
+
+    Map[i++].set((W+Clamp4(NE*3-NNE*3+buf(w*3-stride),W,N,NE,NEE))/2);
+    Map[i++].set(Clamp4((W+Clip(NE*2-NNE))/2,W,NW,N,NE));
+    Map[i++].set((W+NEE)/2);
+    Map[i++].set(Clip((WWW-4*WW+6*W+Clip(NE*4-NNE*6+buf(w*3-stride)*4-buf(w*4-stride)))/4));
+    Map[i++].set(Clip((-buf(4*stride)+5*WWW-10*WW+10*W+Clamp4(NE*4-NNE*6+buf(w*3-stride)*4-buf(w*4-stride),N,NE,buf(w-2*stride),buf(w-3*stride)))/5));
+    Map[i++].set(Clip((-4*WW+15*W+10*Clip(NE*3-NNE*3+buf(w*3-stride))-Clip(buf(w-3*stride)*3-buf(w*2-3*stride)*3+buf(w*3-3*stride)))/20));
+    Map[i++].set(Clip((-3*WW+8*W+Clamp4(NEE*3-NNEE*3+buf(w*3-stride*2),NE,NEE,buf(w-3*stride),buf(w-4*stride)))/6));
+    Map[i++].set(Clip((W+Clip(NE*2-NNE))/2+p1-(Wp1+Clip(NEp1*2-buf(w*2-stride+1)))/2));
+    Map[i++].set(Clip((W+Clip(NE*2-NNE))/2+p2-(Wp2+Clip(NEp2*2-buf(w*2-stride+2)))/2));
+    Map[i++].set(Clip((-3*WW+8*W+Clip(NEE*2-NNEE))/6 +p1-(-3*WWp1+8*Wp1+Clip(buf(w-stride*2+1)*2-buf(w*2-stride*2+1)))/6));
+    Map[i++].set(Clip((-3*WW+8*W+Clip(NEE*2-NNEE))/6 +p2-(-3*WWp2+8*Wp2+Clip(buf(w-stride*2+2)*2-buf(w*2-stride*2+2)))/6));
+    Map[i++].set(Clip((W+NEE)/2+p1-(Wp1+buf(w-stride*2+1))/2));
+    Map[i++].set(Clip((W+NEE)/2+p2-(Wp2+buf(w-stride*2+2))/2));
+    Map[i++].set(Clip((WW+Clip(NEE*2-NNEE))/2+p1-(WWp1+Clip(buf(w-stride*2+1)*2-buf(w*2-stride*2+1)))/2));
+    Map[i++].set(Clip((WW+Clip(NEE*2-NNEE))/2+p2-(WWp2+Clip(buf(w-stride*2+2)*2-buf(w*2-stride*2+2)))/2));
+    Map[i++].set(Clip(WW+NEE-N+p1-Clip(WWp1+buf(w-stride*2+1)-Np1)));
+    Map[i++].set(Clip(WW+NEE-N+p2-Clip(WWp2+buf(w-stride*2+2)-Np2)));
+
+    Map[i++].set(Clip(W+N-NW));
+    Map[i++].set(Clip(W+N-NW+p1-Clip(Wp1+Np1-NWp1)));
+    Map[i++].set(Clip(W+N-NW+p2-Clip(Wp2+Np2-NWp2)));
+    Map[i++].set(Clip(W+NE-N));
+    Map[i++].set(Clip(N+NW-NNW));
+    Map[i++].set(Clip(N+NW-NNW+p1-Clip(Np1+NWp1-buf(w*2+stride+1))));
+    Map[i++].set(Clip(N+NW-NNW+p2-Clip(Np2+NWp2-buf(w*2+stride+2))));
+    Map[i++].set(Clip(N+NE-NNE));
+    Map[i++].set(Clip(N+NE-NNE+p1-Clip(Np1+NEp1-buf(w*2-stride+1))));
+    Map[i++].set(Clip(N+NE-NNE+p2-Clip(Np2+NEp2-buf(w*2-stride+2))));
+    Map[i++].set(Clip(N+NN-NNN));
+    Map[i++].set(Clip(N+NN-NNN+p1-Clip(Np1+NNp1-buf(w*3+1))));
+    Map[i++].set(Clip(N+NN-NNN+p2-Clip(Np2+NNp2-buf(w*3+2))));
+    Map[i++].set(Clip(W+WW-WWW));
+    Map[i++].set(Clip(W+WW-WWW+p1-Clip(Wp1+WWp1-buf(stride*3+1))));
+    Map[i++].set(Clip(W+WW-WWW+p2-Clip(Wp2+WWp2-buf(stride*3+2))));
+    Map[i++].set(Clip(W+NEE-NE));
+    Map[i++].set(Clip(W+NEE-NE+p1-Clip(Wp1+buf(w-stride*2+1)-NEp1)));
+    Map[i++].set(Clip(W+NEE-NE+p2-Clip(Wp2+buf(w-stride*2+2)-NEp2)));
+    Map[i++].set(Clip(NN+p1-NNp1));
+    Map[i++].set(Clip(NN+p2-NNp2));
+    Map[i++].set(Clip(NN+W-NNW));
+    Map[i++].set(Clip(NN+W-NNW+p1-Clip(NNp1+Wp1-buf(w*2+stride+1))));
+    Map[i++].set(Clip(NN+W-NNW+p2-Clip(NNp2+Wp2-buf(w*2+stride+2))));
+    Map[i++].set(Clip(NN+NW-buf(w*3+stride)));
+    Map[i++].set(Clip(NN+NW-buf(w*3+stride)+p1-Clip(NNp1+NWp1-buf(w*3+stride+1))));
+    Map[i++].set(Clip(NN+NW-buf(w*3+stride)+p2-Clip(NNp2+NWp2-buf(w*3+stride+2))));
+    Map[i++].set(Clip(NN+NE-buf(w*3-stride)));
+    Map[i++].set(Clip(NN+NE-buf(w*3-stride)+p1-Clip(NNp1+NEp1-buf(w*3-stride+1))));
+    Map[i++].set(Clip(NN+NE-buf(w*3-stride)+p2-Clip(NNp2+NEp2-buf(w*3-stride+2))));
+    Map[i++].set(Clip(NN+buf(w*4)-buf(w*6)));
+    Map[i++].set(Clip(NN+buf(w*4)-buf(w*6)+p1-Clip(NNp1+buf(w*4+1)-buf(w*6+1))));
+    Map[i++].set(Clip(NN+buf(w*4)-buf(w*6)+p2-Clip(NNp2+buf(w*4+2)-buf(w*6+2))));
+    Map[i++].set(Clip(WW+p1-WWp1));
+    Map[i++].set(Clip(WW+p2-WWp2));
+    Map[i++].set(Clip(WW+buf(stride*4)-buf(stride*6)));
+    Map[i++].set(Clip(WW+buf(stride*4)-buf(stride*6)+p1-Clip(WWp1+buf(stride*4+1)-buf(stride*6+1))));
+    Map[i++].set(Clip(WW+buf(stride*4)-buf(stride*6)+p2-Clip(WWp2+buf(stride*4+2)-buf(stride*6+2))));
+
+    Map[i++].set(Clip(N*2-NN+p1-Clip(Np1*2-NNp1)));
+    Map[i++].set(Clip(N*2-NN+p2-Clip(Np2*2-NNp2)));
+    Map[i++].set(Clip(W*2-WW+p1-Clip(Wp1*2-WWp1)));
+    Map[i++].set(Clip(W*2-WW+p2-Clip(Wp2*2-WWp2)));
+    Map[i++].set(Clip(N*3-NN*3+NNN));
+    Map[i++].set(Clamp4(N*3-NN*3+NNN,W,NW,N,NE));
+    Map[i++].set(Clamp4(W*3-WW*3+WWW,W,NW,N,NE));
+    Map[i++].set(Clamp4(N*2-NN,W,NW,N,NE));
+    Map[i++].set(Clip((buf(w*5)-6*buf(w*4)+15*NNN-20*NN+15*N+Clamp4(W*4-NWW*6+buf(w*2+3*stride)*4-buf(w*3+4*stride),W,NW,N,NN))/6));
+    Map[i++].set(Clip((buf(w*3-3*stride)-4*NNEE+6*NE+Clip(W*4-NW*6+NNW*4-buf(w*3+stride)))/4));
+
+    Map[i++].set(Clip(((N+3*NW)/4)*3-((NNW+NNWW)/2)*3+(buf(w*3+2*stride)*3+buf(w*3+3*stride))/4));
+    Map[i++].set(Clip((W*2+NW)-(WW+2*NWW)+buf(w+3*stride)));
+    Map[i++].set((Clip(W*2-NW)+Clip(W*2-NWW)+N+NE)/4);
+
+    Map[i++].set(buf(w*6));
+    Map[i++].set((buf(w-4*stride)+buf(w-6*stride))/2);
+    Map[i++].set((buf(stride*6)+buf(stride*4))/2);
+    Map[i++].set(buf(1));
+    Map[i++].set(((W+N)*3-NW*2)/4);
+    Map[i++].set(N);
+    Map[i++].set(NN);
+    Map[i++].set((W&0xC0)|((N&0xC0)>>2)|((WW&0xC0)>>4)|(NN>>6));
+    Map[i++].set((N&0xC0)|((NN&0xC0)>>2)|((NE&0xC0)>>4)|(NEE>>6));
+    Map[i++].set(min(color,stride-1));
+
+    i=0;
+    SCMap[i++].set(N+p1-Np1);
+    SCMap[i++].set(N+p2-Np2);
+    SCMap[i++].set(W+p1-Wp1);
+    SCMap[i++].set(W+p2-Wp2);
+    SCMap[i++].set(NW+p1-NWp1);
+    SCMap[i++].set(NW+p2-NWp2);
+    SCMap[i++].set(NE+p1-NEp1);
+    SCMap[i++].set(NE+p2-NEp2);
+    SCMap[i++].set(NN+p1-NNp1);
+    SCMap[i++].set(NN+p2-NNp2);
+    SCMap[i++].set(WW+p1-WWp1);
+    SCMap[i++].set(WW+p2-WWp2);
+    SCMap[i++].set(W+N-NW);
+    SCMap[i++].set(W+N-NW+p1-Wp1-Np1+NWp1);
+    SCMap[i++].set(W+N-NW+p2-Wp2-Np2+NWp2);
+    SCMap[i++].set(W+NE-N);
+    SCMap[i++].set(W+NE-N+p1-Wp1-NEp1+Np1);
+    SCMap[i++].set(W+NE-N+p2-Wp2-NEp2+Np2);
+    SCMap[i++].set(W+NEE-NE);
+    SCMap[i++].set(W+NEE-NE+p1-Wp1-buf(w-stride*2+1)+NEp1);
+    SCMap[i++].set(W+NEE-NE+p2-Wp2-buf(w-stride*2+2)+NEp2);
+    SCMap[i++].set(N+NN-NNN);
+    SCMap[i++].set(N+NN-NNN+p1-Np1-NNp1+buf(w*3+1));
+    SCMap[i++].set(N+NN-NNN+p2-Np2-NNp2+buf(w*3+2));
+    SCMap[i++].set(N+NE-NNE);
+    SCMap[i++].set(N+NE-NNE+p1-Np1-NEp1+buf(w*2-stride+1));
+    SCMap[i++].set(N+NE-NNE+p2-Np2-NEp2+buf(w*2-stride+2));
+    SCMap[i++].set(N+NW-NNW);
+    SCMap[i++].set(N+NW-NNW+p1-Np1-NWp1+buf(w*2+stride+1));
+    SCMap[i++].set(N+NW-NNW+p2-Np2-NWp2+buf(w*2+stride+2));
+    SCMap[i++].set(NE+NW-NN);
+    SCMap[i++].set(NE+NW-NN+p1-NEp1-NWp1+NNp1);
+    SCMap[i++].set(NE+NW-NN+p2-NEp2-NWp2+NNp2);
+    SCMap[i++].set(NW+W-NWW);
+    SCMap[i++].set(NW+W-NWW+p1-NWp1-Wp1+buf(w+stride*2+1));
+    SCMap[i++].set(NW+W-NWW+p2-NWp2-Wp2+buf(w+stride*2+2));
+    SCMap[i++].set(W*2-WW);
+    SCMap[i++].set(W*2-WW+p1-Wp1*2+WWp1);
+    SCMap[i++].set(W*2-WW+p2-Wp2*2+WWp2);
+    SCMap[i++].set(N*2-NN);
+    SCMap[i++].set(N*2-NN+p1-Np1*2+NNp1);
+    SCMap[i++].set(N*2-NN+p2-Np2*2+NNp2);
+    SCMap[i++].set(NW*2-NNWW);
+    SCMap[i++].set(NW*2-NNWW+p1-NWp1*2+buf(w*2+stride*2+1));
+    SCMap[i++].set(NW*2-NNWW+p2-NWp2*2+buf(w*2+stride*2+2));
+    SCMap[i++].set(NE*2-NNEE);
+    SCMap[i++].set(NE*2-NNEE+p1-NEp1*2+buf(w*2-stride*2+1));
+    SCMap[i++].set(NE*2-NNEE+p2-NEp2*2+buf(w*2-stride*2+2));
+    SCMap[i++].set(N*3-NN*3+NNN+p1-Np1*3+NNp1*3-buf(w*3+1));
+    SCMap[i++].set(N*3-NN*3+NNN+p2-Np2*3+NNp2*3-buf(w*3+2));
+    SCMap[i++].set(N*3-NN*3+NNN);
+    SCMap[i++].set((W+NE*2-NNE)/2);
+    SCMap[i++].set((W+NE*3-NNE*3+buf(w*3-stride))/2);
+    SCMap[i++].set((W+NE*2-NNE)/2+p1-(Wp1+NEp1*2-buf(w*2-stride+1))/2);
+    SCMap[i++].set((W+NE*2-NNE)/2+p2-(Wp2+NEp2*2-buf(w*2-stride+2))/2);
+    SCMap[i++].set(NNE+NE-buf(w*3-stride));
+    SCMap[i++].set(NNE+W-NN);
+    SCMap[i++].set(NNW+W-NNWW);
   }
 
   // Predict next bit
-  scm1.mix(m,8);
-  scm2.mix(m,8);
-  scm3.mix(m,8);
-  scm4.mix(m,8);
-  scm5.mix(m);
-  scm6.mix(m);
-  scm7.mix(m);
-  scm8.mix(m);
-  scm9.mix(m,8);
-  scm10.mix(m,8);
   cm.mix(m);
   for (int i=0;i<nMaps;i++)
     Map[i].mix(m);
+  for (int i=0;i<nSCMaps;i++)
+    SCMap[i].mix(m,9);
   static int col=0;
   if (++col>=stride*8) col=0;
   m.set(0, 1);
@@ -4274,6 +4402,11 @@ void im24bitModel(Mixer& m, int w, int alpha=0) {
   m.set(x%stride, stride);
   m.set(c0, 256);
   m.set((ctx[1]<<2)|(bpos>>1), 1024);
+  m.set((ctx[1]<<2)|(bpos>>1), 1024);
+  m.set(hash(LogMeanDiffQt(W,WW,5), LogMeanDiffQt(N,NN,5), LogMeanDiffQt(W,N,5), ilog2(W), color)&0x1FFF, 8192);
+  m.set(hash(ctx[0], column[0]/8)&0x1FFF, 8192);
+  m.set(hash(LogQt(N,5), LogMeanDiffQt(N,NN,3), c0)&0x1FFF, 8192);
+  m.set(hash(LogQt(W,5), LogMeanDiffQt(W,WW,3), c0)&0x1FFF, 8192);
 }
 
 #define CheckIfGrayscale(x,a) {\
@@ -6344,6 +6477,7 @@ bool exeModel(Mixer& m, bool Forced = false, ModelStats *Stats = NULL) {
   m.set((BrkCtx&0x1FF)|((s&0x20)<<4), 1024);
   m.set(hash(Op.Code, State, OpN(Cache, 1)&CodeMask)&0x1FFF, 8192);
   m.set(hash(State, bpos, Op.Code, Op.BytesRead)&0x1FFF, 8192);
+  m.set(hash(State, (bpos<<2)|(c0&3), OpCategMask&CategoryMask, ((Op.Category==OP_GEN_BRANCH)<<2)|(((Op.Flags&fMODE)==fAM)<<1)|(Op.BytesRead>0))&0x1FFF, 8192);
 
   if (Stats)
     (*Stats).x86_64 = Valid|(Context<<1)|(s<<9);
@@ -6745,7 +6879,7 @@ int contextModel2() {
   static ContextMap2 cm(MEM()*31, 9);
   static TextModel textModel(MEM()*16);
   static RunContextMap rcm7(MEM()), rcm9(MEM()), rcm10(MEM());
-  static Mixer m(NUM_INPUTS, 10800+1024*21+16384, NUM_SETS, 32);
+  static Mixer m(NUM_INPUTS, 10800+1024*21+16384+8192, NUM_SETS, 32);
   static U32 cxt[16];
   static Filetype ft2,filetype=preprocessor::DEFAULT;
   static int size=0;  // bytes remaining in block
