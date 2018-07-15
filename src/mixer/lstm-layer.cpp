@@ -92,8 +92,14 @@ void LstmLayer::ClipGradients(std::valarray<float>* arr) {
 
 void LstmLayer::Decay(std::valarray<std::valarray<float>>* arr) {
   for (unsigned int i = 0; i < arr->size(); ++i) {
-    (*arr)[i] *= 1.0 - 1.0e-6;
+    (*arr)[i] *= 1.0 - 2.0e-8;
   }
+}
+
+void LstmLayer::Decay() {
+  Decay(&forget_gate_);
+  Decay(&input_node_);
+  Decay(&output_gate_);
 }
 
 void LstmLayer::BackwardPass(const std::valarray<float>&input, int epoch,
@@ -165,12 +171,6 @@ void LstmLayer::BackwardPass(const std::valarray<float>&input, int epoch,
           &input_node_[i]);
       Nadam(&output_gate_update_[i], &output_gate_m_[i], &output_gate_v_[i],
           &output_gate_[i]);
-    }
-    ++steps_;
-    if (steps_ % 100 == 0) {
-      Decay(&forget_gate_);
-      Decay(&input_node_);
-      Decay(&output_gate_);
     }
   }
 }

@@ -71,6 +71,9 @@ std::valarray<float>& Lstm::Perceive(unsigned int input) {
   ++steps_;
   if (steps_ % 100 == 0) {
     LstmLayer::Decay(&output_layer_[epoch_]);
+    for (unsigned int i = 0; i < layers_.size(); ++i) {
+      layers_[i]->Decay();
+    }
   }
   return Predict(input);
 }

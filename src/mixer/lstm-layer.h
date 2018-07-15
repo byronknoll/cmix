@@ -14,6 +14,7 @@ class LstmLayer {
       std::valarray<float>* hidden, int hidden_start);
   void BackwardPass(const std::valarray<float>& input, int epoch,
       int layer, int input_symbol, std::valarray<float>* hidden_error);
+  void Decay();
   static inline float Rand() {
     return static_cast <float> (rand()) / static_cast <float> (RAND_MAX);
   }
@@ -29,7 +30,6 @@ class LstmLayer {
       output_gate_m_, forget_gate_v_, input_node_v_, output_gate_v_;
   float gradient_clip_;
   unsigned int num_cells_, epoch_, horizon_, input_size_, output_size_;
-  unsigned long long steps_ = 0;
 
   void ClipGradients(std::valarray<float>* arr);
 };
