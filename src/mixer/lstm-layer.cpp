@@ -8,15 +8,15 @@
 
 namespace {
 
-void Nadam(std::valarray<float>* g, std::valarray<float>* m,
+void Vnadam(std::valarray<float>* g, std::valarray<float>* m,
     std::valarray<float>* v, std::valarray<float>* t) {
   float beta1 = 0.9, beta2 = 0.999, alpha = 0.002, eps = 1e-8;
   (*m) *= beta1;
   (*m) += (1 - beta1) * (*g);
   (*v) *= beta2;
   (*v) += (1 - beta2) * (*g) * (*g);
-  (*t) -= alpha * (((*m) / (1 - beta1) * beta1 + ((1 - beta1) * (*g)) /
-      (1 - beta1)) / (sqrt((*v) / (1 - beta2)) + eps));
+  (*t) -= alpha * ((((*m) / (1 - beta1)) * beta1 + (*g)) /
+      (sqrt(((*v) / (1 - beta2)) * beta2 + (*g) * (*g)) + eps));
 }
 
 }
@@ -165,11 +165,11 @@ void LstmLayer::BackwardPass(const std::valarray<float>&input, int epoch,
   }
   if (epoch == 0) {
     for (unsigned int i = 0; i < num_cells_; ++i) {
-      Nadam(&forget_gate_update_[i], &forget_gate_m_[i], &forget_gate_v_[i],
+      Vnadam(&forget_gate_update_[i], &forget_gate_m_[i], &forget_gate_v_[i],
           &forget_gate_[i]);
-      Nadam(&input_node_update_[i], &input_node_m_[i], &input_node_v_[i],
+      Vnadam(&input_node_update_[i], &input_node_m_[i], &input_node_v_[i],
           &input_node_[i]);
-      Nadam(&output_gate_update_[i], &output_gate_m_[i], &output_gate_v_[i],
+      Vnadam(&output_gate_update_[i], &output_gate_m_[i], &output_gate_v_[i],
           &output_gate_[i]);
     }
   }
