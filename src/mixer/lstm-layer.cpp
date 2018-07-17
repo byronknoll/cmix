@@ -92,7 +92,7 @@ void LstmLayer::ClipGradients(std::valarray<float>* arr) {
 
 void LstmLayer::Decay(std::valarray<std::valarray<float>>* arr) {
   for (unsigned int i = 0; i < arr->size(); ++i) {
-    (*arr)[i] *= 1.0 - 2.0e-8;
+    (*arr)[i] *= 1.0 - 1.0e-6;
   }
 }
 
