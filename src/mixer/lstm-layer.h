@@ -30,6 +30,7 @@ class LstmLayer {
       output_gate_m_, forget_gate_v_, input_node_v_, output_gate_v_;
   float gradient_clip_;
   unsigned int num_cells_, epoch_, horizon_, input_size_, output_size_;
+  unsigned long long update_steps_ = 0;
 
   void ClipGradients(std::valarray<float>* arr);
 };
