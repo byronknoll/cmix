@@ -10,7 +10,8 @@ namespace {
 
 void Adam(std::valarray<float>* g, std::valarray<float>* m,
     std::valarray<float>* v, std::valarray<float>* w, float t) {
-  float beta1 = 0.9, beta2 = 0.999, alpha = 0.002, eps = 1e-8;
+  float beta1 = 0.9, beta2 = 0.999, alpha = 0.002 / sqrt(5e-5 * t + 1),
+      eps = 1e-8;
   (*m) *= beta1;
   (*m) += (1 - beta1) * (*g);
   (*v) *= beta2;
