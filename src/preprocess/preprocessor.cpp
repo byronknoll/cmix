@@ -52,20 +52,21 @@ void Pretrain(Predictor* p, FILE* dictionary) {
     }
   }
 
-  unsigned int percent = 1 + (len / 100);
+  unsigned int percent = 1 + (len / 10000);
   for (unsigned int i = 0; i < len; ++i) {
     unsigned char c = getc(dictionary);
     if (c == '\n') c = ' ';
     if (i % percent == 0) {
-      printf("\rpretraining: %d%%", i / percent);
-      fflush(stdout);
+      double frac = 100.0 * i / len;
+      fprintf(stderr, "\rpretraining: %.2f%%", frac);
+      fflush(stderr);
     }
     for (int j = 7; j >= 0; --j) {
       p->Pretrain((c>>j)&1);
     }
   }
-  printf("\r                 \r");
-  fflush(stdout);
+  fprintf(stderr, "\r                     \r");
+  fflush(stderr);
 }
 
 Filetype detect(FILE* in, int n, Filetype type) {

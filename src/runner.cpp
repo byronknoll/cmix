@@ -78,15 +78,16 @@ void ExtractVocab(unsigned long long input_bytes, std::ifstream* is,
 void Compress(unsigned long long input_bytes, std::ifstream* is,
     std::ofstream* os, unsigned long long* output_bytes, Predictor* p) {
   Encoder e(os, p);
-  unsigned long long percent = 1 + (input_bytes / 100);
+  unsigned long long percent = 1 + (input_bytes / 10000);
   for (unsigned long long pos = 0; pos < input_bytes; ++pos) {
     char c = is->get();
     for (int j = 7; j >= 0; --j) {
       e.Encode((c>>j)&1);
     }
     if (pos % percent == 0) {
-      printf("\rprogress: %lld%%", pos / percent);
-      fflush(stdout);
+      double frac = 100.0 * pos / input_bytes;
+      fprintf(stderr, "\rprogress: %.2f%%", frac);
+      fflush(stderr);
     }
   }
   e.Flush();
@@ -96,7 +97,7 @@ void Compress(unsigned long long input_bytes, std::ifstream* is,
 void Decompress(unsigned long long output_length, std::ifstream* is,
                 std::ofstream* os, Predictor* p) {
   Decoder d(is, p);
-  unsigned long long percent = 1 + (output_length / 100);
+  unsigned long long percent = 1 + (output_length / 10000);
   for(unsigned long long pos = 0; pos < output_length; ++pos) {
     int byte = 1;
     while (byte < 256) {
@@ -104,8 +105,9 @@ void Decompress(unsigned long long output_length, std::ifstream* is,
     }
     os->put(byte);
     if (pos % percent == 0) {
-      printf("\rprogress: %lld%%", pos / percent);
-      fflush(stdout);
+      double frac = 100.0 * pos / output_length;
+      fprintf(stderr, "\rprogress: %.2f%%", frac);
+      fflush(stderr);
     }
   }
 }
