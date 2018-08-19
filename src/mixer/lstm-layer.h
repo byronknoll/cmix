@@ -14,11 +14,9 @@ class LstmLayer {
       std::valarray<float>* hidden, int hidden_start);
   void BackwardPass(const std::valarray<float>& input, int epoch,
       int layer, int input_symbol, std::valarray<float>* hidden_error);
-  void Decay();
   static inline float Rand() {
     return static_cast <float> (rand()) / static_cast <float> (RAND_MAX);
   }
-  static void Decay(std::valarray<std::valarray<float>>* arr);
 
  private:
   std::valarray<float> state_, output_gate_error_, state_error_,

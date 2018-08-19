@@ -25,7 +25,6 @@ class Lstm {
   std::valarray<std::valarray<float>> output_;
   float learning_rate_;
   unsigned int num_cells_, epoch_, horizon_, input_size_, output_size_;
-  unsigned long long steps_ = 0;
 };
 
 #endif

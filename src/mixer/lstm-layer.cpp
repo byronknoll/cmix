@@ -91,18 +91,6 @@ void LstmLayer::ClipGradients(std::valarray<float>* arr) {
   }
 }
 
-void LstmLayer::Decay(std::valarray<std::valarray<float>>* arr) {
-  for (unsigned int i = 0; i < arr->size(); ++i) {
-    (*arr)[i] *= 1.0 - 1.0e-6;
-  }
-}
-
-void LstmLayer::Decay() {
-  Decay(&forget_gate_);
-  Decay(&input_node_);
-  Decay(&output_gate_);
-}
-
 void LstmLayer::BackwardPass(const std::valarray<float>&input, int epoch,
     int layer, int input_symbol, std::valarray<float>* hidden_error) {
   if (epoch == (int)horizon_ - 1) {
