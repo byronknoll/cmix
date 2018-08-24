@@ -4352,7 +4352,6 @@ void im8bitModel(Mixer& m, int w, ModelStats *Stats = nullptr, int gray = 0) {
 }
 
 void im24bitModel(Mixer& m, int w, ModelStats *Stats = nullptr, int alpha=0) {
-  const int SCM=0x20000;
   const int nMaps = 94;
   const int nSCMaps = 59;
   static ContextMap cm(MEM()*4, 47);
