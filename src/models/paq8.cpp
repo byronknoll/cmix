@@ -200,7 +200,28 @@ Buf buf;
 int dt[1024];  // i -> 16K/(i+3)
 
 struct ModelStats{
+  Filetype Type;
+  U64 Misses;
+  struct {
+    U32 length;      //used by SSE stage
+    U8 expectedByte; //used by SSE stage
+  } Match;
+  struct {
+    struct {
+      U8 WW, W, NN, N, Wp1, Np1; 
+    } pixels;        //used by SSE stage
+    U8 plane;        //used by SSE stage
+    U8 ctx;          //used by SSE stage
+  } Image;
   U32 XML, x86_64, Record;
+  struct {
+    U8 state:3;      //unused
+    U8 lastPunct:5;  //unused
+    U8 wordLength:4; //unused
+    U8 boolmask:4;   //unused
+    U8 firstLetter;  //used by SSE stage
+    U8 mask;         //used by SSE stage
+  } Text;
 };
 
 #define CacheSize (1<<5)
@@ -471,7 +492,7 @@ void train(short *t, short *w, int n, int err) {
 }
 #endif
 
-#define NUM_INPUTS 1615
+#define NUM_INPUTS 1429
 #define NUM_SETS 23
 
 std::valarray<float> model_predictions(0.5, NUM_INPUTS + NUM_SETS + 11);
@@ -551,12 +572,12 @@ Mixer::Mixer(int n, int m, int s, int w):
   if (S>1) mp=new Mixer(S, 1, 1, 0x7fff);
 }
 
-class APM {
+class APM1 {
   int index;
   const int N;
   Array<U16> t;
 public:
-  APM(int n);
+  APM1(int n);
   int p(int pr=2048, int cxt=0, int rate=7) {
     pr=stretch(pr);
     int g=(y<<16)+(y<<rate)-y-y;
@@ -568,7 +589,7 @@ public:
   }
 };
 
-APM::APM(int n): index(0), N(n), t(n*33) {
+APM1::APM1(int n): index(0), N(n), t(n*33) {
   for (int i=0; i<N; ++i)
     for (int j=0; j<33; ++j)
       t[i*33+j] = i==0 ? squash((j-16)*128)*16 : t[j];
@@ -631,10 +652,49 @@ StateMap32::StateMap32(int n): N(n), cxt(0), t(n) {
     t[i]=(1u<<31)+0;  //initial p=0.5, initial count=0
 }
 
+class APM : public StateMap32 {
+public:
+  APM(int n) : StateMap32(n*24) {
+    for (int i=0; i<N; ++i) {
+      int p = ((i%24*2+1)*4096)/48-2048;
+      t[i] = (U32(squash(p))<<20)+6; //initial count: 6
+    }
+  }
+  int p(int pr, int cx, const int limit=0xFF) {
+    //adapt (update prediction from previous pass)
+    update(limit);
+    //predict
+    pr = (stretch(pr)+2048)*23;
+    int wt = pr&0xfff;  // interpolation weight (0..4095)
+    cx = cx*24+(pr>>12);
+    cxt = cx+(wt>>11);
+    pr = ((t[cx]>>13)*(4096-wt)+(t[cx+1]>>13)*wt)>>19;
+    return pr;
+  }
+};
+
 inline U32 hash(U32 a, U32 b, U32 c=0xffffffff, U32 d=0xffffffff,
     U32 e=0xffffffff) {
   U32 h=a*200002979u+b*30005491u+c*50004239u+d*70004807u+e*110002499u;
   return h^h>>9^a>>2^b>>3^c>>4^d>>5^e>>6;
+}
+
+#define PHI UINT32_C(0x9E3779B1)
+
+inline U32 hash(U32 x) {
+  x++;
+  x = ((x >> 17) ^ x) * UINT32_C(0xed5ad4bb);
+  x = ((x >> 11) ^ x) * UINT32_C(0xac4c1b51);
+  x = ((x >> 15) ^ x) * UINT32_C(0x31848bab);
+  x = (x >> 14) ^ x;
+  return x;
+}
+
+inline U32 combine(U32 seed, const U32 x) {
+  seed+=(x+1)*PHI;
+  seed+=seed<<10;
+  seed^=seed>>6;
+  return seed;
 }
 
 template <int B> class BH {
@@ -727,7 +787,6 @@ inline int mix2(Mixer& m, int s, StateMap& sm) {
   m.add(p1-p0);
   m.add(st*abs(n1-n0));
   m.add((p1&n0)-(p0&n1));
-  m.add((p1&n1)-(p0&n0));
   return s>0;
 }
 
@@ -754,22 +813,34 @@ public:
 };
 
 class SmallStationaryContextMap {
-  Array<U16> t;
-  int cxt;
+  Array<U16> Data;
+  int Context, Mask, bCount, B;
   U16 *cp;
 public:
-  SmallStationaryContextMap(int m): t(m/2), cxt(0) {
-    for (U32 i=0; i<t.size(); ++i)
-      t[i]=32768;
-    cp=&t[0];
+  SmallStationaryContextMap(int BitsOfContext, int BitsPerContext = 8) : Data(1ull<<(BitsOfContext+BitsPerContext)), Context(0), Mask(1<<BitsPerContext), bCount(1), B(1) {
+    Reset();
+    cp=&Data[0];
   }
-  void set(U32 cx) {
-    cxt=(cx*256)&(t.size()-256);
+  void set(U32 ctx) {
+    Context = (ctx*Mask)&(Data.size() - Mask);
+    bCount=B=1;
   }
-  void mix(Mixer& m, const int rate=7, const int Multiplier = 1, const int Divisor = 2) {
-    *cp += ((y<<16)-*cp+(1<<(rate-1))) >> rate;
-    cp=&t[cxt+c0];
-    m.add((stretch(*cp>>4)*Multiplier)/Divisor);
+  void Reset() {
+    for (U32 i=0; i<Data.size(); ++i)
+      Data[i]=0x7FFF;
+  }
+  void mix(Mixer& m, const int rate = 7, const int Multiplier = 1, const int Divisor = 4) {
+    *cp+=((y<<16)-(*cp)+(1<<(rate-1)))>>rate;
+    B+=(y && B>1);
+    cp = &Data[Context+B];
+    int Prediction = (*cp)>>4;
+    m.add((stretch(Prediction)*Multiplier)/Divisor);
+    m.add(((Prediction-2048)*Multiplier)/(Divisor*2));
+    bCount<<=1; B<<=1;
+    if (bCount==Mask) {
+      bCount=1;
+      B=1;
+    }
   }
 };
 
@@ -842,7 +913,7 @@ class ContextMap {
   void update(U32 cx, int c);
   int mix1(Mixer& m, int cc, int bp, int c1, int y1);
 public:
-  ContextMap(U32 m, int c=1);
+  ContextMap(U64 m, int c=1);
   ~ContextMap();
   void set(U32 cx, int next=-1);
   int mix(Mixer& m) {return mix1(m, c0, bpos, buf(1), y);}
@@ -859,7 +930,7 @@ inline U8* ContextMap::E::get(U16 ch) {
   return last=0xf0|bi, chk[bi]=ch, (U8*)memset(&bh[bi][0], 0, 7);
 }
 
-ContextMap::ContextMap(U32 m, int c): C(c), t(m>>6), cp(c), cp0(c),
+ContextMap::ContextMap(U64 m, int c): C(c), t(m>>6), cp(c), cp0(c),
     cxt(c), runp(c), cn(0) {
   sm=new StateMap[C];
   for (int i=0; i<C; ++i) {
@@ -1141,7 +1212,6 @@ public:
       int p0 = 255-p1;
       m.add((st*abs(n1-n0)));
       m.add((p1&n0)-(p0&n1));
-      m.add((p1&n1)-(p0&n0));
       m.add(stretch(Maps12b[i]->p((state<<9)|(bitPos<<6)|k))>>2);
       m.add(stretch(Maps6b[i]->p((state<<3)|bitPos))>>2);
     }
@@ -2664,6 +2734,24 @@ public:
 class TextModel {
 private:
   const U32 MIN_RECOGNIZED_WORDS = 4;
+  const U8 AsciiGroup[128] = {
+     0,  5,  5,  5,  5,  5,  5,  5,
+     5,  5,  4,  5,  5,  4,  5,  5,
+     5,  5,  5,  5,  5,  5,  5,  5,
+     5,  5,  5,  5,  5,  5,  5,  5,
+     6,  7,  8, 17, 17,  9, 17, 10,
+    11, 12, 17, 17, 13, 14, 15, 16,
+     1,  1,  1,  1,  1,  1,  1,  1,
+     1,  1, 18, 19, 20, 23, 21, 22,
+    23,  2,  2,  2,  2,  2,  2,  2,
+     2,  2,  2,  2,  2,  2,  2,  2,
+     2,  2,  2,  2,  2,  2,  2,  2,
+     2,  2,  2, 24, 27, 25, 27, 26,
+    27,  3,  3,  3,  3,  3,  3,  3,
+     3,  3,  3,  3,  3,  3,  3,  3,
+     3,  3,  3,  3,  3,  3,  3,  3,
+     3,  3,  3, 28, 30, 29, 30, 30
+  };
   ContextMap2 Map;
   Array<Stemmer*> Stemmers;
   Array<Language*> Languages;
@@ -2714,7 +2802,8 @@ private:
     U32 maskPunct;    // mask of relative position of last comma related to other punctuation
     U32 nestHash;     // hash representing current nesting state
     U32 lastNest;     // distance to last nesting character
-    U32 masks[4],
+    U64 asciiMask;
+    U32 masks[5],
         wordLength[2];
     int UTF8Remaining;// remaining bytes for current UTF8-encoded Unicode code point (-1 if invalid byte found)
     U8 firstLetter;   // first letter of current word
@@ -2727,7 +2816,7 @@ private:
   void Update(Buf& buffer, ModelStats *Stats = nullptr);
   void SetContexts(Buf& buffer, ModelStats *Stats = nullptr);
 public:
-  TextModel(const U32 Size) : Map(Size, 26), Stemmers(Language::Count-1), Languages(Language::Count-1), WordPos(0x10000), State(Parse::Unknown), pState(State), Lang{ 0, 0, Language::Unknown, Language::Unknown }, Info{ 0 }, ParseCtx(0) {
+  TextModel(const U32 Size) : Map(Size, 33), Stemmers(Language::Count-1), Languages(Language::Count-1), WordPos(0x10000), State(Parse::Unknown), pState(State), Lang{ 0, 0, Language::Unknown, Language::Unknown }, Info{ 0 }, ParseCtx(0) {
     Stemmers[Language::English-1] = new EnglishStemmer();
     Stemmers[Language::French-1] = new FrenchStemmer();
     Stemmers[Language::German-1] = new GermanStemmer();
@@ -2787,7 +2876,10 @@ void TextModel::Update(Buf& buffer, ModelStats *Stats) {
   Info.masks[0]<<=2, Info.masks[1]<<=2, Info.masks[2]<<=4, Info.masks[3]<<=3;
   pState = State;  
 
-  U8 c = buffer(1), pC=tolower(c);
+  U8 c = buffer(1), pC=tolower(c), g = (c<0x80)?AsciiGroup[c]:31;
+  if(!((g<=4) && g==(Info.asciiMask&0x1f))) //repetition is allowed for groups 0..4
+      Info.asciiMask = ((Info.asciiMask<<5) | g)&((U64(1)<<60)-1); //keep last 12 groups (12x5=60 bits)
+  Info.masks[4] = Info.asciiMask&((1<<30)-1);
   BytePos[c] = pos;
   if (c!=pC) {
     c = pC;
@@ -3000,6 +3092,17 @@ void TextModel::Update(Buf& buffer, ModelStats *Stats) {
   else
     Info.UTF8Remaining = (leadingBitsSet!=1)?(c!=0xC0 && c!=0xC1 && c<0xF5)?(leadingBitsSet-(leadingBitsSet>0)):-1:0;
   Info.maskPunct = (BytePos[',']>BytePos['.'])|((BytePos[',']>BytePos['!'])<<1)|((BytePos[',']>BytePos['?'])<<2)|((BytePos[',']>BytePos[':'])<<3)|((BytePos[',']>BytePos[';'])<<4);
+  if (Stats) {
+    Stats->Text.state = State;
+    Stats->Text.lastPunct = std::min<U32>(0x1F, Info.lastPunct);
+    Stats->Text.wordLength = std::min<U32>(0xF, Info.wordLength[0]);
+    Stats->Text.boolmask = (Info.lastDigit<Info.wordLength[0]+Info.wordGap)|
+                          ((Info.lastUpper<Info.lastLetter+Info.wordLength[1])<<1)|
+                          ((Info.lastPunct<Info.wordLength[0]+Info.wordGap)<<2)|
+                          ((Info.lastUpper<Info.wordLength[0])<<3);
+    Stats->Text.firstLetter = Info.firstLetter;
+    Stats->Text.mask = Info.masks[1]&0xFF;
+  }
 }
 
 void TextModel::SetContexts(Buf& buffer, ModelStats *Stats) {
@@ -3086,16 +3189,25 @@ void TextModel::SetContexts(Buf& buffer, ModelStats *Stats) {
   Map.set(hash(i++, w*23+c, Words[Lang.pId](1+(Info.wordLength[0]==0)).Letters[Words[Lang.pId](1+(Info.wordLength[0]==0)).Start], Info.firstLetter*(Info.wordLength[0]<7)));
   Map.set(hash(i++, column, Info.spaces&7, Info.nestHash&0x7FF));
   Map.set(hash(i++, cWord->Hash[1], (Info.lastUpper<column)|((Info.lastUpper<Info.wordLength[0])<<1), min(5, Info.wordLength[0])));
+  Map.set(Info.masks[4]); //last 6 groups
+  Map.set(hash(U32(Info.asciiMask),U32(Info.asciiMask>>32))); //last 12 groups
+  Map.set(Info.asciiMask & ((1<<20)-1)); //last 4 groups
+  Map.set(Info.asciiMask & ((1<<10)-1)); //last 2 groups
+  Map.set(hash((Info.asciiMask>>5) &((1<<30)-1),buffer(1)));
+  Map.set(hash((Info.asciiMask>>10)&((1<<30)-1),buffer(1),buffer(2)));
+  Map.set(hash((Info.asciiMask>>15)&((1<<30)-1),buffer(1),buffer(2),buffer(3)));
 }
 
 class MatchModel {
 private:
-  enum Parameters : U32{
-    MaxLen = 0xFFFF,    // longest allowed match
-    MinLen = 2,         // minimum required match
-    DeltaLen = 5,       // minimum length to switch to delta mode
-    NumCtxs = 5,        // number of contexts used
-    NumHashes = 2       // number of hashes used
+  enum Parameters : U32 {
+    MaxLen = 0xFFFF, // longest allowed match
+    MaxExtend = 0,   // longest allowed match expansion // warning: larger value -> slowdown
+    MinLen = 5,      // minimum required match length
+    StepSize = 2,    // additional minimum length increase per higher order hash
+    DeltaLen = 5,    // minimum length to switch to delta mode
+    NumCtxs = 3,     // number of contexts used
+    NumHashes = 3    // number of hashes used
   };
   Array<U32> Table;
   StateMap32 **StateMaps;
@@ -3103,36 +3215,58 @@ private:
   StationaryMap Map;
   U32 hashes[NumHashes];
   U32 ctx[NumCtxs];
-  U32 length;    // length of match, or 0 if no match
-  U32 index;     // points to next byte of match, if any
+  U32 length;    // rebased length of match (length=1 represents the smallest accepted match length), or 0 if no match
+  U32 index;     // points to next byte of match in buffer, 0 when there is no match
   U32 mask;
+  U8 expectedByte; // prediction is based on this byte (buffer[index]), valid only when length>0
   bool delta;
   void Update(Buf& buffer, ModelStats *Stats = nullptr) {
     delta = false;
     // update hashes
-    hashes[0] = (hashes[0]*(3<<3)+buffer(1))&mask;
-    hashes[1] = (hashes[1]*(5<<5)+buffer(1))&mask;
+    for (U32 i=0, minLen=MinLen+(NumHashes-1)*StepSize; i<NumHashes; i++, minLen-=StepSize) {
+      hashes[i] = hash(minLen);
+      for (U32 j=1; j<=minLen; j++)
+        hashes[i] = combine(hashes[i], buffer(j)<<i);
+      hashes[i]&=mask;
+    }
     // extend current match, if available
     if (length) {
       index++;
       if (length<MaxLen)
         length++;
     }
-    // or find a new match
+    // or find a new match, starting with the highest order hash and falling back to lower ones
     else {
-      for (U32 i=0; i<NumHashes && length<MinLen; i++){
+      U32 minLen = MinLen+(NumHashes-1)*StepSize, bestLen = 0, bestIndex = 0;
+      for (U32 i=0; i<NumHashes && length<minLen; i++, minLen-=StepSize) {
         index = Table[hashes[i]];
-        if (index && index!=(U32)pos && (U64)pos<(index+buffer.size())) {
-          while (length<MaxLen && (index-length-1)!=(U32)pos && buffer(length+1)==buffer[index-length-1])
+        if (index>0) {
+          length = 0;
+          while (length<(minLen+MaxExtend) && buffer(length+1)==buffer[index-length-1])
             length++;
+          if (length>bestLen) {
+            bestLen = length;
+            bestIndex = index;
+          }
         }
       }
+      if (bestLen>=MinLen) {
+        length = bestLen-(MinLen-1); // rebase, a length of 1 actually means a length of MinLen
+        index = bestIndex;
+      }
+      else
+        length = index = 0;
     }
+    // update position information in hashtable
     for (U32 i=0; i<NumHashes; i++)
       Table[hashes[i]] = pos;
-    SCM[0]->set(buffer[index]);
-    SCM[1]->set(pos);
-    Map.set((buffer[index]<<8)|buffer(1));
+    expectedByte = buffer[index];
+    SCM[0]->set(expectedByte);
+    SCM[1]->set(expectedByte);
+    SCM[2]->set(pos);
+    Map.set((expectedByte<<8)|buffer(1));
+    if (Stats)
+      Stats->Match.expectedByte = (length>0)?expectedByte:0;
   }
 public:
   MatchModel(const U32 Size) :
@@ -3141,70 +3275,79 @@ public:
     hashes{ 0 },
     ctx{ 0 },
     length(0),
-    mask((Size-1)/sizeof(U32)),
+    mask(Size/sizeof(U32)-1),
+    expectedByte(0),
     delta(false)
   {
     StateMaps = new StateMap32*[NumCtxs];
-    StateMaps[0] = new StateMap32(56<<8);
-    StateMaps[1] = new StateMap32(0x80800);
-    StateMaps[2] = new StateMap32(0x10100);
-    StateMaps[3] = new StateMap32(0x10100);
-    StateMaps[4] = new StateMap32(0x10100);
-    SCM = new SmallStationaryContextMap*[2];
-    SCM[0] = new SmallStationaryContextMap(0x10000);
-    SCM[1] = new SmallStationaryContextMap(0x10000);
+    StateMaps[0] = new StateMap32(56*256);
+    StateMaps[1] = new StateMap32(8*256*256+1);
+    StateMaps[2] = new StateMap32(256*256);
+    SCM = new SmallStationaryContextMap*[3];
+    SCM[0] = new SmallStationaryContextMap(8,8);
+    SCM[1] = new SmallStationaryContextMap(11,1);
+    SCM[2] = new SmallStationaryContextMap(8,8);
   }
   ~MatchModel(){
     for (U32 i=0; i<NumCtxs; i++)
       delete StateMaps[i];
     delete[] StateMaps;
-    for (U32 i=0; i<2; i++)
+    for (U32 i=0; i<3; i++)
       delete SCM[i];
     delete[] SCM;
   }
   int Predict(Mixer& mixer, Buf& buffer, ModelStats *Stats = nullptr) {
     if (bpos==0)
       Update(buffer, Stats);
-    int bit = (buffer[index]>>(7-bpos))&1;
-    ctx[0] = ctx[1] = ctx[2] = ctx[3] = ctx[4] = c0;
-    ctx[2]+= (buffer(1)+1)<<8;
-    if (!delta) {
-      if (length)
-      {
-        if (buffer(1)==buffer[index-1] && c0==((buffer[index] + 256)>>(8-bpos))) { // bits match?
-          if (length<16)
-            ctx[0] = length*2 + bit;
-          else
-            ctx[0] = (std::min<U32>(length, 63)>>2)*2 + bit + 24;
-          ctx[0] = (ctx[0]<<8) + buffer(1);
-          ctx[1] = ((buffer[index]+1)<<11)|(bpos<<8)|buffer(1);
-          mixer.add((std::min<U32>(length, 32)<<5)*(2*bit-1));
-          mixer.add((ilog(length)<<2)*(2*bit-1));
-        }
-        else { // we have a mismatch
-          delta = length>DeltaLen;
-          length = 0;
-          mixer.add(0);
-          mixer.add(0);
-        }
-      }
-      else {
-        mixer.add(0);
-        mixer.add(0);
-      }
-    }
-    else { //delta mode
-      ctx[3] = ctx[2];
-      ctx[4]+= (buffer[index]+1)<<8;
-      mixer.add(0);
-      mixer.add(0);
-    }
-    for (U32 i=0; i<NumCtxs; i++)
-      mixer.add(stretch(StateMaps[i]->p(ctx[i]))/2);
-    SCM[0]->mix(mixer, 7, 1, 4);
-    SCM[1]->mix(mixer, 5);
-    Map.mix(mixer, 1, 4, 0xFF);
+    else
+      SCM[1]->set((bpos<<8)|(expectedByte^U8(c0<<(8-bpos))));
+    const int expectedBit = (expectedByte>>(7-bpos))&1;
 
+    if(length>0) {
+      const bool isMatch = (bpos==0)?(buffer(1)==buffer[index-1]):(((expectedByte+256)>>(8-bpos))==c0); // next bit matches the prediction?
+      if(!isMatch) {
+        delta = (length+MinLen)>DeltaLen;
+        length = 0;
+      }
+    }
+
+    for (U32 i=0; i<NumCtxs; i++)
+      ctx[i] = 0;
+    if (length>0) {
+      if (length<=16)
+        ctx[0] = (length-1)*2 + expectedBit; // 0..31
+      else
+        ctx[0] = 24 + (min(length-1, 63)>>2)*2 + expectedBit; // 32..55
+      ctx[0] = ((ctx[0]<<8) | c0);
+      ctx[1] = ((expectedByte<<11) | (bpos<<8) | buffer(1)) + 1;
+      const int sign = 2*expectedBit-1;
+      mixer.add(sign*(min(length,32)<<5)); // +/- 32..1024
+      mixer.add(sign*(ilog(length)<<2));   // +/-  0..1024
+    }
+    else { // no match at all or delta mode
+      mixer.add(0);
+      mixer.add(0);
+    }
+
+    if (delta)
+      ctx[2] = (expectedByte<<8) | c0;
+
+    for (U32 i=0; i<NumCtxs; i++) {
+      const U32 c = ctx[i];
+      const U32 p = StateMaps[i]->p(c);
+      if (c!=0)
+        mixer.add((stretch(p)+1)>>1);
+      else
+        mixer.add(0);
+    }
+
+    SCM[0]->mix(mixer);
+    SCM[1]->mix(mixer, 6);
+    SCM[2]->mix(mixer, 5);
+    Map.mix(mixer, 1, 4, 255);
+    
+    if (Stats)
+      Stats->Match.length = length;
     return length;
   }
 };
@@ -3245,7 +3388,7 @@ void wordModel(Mixer& m) {
     static U32 number0=0, number1=0;
     static U32 text0=0,data0=0,type0=0;
     static U32 lastLetter=0, firstLetter=0, lastUpper=0, lastDigit=0, wordGap=0;
-    static ContextMap cm(MEM()*31, 61);
+    static ContextMap cm(MEM()*32, 61);
     static int nl1=-3, nl=-2;
     static U32 mask=0, mask2=0;
     static Array<int> wpos(0x10000);
@@ -3569,7 +3712,7 @@ struct dBASE {
   int Start, End;
 };
 
-void recordModel(Mixer& m, Filetype filetype, ModelStats *Stats = NULL) {
+void recordModel(Mixer& m, Filetype filetype, ModelStats *Stats = nullptr) {
   static int cpos1[256] , cpos2[256], cpos3[256], cpos4[256];
   static int wpos1[0x10000];
   static int rlen[3] = {2,3,4}; // run length and 2 candidates
@@ -3829,8 +3972,8 @@ void sparseModel(Mixer& m, int seenbefore, int howmany) {
 U32 x4=0;
 void sparseModel1(Mixer& m, int seenbefore, int howmany) {
    static ContextMap cm(MEM()*4, 31);
-    static SmallStationaryContextMap scm1(0x10000), scm2(0x20000), scm3(0x2000),
-     scm4(0x8000), scm5(0x2000),scm6(0x2000), scma(0x10000);
+    static SmallStationaryContextMap scm1(7,8), scm2(8,8), scm3(4,8),
+     scm4(6,8), scm5(4,8),scm6(4,8), scma(7,8);
   if (bpos==0) {
     scm5.set(seenbefore);
     scm6.set(howmany);
@@ -4020,7 +4163,7 @@ void im4bitModel(Mixer& m, int w) {
   m.set(0,1);
 }
 
-void im8bitModel(Mixer& m, int w, int gray = 0) {
+void im8bitModel(Mixer& m, int w, ModelStats *Stats = nullptr, int gray = 0) {
   const int nMaps = 57;
   static ContextMap cm(MEM()*4, 48);
   static StationaryMap Map[nMaps] = {
@@ -4184,6 +4327,13 @@ void im8bitModel(Mixer& m, int w, int gray = 0) {
 
       ctx = min(0x1F,x/max(1,w/min(32,columns[0])))|( ( ((abs(W-N)*16>W+N)<<1)|(abs(N-NW)>8) )<<5 )|((W+N)&0x180);
     }
+    if (Stats) {
+      Stats->Image.pixels.W = W;
+      Stats->Image.pixels.N = N;
+      Stats->Image.pixels.NN = NN;
+      Stats->Image.pixels.WW = WW;
+      Stats->Image.ctx = ctx>>gray;
+    }
   }
 
   cm.mix(m);
@@ -4201,19 +4351,19 @@ void im8bitModel(Mixer& m, int w, int gray = 0) {
   m.set(min(127,column[1]), 128);
 }
 
-void im24bitModel(Mixer& m, int w, int alpha=0) {
+void im24bitModel(Mixer& m, int w, ModelStats *Stats = nullptr, int alpha=0) {
   const int SCM=0x20000;
   const int nMaps = 94;
   const int nSCMaps = 59;
   static ContextMap cm(MEM()*4, 47);
-  static SmallStationaryContextMap SCMap[nSCMaps] = { {SCM}, {SCM}, {SCM}, {SCM}, {SCM}, {SCM}, {SCM}, {SCM},
-                                                      {SCM}, {SCM}, {SCM}, {SCM}, {SCM}, {SCM}, {SCM}, {SCM},
-                                                      {SCM}, {SCM}, {SCM}, {SCM}, {SCM}, {SCM}, {SCM}, {SCM},
-                                                      {SCM}, {SCM}, {SCM}, {SCM}, {SCM}, {SCM}, {SCM}, {SCM},
-                                                      {SCM}, {SCM}, {SCM}, {SCM}, {SCM}, {SCM}, {SCM}, {SCM},
-                                                      {SCM}, {SCM}, {SCM}, {SCM}, {SCM}, {SCM}, {SCM}, {SCM},
-                                                      {SCM}, {SCM}, {SCM}, {SCM}, {SCM}, {SCM}, {SCM}, {SCM},
-                                                      {SCM}, {SCM}, {512}};
+  static SmallStationaryContextMap SCMap[nSCMaps] = { {9,4}, {9,4}, {9,4}, {9,4}, {9,4}, {9,4}, {9,4}, {9,4},
+                                                      {9,4}, {9,4}, {9,4}, {9,4}, {9,4}, {9,4}, {9,4}, {9,4},
+                                                      {9,4}, {9,4}, {9,4}, {9,4}, {9,4}, {9,4}, {9,4}, {9,4},
+                                                      {9,4}, {9,4}, {9,4}, {9,4}, {9,4}, {9,4}, {9,4}, {9,4},
+                                                      {9,4}, {9,4}, {9,4}, {9,4}, {9,4}, {9,4}, {9,4}, {9,4},
+                                                      {9,4}, {9,4}, {9,4}, {9,4}, {9,4}, {9,4}, {9,4}, {9,4},
+                                                      {9,4}, {9,4}, {9,4}, {9,4}, {9,4}, {9,4}, {9,4}, {9,4},
+                                                      {9,4}, {9,4}, {0,8}};
   static StationaryMap Map[nMaps] ={ { 8,8}, { 8,8}, { 8,8}, { 0,2}, { 0,8}, {13,4}, {13,4}, {13,4}, {13,4}, {13,4},
                                      {15,4}, {15,4}, {15,4}, {15,4}, {11,4}, {11,4}, {11,4}, {11,4}, { 9,4}, { 9,4},
                                      { 9,4}, { 9,4}, { 9,4}, { 9,4}, { 9,4}, { 9,4}, { 9,4}, { 9,4}, { 9,4}, { 9,4},
@@ -4312,70 +4462,20 @@ void im24bitModel(Mixer& m, int w, int alpha=0) {
     cm.set(hash(++i, mean, logvar>>4));
 
     i=0;
-    SCMap[i++].set(N+p1-Np1);
-    SCMap[i++].set(N+p2-Np2);
-    SCMap[i++].set(W+p1-Wp1);
-    SCMap[i++].set(W+p2-Wp2);
-    SCMap[i++].set(NW+p1-NWp1);
-    SCMap[i++].set(NW+p2-NWp2);
-    SCMap[i++].set(NE+p1-NEp1);
-    SCMap[i++].set(NE+p2-NEp2);
-    SCMap[i++].set(NN+p1-NNp1);
-    SCMap[i++].set(NN+p2-NNp2);
-    SCMap[i++].set(WW+p1-WWp1);
-    SCMap[i++].set(WW+p2-WWp2);
-    SCMap[i++].set(W+N-NW);
-    SCMap[i++].set(W+N-NW+p1-Wp1-Np1+NWp1);
-    SCMap[i++].set(W+N-NW+p2-Wp2-Np2+NWp2);
-    SCMap[i++].set(W+NE-N);
-    SCMap[i++].set(W+NE-N+p1-Wp1-NEp1+Np1);
-    SCMap[i++].set(W+NE-N+p2-Wp2-NEp2+Np2);
-    SCMap[i++].set(W+NEE-NE);
-    SCMap[i++].set(W+NEE-NE+p1-Wp1-buf(w-stride*2+1)+NEp1);
-    SCMap[i++].set(W+NEE-NE+p2-Wp2-buf(w-stride*2+2)+NEp2);
-    SCMap[i++].set(N+NN-NNN);
-    SCMap[i++].set(N+NN-NNN+p1-Np1-NNp1+buf(w*3+1));
-    SCMap[i++].set(N+NN-NNN+p2-Np2-NNp2+buf(w*3+2));
-    SCMap[i++].set(N+NE-NNE);
-    SCMap[i++].set(N+NE-NNE+p1-Np1-NEp1+buf(w*2-stride+1));
-    SCMap[i++].set(N+NE-NNE+p2-Np2-NEp2+buf(w*2-stride+2));
-    SCMap[i++].set(N+NW-NNW);
-    SCMap[i++].set(N+NW-NNW+p1-Np1-NWp1+buf(w*2+stride+1));
-    SCMap[i++].set(N+NW-NNW+p2-Np2-NWp2+buf(w*2+stride+2));
-    SCMap[i++].set(NE+NW-NN);
-    SCMap[i++].set(NE+NW-NN+p1-NEp1-NWp1+NNp1);
-    SCMap[i++].set(NE+NW-NN+p2-NEp2-NWp2+NNp2);
-    SCMap[i++].set(NW+W-NWW);
-    SCMap[i++].set(NW+W-NWW+p1-NWp1-Wp1+buf(w+stride*2+1));
-    SCMap[i++].set(NW+W-NWW+p2-NWp2-Wp2+buf(w+stride*2+2));
-    SCMap[i++].set(W*2-WW);
-    SCMap[i++].set(W*2-WW+p1-Wp1*2+WWp1);
-    SCMap[i++].set(W*2-WW+p2-Wp2*2+WWp2);
-    SCMap[i++].set(N*2-NN);
-    SCMap[i++].set(N*2-NN+p1-Np1*2+NNp1);
-    SCMap[i++].set(N*2-NN+p2-Np2*2+NNp2);
-    SCMap[i++].set(NW*2-NNWW);
-    SCMap[i++].set(NW*2-NNWW+p1-NWp1*2+buf(w*2+stride*2+1));
-    SCMap[i++].set(NW*2-NNWW+p2-NWp2*2+buf(w*2+stride*2+2));
-    SCMap[i++].set(NE*2-NNEE);
-    SCMap[i++].set(NE*2-NNEE+p1-NEp1*2+buf(w*2-stride*2+1));
-    SCMap[i++].set(NE*2-NNEE+p2-NEp2*2+buf(w*2-stride*2+2));
-    SCMap[i++].set(N*3-NN*3+NNN+p1-Np1*3+NNp1*3-buf(w*3+1));
-    SCMap[i++].set(N*3-NN*3+NNN+p2-Np2*3+NNp2*3-buf(w*3+2));
-    SCMap[i++].set(N*3-NN*3+NNN);
-    SCMap[i++].set((W+NE*2-NNE)/2);
-    SCMap[i++].set((W+NE*3-NNE*3+buf(w*3-stride))/2);
-    SCMap[i++].set((W+NE*2-NNE)/2+p1-(Wp1+NEp1*2-buf(w*2-stride+1))/2);
-    SCMap[i++].set((W+NE*2-NNE)/2+p2-(Wp2+NEp2*2-buf(w*2-stride+2))/2);
-    SCMap[i++].set(NNE+NE-buf(w*3-stride));
-    SCMap[i++].set(NNE+W-NN);
-    SCMap[i++].set(NNW+W-NNWW);
-
-    i=0;
     Map[i++].set((W&0xC0)|((N&0xC0)>>2)|((WW&0xC0)>>4)|(NN>>6));
     Map[i++].set((N&0xC0)|((NN&0xC0)>>2)|((NE&0xC0)>>4)|(NEE>>6));
     Map[i++].set(buf(1));
     Map[i++].set(min(color, stride-1));
+    if (Stats) {
+        Stats->Image.plane = std::min<int>(color, stride-1);
+        Stats->Image.pixels.W = W;
+        Stats->Image.pixels.N = N;
+        Stats->Image.pixels.NN = NN;
+        Stats->Image.pixels.WW = WW;
+        Stats->Image.pixels.Wp1 = Wp1;
+        Stats->Image.pixels.Np1 = Np1;
+        Stats->Image.ctx = ctx[0]>>3;
+      }
   }
   if (bpos==0 || bpos==4) {
     U8 B=(c0<<(8-bpos)), lsb=(bpos>0);
@@ -4475,6 +4575,66 @@ void im24bitModel(Mixer& m, int w, int alpha=0) {
     Map[i++].set((((W+N)*3-NW*2)/4-B)*2+lsb);
     Map[i++].set((N-B)*2+lsb);
     Map[i++].set((NN-B)*2+lsb);
+
+    i=0;
+    SCMap[i++].set((N+p1-Np1-B)*2+lsb);
+    SCMap[i++].set((N+p2-Np2-B)*2+lsb);
+    SCMap[i++].set((W+p1-Wp1-B)*2+lsb);
+    SCMap[i++].set((W+p2-Wp2-B)*2+lsb);
+    SCMap[i++].set((NW+p1-NWp1-B)*2+lsb);
+    SCMap[i++].set((NW+p2-NWp2-B)*2+lsb);
+    SCMap[i++].set((NE+p1-NEp1-B)*2+lsb);
+    SCMap[i++].set((NE+p2-NEp2-B)*2+lsb);
+    SCMap[i++].set((NN+p1-NNp1-B)*2+lsb);
+    SCMap[i++].set((NN+p2-NNp2-B)*2+lsb);
+    SCMap[i++].set((WW+p1-WWp1-B)*2+lsb);
+    SCMap[i++].set((WW+p2-WWp2-B)*2+lsb);
+    SCMap[i++].set((W+N-NW-B)*2+lsb);
+    SCMap[i++].set((W+N-NW+p1-Wp1-Np1+NWp1-B)*2+lsb);
+    SCMap[i++].set((W+N-NW+p2-Wp2-Np2+NWp2-B)*2+lsb);
+    SCMap[i++].set((W+NE-N-B)*2+lsb);
+    SCMap[i++].set((W+NE-N+p1-Wp1-NEp1+Np1-B)*2+lsb);
+    SCMap[i++].set((W+NE-N+p2-Wp2-NEp2+Np2-B)*2+lsb);
+    SCMap[i++].set((W+NEE-NE-B)*2+lsb);
+    SCMap[i++].set((W+NEE-NE+p1-Wp1-buf(w-stride*2+1)+NEp1-B)*2+lsb);
+    SCMap[i++].set((W+NEE-NE+p2-Wp2-buf(w-stride*2+2)+NEp2-B)*2+lsb);
+    SCMap[i++].set((N+NN-NNN-B)*2+lsb);
+    SCMap[i++].set((N+NN-NNN+p1-Np1-NNp1+buf(w*3+1)-B)*2+lsb);
+    SCMap[i++].set((N+NN-NNN+p2-Np2-NNp2+buf(w*3+2)-B)*2+lsb);
+    SCMap[i++].set((N+NE-NNE-B)*2+lsb);
+    SCMap[i++].set((N+NE-NNE+p1-Np1-NEp1+buf(w*2-stride+1)-B)*2+lsb);
+    SCMap[i++].set((N+NE-NNE+p2-Np2-NEp2+buf(w*2-stride+2)-B)*2+lsb);
+    SCMap[i++].set((N+NW-NNW-B)*2+lsb);
+    SCMap[i++].set((N+NW-NNW+p1-Np1-NWp1+buf(w*2+stride+1)-B)*2+lsb);
+    SCMap[i++].set((N+NW-NNW+p2-Np2-NWp2+buf(w*2+stride+2)-B)*2+lsb);
+    SCMap[i++].set((NE+NW-NN-B)*2+lsb);
+    SCMap[i++].set((NE+NW-NN+p1-NEp1-NWp1+NNp1-B)*2+lsb);
+    SCMap[i++].set((NE+NW-NN+p2-NEp2-NWp2+NNp2-B)*2+lsb);
+    SCMap[i++].set((NW+W-NWW-B)*2+lsb);
+    SCMap[i++].set((NW+W-NWW+p1-NWp1-Wp1+buf(w+stride*2+1)-B)*2+lsb);
+    SCMap[i++].set((NW+W-NWW+p2-NWp2-Wp2+buf(w+stride*2+2)-B)*2+lsb);
+    SCMap[i++].set((W*2-WW-B)*2+lsb);
+    SCMap[i++].set((W*2-WW+p1-Wp1*2+WWp1-B)*2+lsb);
+    SCMap[i++].set((W*2-WW+p2-Wp2*2+WWp2-B)*2+lsb);
+    SCMap[i++].set((N*2-NN-B)*2+lsb);
+    SCMap[i++].set((N*2-NN+p1-Np1*2+NNp1-B)*2+lsb);
+    SCMap[i++].set((N*2-NN+p2-Np2*2+NNp2-B)*2+lsb);
+    SCMap[i++].set((NW*2-NNWW-B)*2+lsb);
+    SCMap[i++].set((NW*2-NNWW+p1-NWp1*2+buf(w*2+stride*2+1)-B)*2+lsb);
+    SCMap[i++].set((NW*2-NNWW+p2-NWp2*2+buf(w*2+stride*2+2)-B)*2+lsb);
+    SCMap[i++].set((NE*2-NNEE-B)*2+lsb);
+    SCMap[i++].set((NE*2-NNEE+p1-NEp1*2+buf(w*2-stride*2+1)-B)*2+lsb);
+    SCMap[i++].set((NE*2-NNEE+p2-NEp2*2+buf(w*2-stride*2+2)-B)*2+lsb);
+    SCMap[i++].set((N*3-NN*3+NNN+p1-Np1*3+NNp1*3-buf(w*3+1)-B)*2+lsb);
+    SCMap[i++].set((N*3-NN*3+NNN+p2-Np2*3+NNp2*3-buf(w*3+2)-B)*2+lsb);
+    SCMap[i++].set((N*3-NN*3+NNN-B)*2+lsb);
+    SCMap[i++].set(((W+NE*2-NNE)/2-B)*2+lsb);
+    SCMap[i++].set(((W+NE*3-NNE*3+buf(w*3-stride))/2-B)*2+lsb);
+    SCMap[i++].set(((W+NE*2-NNE)/2+p1-(Wp1+NEp1*2-buf(w*2-stride+1))/2-B)*2+lsb);
+    SCMap[i++].set(((W+NE*2-NNE)/2+p2-(Wp2+NEp2*2-buf(w*2-stride+2))/2-B)*2+lsb);
+    SCMap[i++].set((NNE+NE-buf(w*3-stride)-B)*2+lsb);
+    SCMap[i++].set((NNE+W-NN-B)*2+lsb);
+    SCMap[i++].set((NNW+W-NNWW-B)*2+lsb);
   }
   
   // Predict next bit
@@ -4531,7 +4691,7 @@ struct BMPImage{
   U32 Header, Offset, Bpp, Size, Palette, HdrLess, Width, Height, BitMask;
 };
 
-int imgModel(Mixer& m, ModelStats *Stats = NULL) {
+int imgModel(Mixer& m, ModelStats *Stats = nullptr) {
   static int w=0, bpp=0;
   static int eoi=0;
   static BMPImage BMP;
@@ -4638,8 +4798,8 @@ int imgModel(Mixer& m, ModelStats *Stats = NULL) {
     switch (bpp){
       case 1 : im1bitModel(m, w); break;
       case 4 : im4bitModel(m, w); break;
-      case 8 : im8bitModel(m, w, gray); break;
-      default: im24bitModel(m, w, alpha);
+      case 8 : im8bitModel(m, w, Stats, gray); if (Stats) Stats->Type=(gray)?preprocessor::IMAGE8GRAY:preprocessor::IMAGE8; break;
+      default: im24bitModel(m, w, Stats, alpha); if (Stats) Stats->Type=(alpha)?preprocessor::IMAGE32:preprocessor::IMAGE24;
     }
   }
   if (bpos==7 && (pos+1)==eoi){
@@ -4689,15 +4849,14 @@ inline int X2(int i) {
   }
 }
 
-void wavModel(Mixer& m, int info, ModelStats *Stats = NULL) {
+void wavModel(Mixer& m, int info, ModelStats *Stats = nullptr) {
   static int pr[3][2], n[2], counter[2];
   static double F[49][49][2],L[49][49];
   static int rpos=0, lastPos=0;
   int j,k,l,i=0;
   long double sum;
   const double a=0.996,a2=1/a;
-  const int SC=0x20000;
-  static SmallStationaryContextMap scm1(SC), scm2(SC), scm3(SC), scm4(SC), scm5(SC), scm6(SC), scm7(SC);
+  static SmallStationaryContextMap scm1(8,8), scm2(8,8), scm3(8,8), scm4(8,8), scm5(8,8), scm6(8,8), scm7(8,8);
   static ContextMap cm(MEM()*2, 10+1);
   static int bits, channels, w, ch, col=0;
   static int z1, z2, z3, z4, z5, z6, z7;
@@ -4842,7 +5001,7 @@ struct WAVAudio{
   U32 Header, Size, Channels, BitsPerSample, Chunk, Data;
 };
 
-int audioModel(Mixer& m, ModelStats *Stats = NULL) {
+int audioModel(Mixer& m, ModelStats *Stats = nullptr) {
   static U32 eoi=0, length=0, info=0;
   static WAVAudio WAV;
 
@@ -4860,9 +5019,9 @@ int audioModel(Mixer& m, ModelStats *Stats = NULL) {
       }
       else if (p==8)
         WAV.Header*=(m4(4)==0x57415645); // "WAVE"
-      else if (p==(int)(16+length) && (m4(8)!=0x666d7420 || i4(4)!=16)){ // "fmt ", chunk size=16. should be first chunk in the file, but sometimes it's not
+      else if (p==(int)(16+length) && (m4(8)!=0x666d7420 || ((WAV.Chunk=i4(4)-16)&0xFFFFFFFD)!=0)){ // "fmt ", chunk size=16 or 18. should be first chunk in the file, but sometimes it's not
         length = ((i4(4)+1)&(-2)) + 8; // word aligned
-        WAV.Header*=!(m4(8)==0x666d7420 && i4(4)!=16); // was "fmt " chunk, but not 16bytes
+        WAV.Header*=!(m4(8)==0x666d7420 && (i4(4)&0xFFFFFFFD)!=16); // was "fmt " chunk, but not 16 or 18 bytes
       }
       else if (p==(int)(20+length)){ // check for uncompressed audio ( 0100 xx xx ) and channels ( xx xx 0? 00 )
         WAV.Channels = buf(2);
@@ -5592,11 +5751,11 @@ int jpegModel(Mixer& m) {
   m1.add(128);
   jassert(hbcount<=2);
   int p;
- switch(hbcount)
+  switch(hbcount)
   {
-   case 0: for (int i=0; i<N; ++i){ cp[i]=t[cxt[i]]+1, m1.add(p=stretch(sm[i].p(*cp[i]))); m.add(p);} break;
-   case 1: { int hc=1+(huffcode&1)*3; for (int i=0; i<N; ++i){ cp[i]+=hc, m1.add(p=stretch(sm[i].p(*cp[i]))); m.add(p); }} break;
-   default: { int hc=1+(huffcode&1); for (int i=0; i<N; ++i){ cp[i]+=hc, m1.add(p=stretch(sm[i].p(*cp[i]))); m.add(p); }} break;
+    case 0: for (int i=0; i<N; ++i){ cp[i]=t[cxt[i]]+1, p=sm[i].p(*cp[i]); m.add((p-2048)>>2); m1.add(p=stretch(p)); m.add(p);} break;
+    case 1: { int hc=1+(huffcode&1)*3; for (int i=0; i<N; ++i){ cp[i]+=hc, p=sm[i].p(*cp[i]); m.add((p-2048)>>2); m1.add(p=stretch(p)); m.add(p); }} break;
+    default: { int hc=1+(huffcode&1); for (int i=0; i<N; ++i){ cp[i]+=hc, p=sm[i].p(*cp[i]); m.add((p-2048)>>2); m1.add(p=stretch(p)); m.add(p); }} break;
   }
 
   m1.set(firstcol, 2);
@@ -6300,7 +6459,7 @@ U32 execxt(int i, int x=0) {
   return prefix|opcode<<4|modrm<<12|x<<20|sib<<(28-6);
 }
 
-bool exeModel(Mixer& m, bool Forced = false, ModelStats *Stats = NULL) {
+bool exeModel(Mixer& m, bool Forced = false, ModelStats *Stats = nullptr) {
   const int N1=9, N2=10;
   static ContextMap2 cm(MEM()*2, N1+N2);
   static OpCache Cache;
@@ -6553,7 +6712,7 @@ bool exeModel(Mixer& m, bool Forced = false, ModelStats *Stats = NULL) {
   if (Valid || Forced)
     cm.mix(m);
   else{
-      for (int i=0; i<(N1+N2)*8; ++i)
+      for (int i=0; i<(N1+N2)*7; ++i)
         m.add(0);
   }
   U8 s = ((StateBH[Context]>>(28-bpos))&0x08) |
@@ -6780,7 +6939,7 @@ enum XMLState {
     (*Content).Type |= ISBN; \
 }
 
-void XMLModel(Mixer& m, ModelStats *Stats = NULL){
+void XMLModel(Mixer& m, ModelStats *Stats = nullptr){
   static ContextMap cm(MEM()/4, 4);
   static XMLTagCache Cache;
   static U32 StateBH[8];
@@ -6966,17 +7125,17 @@ void XMLModel(Mixer& m, ModelStats *Stats = NULL){
 
 U32 last_prediction = 2048;
 
-int contextModel2() {
-  static ContextMap2 cm(MEM()*31, 9);
+int contextModel2(ModelStats *Stats) {
+  static ContextMap2 cm(MEM()*32, 9);
   static TextModel textModel(MEM()*16);
   static MatchModel matchModel(MEM()*4);
   static RunContextMap rcm7(MEM()), rcm9(MEM()), rcm10(MEM());
+  static StateMap32 StateMaps[2]={{256},{256*256}};
   static Mixer m(NUM_INPUTS, 10800+1024*21+16384+8192, NUM_SETS, 32);
   static U32 cxt[16];
   static Filetype ft2,filetype=preprocessor::DEFAULT;
   static int size=0;  // bytes remaining in block
   static int info=0;  // image width or audio type
-  static ModelStats stats;
 
   // Parse filetype and size
   if (bpos==0) {
@@ -6995,21 +7154,13 @@ int contextModel2() {
     }
     if (!blpos) filetype=ft2;
     if (size==0) filetype=preprocessor::DEFAULT;
+    if (Stats)
+      Stats->Type = filetype;
   }
 
   m.update();
   m.add(64);
-
-  int ismatch=ilog(matchModel.Predict(m, buf, &stats));
-  if (filetype==preprocessor::IMAGE1) return im1bitModel(m, info), m.p();
-  if (filetype==preprocessor::IMAGE4) return im4bitModel(m, info), m.p();
-  if (filetype==preprocessor::IMAGE8) return im8bitModel(m, info), m.p();
-  if (filetype==preprocessor::IMAGE8GRAY) return im8bitModel(m, info, 1), m.p();
-  if (filetype==preprocessor::IMAGE24) return im24bitModel(m, info), m.p();
-  if (filetype==preprocessor::IMAGE32) return im24bitModel(m, info, 1), m.p();
-  if ((filetype!=preprocessor::EXE && jpegModel(m)) || (size>0 && imgModel(m, &stats)) || audioModel(m, &stats))
-    return m.p();
-
+  
   if (bpos==0) {
     for (int i=15; i>0; --i)
       cxt[i]=cxt[i-1]*257+(c4&255)+1;
@@ -7021,26 +7172,37 @@ int contextModel2() {
     rcm10.set(cxt[12]);
     cm.set(cxt[14]);
   }
+  m.add((stretch(StateMaps[0].p(c0))+1)>>1);
+  m.add((stretch(StateMaps[1].p(c0|(buf(1)<<8)))+1)>>1);
   int order=cm.mix(m);
-
   rcm7.mix(m);
   rcm9.mix(m);
   rcm10.mix(m);
+
+  int ismatch=ilog(matchModel.Predict(m, buf, Stats));
+  if (filetype==preprocessor::IMAGE1) return im1bitModel(m, info), m.p();
+  if (filetype==preprocessor::IMAGE4) return im4bitModel(m, info), m.p();
+  if (filetype==preprocessor::IMAGE8) return im8bitModel(m, info, Stats), m.p();
+  if (filetype==preprocessor::IMAGE8GRAY) return im8bitModel(m, info, Stats, 1), m.p();
+  if (filetype==preprocessor::IMAGE24) return im24bitModel(m, info, Stats), m.p();
+  if (filetype==preprocessor::IMAGE32) return im24bitModel(m, info, Stats, 1), m.p();
+  if ((filetype!=preprocessor::EXE && jpegModel(m)) || (size>0 && imgModel(m, Stats)) || audioModel(m, Stats))
+    return m.p();
 
   if (level>=4) {
     sparseModel(m,ismatch,order);
     sparseModel1(m,ismatch,order);
     distanceModel(m);
     picModel(m);
-    recordModel(m, filetype, &stats);
+    recordModel(m, filetype, Stats);
     recordModel1(m);
     wordModel(m);
     nestModel(m);
     indirectModel(m);
     dmcModel(m);
-    XMLModel(m, &stats);
-    textModel.Predict(m, buf, &stats);
-    exeModel(m, true, &stats);
+    XMLModel(m, Stats);
+    textModel.Predict(m, buf, Stats);
+    exeModel(m, true, Stats);
   }
 
   order = order-5;
@@ -7067,23 +7229,49 @@ int contextModel2() {
 
 class Predictor {
   int pr;
+  struct {
+    APM APMs[4];
+    APM1 APM1s[3];
+  } Text;
+  struct {
+    struct {
+      APM APMs[4];
+      APM1 APM1s[2];
+    } Color, Palette;
+    struct {
+      APM APMs[3];
+    } Gray;
+  } Image;
+  struct {
+    APM1 APM1s[7];
+  } Generic;
+  ModelStats stats;
 public:
   Predictor();
   int p() const {return pr;}
   void update();
 };
 
-Predictor::Predictor(): pr(2048) {
+Predictor::Predictor():
+  pr(2048),
+  Text{{{0x10000}, {0x10000}, {0x10000}, {0x10000}}, {{0x10000}, {0x10000}, {0x10000}}},
+  Image{ 
+    {{{0x1000}, {0x10000}, {0x10000}, {0x10000}}, {{0x10000}, {0x10000}}}, // color
+    {{{0x1000}, {0x10000}, {0x10000}, {0x10000}}, {{0x10000}, {0x10000}}}, // palette
+    {{{0x1000}, {0x10000}, {0x10000}}} //gray
+  },
+  Generic{{{0x10000}, {0x10000}, {0x10000}, {0x10000}, {0x10000}, {0x10000}, {0x10000}}}
+  {
+  memset(&stats, 0, sizeof(ModelStats));
   for (int i=0; i<1024; ++i)
     dt[i]=16384/(i+i+3);
 }
 
 void Predictor::update() {
-  static APM a(256), a1(0x10000), a2(0x10000), a3(0x10000),
-                      a4(0x10000), a5(0x10000), a6(0x10000);
   static U32 x5=0;
 
   c0+=c0+y;
+  stats.Misses+=stats.Misses+((pr>>11)!=y);
   if (c0>=256) {
      buf[pos++]=c0;
      c0-=256;
@@ -7105,33 +7293,88 @@ void Predictor::update() {
      c0=1;
   }
   bpos=(bpos+1)&7;
-
-  int pr0=contextModel2();
+  
+  int pr0=contextModel2(&stats);
   AddPrediction(pr0);
+  
+  int pr1, pr2, pr3;
+  switch (stats.Type) {
+    case preprocessor::TEXT: {
+      int limit=0x3FF>>((blpos<0xFFF)*2);
+      pr  = Text.APMs[0].p(pr0, (c0<<8)|(stats.Text.mask&0xF)|((stats.Misses&0xF)<<4), limit); AddPrediction(pr);
+      pr1 = Text.APMs[1].p(pr0, hash(bpos, stats.Misses&3, buf(1), buf(2), stats.Text.mask>>4)&0xFFFF, limit); AddPrediction(pr1);
+      pr2 = Text.APMs[2].p(pr0, hash(c0, stats.Match.expectedByte, std::min<U32>(3, ilog2(stats.Match.length+1)))&0xFFFF, limit); AddPrediction(pr2);
+      pr3 = Text.APMs[3].p(pr0, hash(c0, buf(1), buf(2), stats.Text.firstLetter)&0xFFFF, limit); AddPrediction(pr3);
 
-  pr=a.p(pr0, c0);
-  AddPrediction(pr);
+      pr0 = (pr0+pr1+pr2+pr3+2)>>2; AddPrediction(pr0);
 
-  int pr1=a1.p(pr0, c0+256*buf(1));
-  AddPrediction(pr1);
-  int pr2=a2.p(pr0, c0^(hash(buf(1), buf(2))&0xffff));
-  AddPrediction(pr2);
-  int pr3=a3.p(pr0, c0^(hash(buf(1), buf(2), buf(3))&0xffff));
-  AddPrediction(pr3);
-  pr0=(pr0+pr1+pr2+pr3+2)>>2;
-  AddPrediction(pr0);
+      pr1 = Text.APM1s[0].p(pr0, hash(stats.Match.expectedByte, std::min<U32>(3, ilog2(stats.Match.length+1)), buf(1))&0xFFFF); AddPrediction(pr1);
+      pr2 = Text.APM1s[1].p(pr, hash(c0, buf(1), buf(2), buf(3))&0xFFFF, 6); AddPrediction(pr2);
+      pr3 = Text.APM1s[2].p(pr, hash(c0, buf(2), buf(3), buf(4))&0xFFFF, 6); AddPrediction(pr3);
+      
+      pr = (pr+pr1+pr2+pr3+2)>>2; AddPrediction(pr);
+      pr = (pr+pr0+1)>>1; AddPrediction(pr);
+      break;
+    }
+    case preprocessor::IMAGE24: case preprocessor::IMAGE32: {
+      int limit=0x3FF>>((blpos<0xFFF)*4);
+      pr  = Image.Color.APMs[0].p(pr0, (c0<<4)|(stats.Misses&0xF), limit); AddPrediction(pr);
+      pr1 = Image.Color.APMs[1].p(pr0, hash(c0, stats.Image.pixels.W, stats.Image.pixels.WW)&0xFFFF, limit); AddPrediction(pr1);
+      pr2 = Image.Color.APMs[2].p(pr0, hash(c0, stats.Image.pixels.N, stats.Image.pixels.NN)&0xFFFF, limit); AddPrediction(pr2);
+      pr3 = Image.Color.APMs[3].p(pr0, (c0<<8)|stats.Image.ctx, limit); AddPrediction(pr3);
 
-  pr1=a4.p(pr, c0+256*buf(1));
-  AddPrediction(pr1);
-  pr2=a5.p(pr, c0^(hash(buf(1), buf(2))&0xffff));
-  AddPrediction(pr2);
-  pr3=a6.p(pr, c0^(hash(buf(1), buf(2), buf(3))&0xffff));
-  AddPrediction(pr3);
-  pr=(pr+pr1+pr2+pr3+2)>>2;
-  AddPrediction(pr);
+      pr0 = (pr0+pr1+pr2+pr3+2)>>2; AddPrediction(pr0);
 
-  pr=(pr+pr0+1)>>1;
-  AddPrediction(pr);
+      pr1 = Image.Color.APM1s[0].p(pr, hash(c0, stats.Image.pixels.W, buf(1)-stats.Image.pixels.Wp1, stats.Image.plane)&0xFFFF); AddPrediction(pr1);
+      pr2 = Image.Color.APM1s[1].p(pr, hash(c0, stats.Image.pixels.N, buf(1)-stats.Image.pixels.Np1, stats.Image.plane)&0xFFFF); AddPrediction(pr2);
+
+      pr=(pr*2+pr1*3+pr2*3+4)>>3; AddPrediction(pr);
+      pr = (pr+pr0+1)>>1; AddPrediction(pr);
+      break;
+    }
+    case preprocessor::IMAGE8GRAY: {
+      int limit=0x3FF>>((blpos<0xFFF)*4);
+      pr  = Image.Gray.APMs[0].p(pr0, (c0<<4)|(stats.Misses&0xF), limit); AddPrediction(pr);
+      pr1 = Image.Gray.APMs[1].p(pr, (c0<<8)|stats.Image.ctx, limit); AddPrediction(pr1);
+      pr2 = Image.Gray.APMs[2].p(pr0, bpos|(stats.Image.ctx&0xF8)|(stats.Match.expectedByte<<8), limit); AddPrediction(pr2);
+
+      pr0 = (2*pr0+pr1+pr2+2)>>2; AddPrediction(pr0);
+      pr = (pr+pr0+1)>>1; AddPrediction(pr);
+      break;
+    }
+    case preprocessor::IMAGE8: {
+      int limit=0x3FF>>((blpos<0xFFF)*4);
+      pr  = Image.Palette.APMs[0].p(pr0, (c0<<4)|(stats.Misses&0xF), limit); AddPrediction(pr);
+      pr1 = Image.Palette.APMs[1].p(pr0, hash(c0, stats.Image.pixels.W, stats.Image.pixels.N)&0xFFFF, limit); AddPrediction(pr1);
+      pr2 = Image.Palette.APMs[2].p(pr0, hash(c0, stats.Image.pixels.N, stats.Image.pixels.NN)&0xFFFF, limit); AddPrediction(pr2);
+      pr3 = Image.Palette.APMs[3].p(pr0, hash(c0, stats.Image.pixels.W, stats.Image.pixels.WW)&0xFFFF, limit); AddPrediction(pr3);
+
+      pr0 = (pr0+pr1+pr2+pr3+2)>>2; AddPrediction(pr0);
+      
+      pr1 = Image.Palette.APM1s[0].p(pr0, hash(c0, stats.Match.expectedByte, stats.Image.pixels.N)&0xFFFF, 5); AddPrediction(pr1);
+      pr2 = Image.Palette.APM1s[1].p(pr, hash(c0, stats.Image.pixels.W, stats.Image.pixels.N)&0xFFFF, 6); AddPrediction(pr2);
+
+      pr = (pr*2+pr1+pr2+2)>>2; AddPrediction(pr);
+      pr = (pr+pr0+1)>>1; AddPrediction(pr);
+      break;
+    }
+    default: {
+      pr  = Generic.APM1s[0].p(pr0, c0); AddPrediction(pr);
+      pr1 = Generic.APM1s[1].p(pr0, c0+256*buf(1)); AddPrediction(pr1);
+      pr2 = Generic.APM1s[2].p(pr0, (c0^hash(buf(1), buf(2)))&0xFFFF); AddPrediction(pr2);
+      pr3 = Generic.APM1s[3].p(pr0, (c0^hash(buf(1), buf(2), buf(3)))&0xFFFF); AddPrediction(pr3);
+
+      pr0 = (pr0+pr1+pr2+pr3+2)>>2; AddPrediction(pr0);
+
+      pr1 = Generic.APM1s[4].p(pr, c0+256*buf(1)); AddPrediction(pr1);
+      pr2 = Generic.APM1s[5].p(pr, (c0^hash(buf(1), buf(2)))&0xFFFF); AddPrediction(pr2);
+      pr3 = Generic.APM1s[6].p(pr, (c0^hash(buf(1), buf(2), buf(3)))&0xFFFF); AddPrediction(pr3);
+
+      pr = (pr+pr1+pr2+pr3+2)>>2; AddPrediction(pr);
+      pr = (pr+pr0+1)>>1; AddPrediction(pr);
+    }
+  }
+  
   ResetPredictions();
   last_prediction = pr;
 }
