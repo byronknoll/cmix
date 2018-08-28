@@ -300,12 +300,24 @@ int decode_default(FILE* in) {
   return getc(in);
 }
 
+#define RGB565_MIN_RUN 63
 void encode_bmp(FILE* in, FILE* out, int len, int width) {
   fprintf(out, "%c%c%c%c", width>>24, width>>16, width>>8, width);
-  int r,g,b;
+  int r,g,b, total=0;
+  bool isPossibleRGB565 = true;
   for (int i=0; i<len/width; i++) {
     for (int j=0; j<width/3; j++) {
       b=getc(in), g=getc(in), r=getc(in);
+      if (isPossibleRGB565) {
+        int pTotal=total;
+        total=std::min<int>(total+1, 0xFFFF)*((b&7)==((b&8)-((b>>3)&1)) && (g&3)==((g&4)-((g>>2)&1)) && (r&7)==((r&8)-((r>>3)&1)));
+        if (total>RGB565_MIN_RUN || pTotal>=RGB565_MIN_RUN) {
+          b^=(b&8)-((b>>3)&1);
+          g^=(g&4)-((g>>2)&1);
+          r^=(r&8)-((r>>3)&1);
+        }
+        isPossibleRGB565=total>0;
+      }
       putc(g, out);
       putc(g-r, out);
       putc(g-b, out);
@@ -315,13 +327,15 @@ void encode_bmp(FILE* in, FILE* out, int len, int width) {
 }
 
 int decode_bmp(FILE *in, int &reset) {
-  static int width = 0;
+  static int width = 0, total = 0;
+  static bool isPossibleRGB565 = true;
   if (width == 0 || reset) {
     width=getc(in)<<24;
     width|=getc(in)<<16;
     width|=getc(in)<<8;
     width|=getc(in);
-    reset=0;
+    reset=total=0;
+    isPossibleRGB565 = true;
   }
 
   static int r,g,b;
@@ -329,17 +343,26 @@ int decode_bmp(FILE *in, int &reset) {
 
   if (state1 < width/3) {
     if (state2 == 0) {
-      b=getc(in), g=getc(in), r=getc(in);
+      g=getc(in), r=g-getc(in), b=g-getc(in);
       ++state2;
-      return (b-r)&255;
+      if (isPossibleRGB565){
+        if (total>=RGB565_MIN_RUN) {
+          b^=(b&8)-((b>>3)&1);
+          g^=(g&4)-((g>>2)&1);
+          r^=(r&8)-((r>>3)&1);
+        }
+        total=std::min<int>(total+1, 0xFFFF)*((b&7)==((b&8)-((b>>3)&1)) && (g&3)==((g&4)-((g>>2)&1)) && (r&7)==((r&8)-((r>>3)&1)));
+        isPossibleRGB565=total>0;
+      }
+      return b&255;
     } else if (state2 == 1) {
       ++state2;
-      return b;
+      return g;
     } else if (state2 == 2) {
       ++state1;
       if (width%3 == 0) state1 = 0;
       state2 = 0;
-      return (b-g)&255;
+      return r&255;
     }
   } else {
     ++state2;

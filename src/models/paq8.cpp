@@ -492,7 +492,7 @@ void train(short *t, short *w, int n, int err) {
 }
 #endif
 
-#define NUM_INPUTS 1429
+#define NUM_INPUTS 1438
 #define NUM_SETS 23
 
 std::valarray<float> model_predictions(0.5, NUM_INPUTS + NUM_SETS + 11);
@@ -3212,7 +3212,7 @@ private:
   Array<U32> Table;
   StateMap32 **StateMaps;
   SmallStationaryContextMap **SCM;
-  StationaryMap Map;
+  StationaryMap **Maps;
   U32 hashes[NumHashes];
   U32 ctx[NumCtxs];
   U32 length;    // rebased length of match (length=1 represents the smallest accepted match length), or 0 if no match
@@ -3264,14 +3264,14 @@ private:
     SCM[0]->set(expectedByte);
     SCM[1]->set(expectedByte);
     SCM[2]->set(pos);
-    Map.set((expectedByte<<8)|buffer(1));
+    Maps[0]->set((expectedByte<<8)|buffer(1));
+    Maps[1]->set(hash(expectedByte, c0, buffer(1), buffer(2)));
     if (Stats)
       Stats->Match.expectedByte = (length>0)?expectedByte:0;
   }
 public:
   MatchModel(const U32 Size) :
     Table(Size/sizeof(U32)),
-    Map{16, 8},
     hashes{ 0 },
     ctx{ 0 },
     length(0),
@@ -3287,6 +3287,9 @@ public:
     SCM[0] = new SmallStationaryContextMap(8,8);
     SCM[1] = new SmallStationaryContextMap(11,1);
     SCM[2] = new SmallStationaryContextMap(8,8);
+    Maps = new StationaryMap*[2];
+    Maps[0] = new StationaryMap(16,8);
+    Maps[1] = new StationaryMap(20,1);
   }
   ~MatchModel(){
     for (U32 i=0; i<NumCtxs; i++)
@@ -3295,12 +3298,17 @@ public:
     for (U32 i=0; i<3; i++)
       delete SCM[i];
     delete[] SCM;
+    for (U32 i=0; i<2; i++)
+      delete Maps[i];
+    delete[] Maps;
   }
   int Predict(Mixer& mixer, Buf& buffer, ModelStats *Stats = nullptr) {
     if (bpos==0)
       Update(buffer, Stats);
-    else
+    else{
       SCM[1]->set((bpos<<8)|(expectedByte^U8(c0<<(8-bpos))));
+      Maps[1]->set(hash(expectedByte, c0, buffer(1), buffer(2)));
+    }
     const int expectedBit = (expectedByte>>(7-bpos))&1;
 
     if(length>0) {
@@ -3344,10 +3352,137 @@ public:
     SCM[0]->mix(mixer);
     SCM[1]->mix(mixer, 6);
     SCM[2]->mix(mixer, 5);
-    Map.mix(mixer, 1, 4, 255);
+    Maps[0]->mix(mixer, 1, 4, 255);
+    Maps[1]->mix(mixer);
     
     if (Stats)
       Stats->Match.length = length;
+    return length;
+  }
+};
+
+class SparseMatchModel {
+private:
+  enum Parameters : U32 {
+    MaxLen    = 0xFFFF, // longest allowed match
+    MinLen    = 3,      // default minimum required match length
+    NumHashes = 2,      // number of hashes used
+  };
+  struct sparseConfig {
+    U32 offset    = 0;      // number of last input bytes to ignore when searching for a match
+    U32 stride    = 1;      // look for a match only every stride bytes after the offset
+    U32 deletions = 0;      // when a match is found, ignore these many initial post-match bytes, to model deletions
+    U32 minLen    = MinLen;
+    U32 bitMask   = 0xFF;   // match every byte according to this bit mask
+  };
+  Array<U32> Table;
+  StationaryMap **Maps;
+  sparseConfig sparse[NumHashes];
+  U32 hashes[NumHashes];
+  U32 hashIndex;   // index of hash used to find current match
+  U32 length;      // rebased length of match (length=1 represents the smallest accepted match length), or 0 if no match
+  U32 index;       // points to next byte of match in buffer, 0 when there is no match
+  U32 mask;
+  U8 expectedByte; // prediction is based on this byte (buffer[index]), valid only when length>0
+  bool valid;
+  void Update(Buf& buffer, ModelStats *Stats = nullptr) {
+    // update sparse hashes
+    for (U32 i=0; i<NumHashes; i++) {
+      hashes[i] = (i+1)*PHI;
+      for (U32 j=0, k=sparse[i].offset+1; j<sparse[i].minLen; j++, k+=sparse[i].stride)
+        hashes[i] = combine(hashes[i], (buffer(k)&sparse[i].bitMask)<<i);
+      hashes[i]&=mask;
+    }
+    // extend current match, if available
+    if (length) {
+      index++;
+      if (length<MaxLen)
+        length++;
+    }
+    // or find a new match
+    else {     
+      for (U32 i=0; i<NumHashes; i++) {
+        index = Table[hashes[i]];
+        if (index>0) {
+          U32 offset = sparse[i].offset+1;
+          while (length<sparse[i].minLen && ((buffer(offset)^buffer[index-offset])&sparse[i].bitMask)==0) {
+            length++;
+            offset+=sparse[i].stride;
+          }
+          if (length>=sparse[i].minLen) {
+            length-=(sparse[i].minLen-1);
+            index+=sparse[i].deletions;
+            hashIndex = i;
+            break;
+          }
+        }
+        length = index = 0;
+      }
+    }
+    // update position information in hashtable
+    for (U32 i=0; i<NumHashes; i++)
+      Table[hashes[i]] = pos;
+    
+    expectedByte = buffer[index];
+    
+    valid = length>1; // only predict after at least one byte following the match
+    if (valid) {
+      Maps[0]->set(hash(expectedByte, c0, buffer(1), buffer(2)));
+      Maps[1]->set((expectedByte<<8)|buffer(1));
+    }
+  }
+public:
+  SparseMatchModel(const U64 Size, const bool AllowBypass = false) :
+    Table(Size/sizeof(U32)),
+    hashes{ 0 },
+    hashIndex(0),
+    length(0),
+    mask(Size/sizeof(U32)-1),
+    expectedByte(0),
+    valid(false)
+  {
+    Maps = new StationaryMap*[2];
+    Maps[0] = new StationaryMap(20,1);
+    Maps[1] = new StationaryMap(14,4);
+    sparse[0].minLen=5, sparse[0].bitMask=0xDF;
+    sparse[1].offset=1, sparse[1].minLen=4;
+  }
+  ~SparseMatchModel(){
+    for (U32 i=0; i<2; i++)
+      delete Maps[i];
+    delete[] Maps;
+  }
+  int Predict(Mixer& mixer, Buf& buffer, ModelStats *Stats = nullptr) {
+    if (bpos==0)
+      Update(buffer, Stats);
+    else if (valid) {
+      Maps[0]->set(hash(expectedByte, c0, buffer(1), buffer(2)));
+      if (bpos==4)
+        Maps[1]->set(0x10000|((expectedByte^U8(c0<<4))<<8)|buffer(1));
+    }
+
+    // check if next bit matches the prediction, accounting for the required bitmask
+    if (length>0 && (((expectedByte^U8(c0<<(8-bpos)))&sparse[hashIndex].bitMask)>>(8-bpos))!=0)
+      length = 0;
+
+    if (valid) {
+      if (length>1 && ((sparse[hashIndex].bitMask>>(7-bpos))&1)>0) {
+        const int expectedBit = (expectedByte>>(7-bpos))&1;
+        const int sign = 2*expectedBit-1;
+        mixer.add(sign*(min(length-1, 64)<<4)); // +/- 16..1024
+        mixer.add(sign*(1<<min(length-2, 3))*min(length-1, 8)<<4); // +/- 16..1024
+        mixer.add(sign*512);
+      }
+      else {
+        mixer.add(0); mixer.add(0); mixer.add(0);
+      }
+
+      Maps[0]->mix(mixer, 1, 2);
+      Maps[1]->mix(mixer, 1, 2);
+    }
+    else
+      for (int i=0; i<7; i++, mixer.add(0));
+
     return length;
   }
 };
@@ -3388,7 +3523,7 @@ void wordModel(Mixer& m) {
     static U32 number0=0, number1=0;
     static U32 text0=0,data0=0,type0=0;
     static U32 lastLetter=0, firstLetter=0, lastUpper=0, lastDigit=0, wordGap=0;
-    static ContextMap cm(MEM()*32, 61);
+    static ContextMap cm(MEM()*16, 61);
     static int nl1=-3, nl=-2;
     static U32 mask=0, mask2=0;
     static Array<int> wpos(0x10000);
@@ -4678,7 +4813,7 @@ void im24bitModel(Mixer& m, int w, ModelStats *Stats = nullptr, int alpha=0) {
         else if (i==3)\
           gray&=((!B || (B==0xFF))*0x1FF); /* alpha/attribute component must be zero or 0xFF */\
         else\
-          gray&=((B==(gray&0xFF))<<9)-1;\
+          gray&=((B==(gray&0xFF))*0x1FF);\
       }\
   }\
 }
@@ -7125,9 +7260,10 @@ void XMLModel(Mixer& m, ModelStats *Stats = nullptr){
 U32 last_prediction = 2048;
 
 int contextModel2(ModelStats *Stats) {
-  static ContextMap2 cm(MEM()*32, 9);
+  static ContextMap2 cm(MEM()*16, 9);
   static TextModel textModel(MEM()*16);
-  static MatchModel matchModel(MEM()*4);
+  static MatchModel matchModel(MEM()*2);
+  static SparseMatchModel sparseMatchModel(MEM()/4);
   static RunContextMap rcm7(MEM()), rcm9(MEM()), rcm10(MEM());
   static StateMap32 StateMaps[2]={{256},{256*256}};
   static Mixer m(NUM_INPUTS, 10800+1024*21+16384+8192, NUM_SETS, 32);
@@ -7189,6 +7325,7 @@ int contextModel2(ModelStats *Stats) {
     return m.p();
 
   if (level>=4) {
+    sparseMatchModel.Predict(m, buf, Stats);
     sparseModel(m,ismatch,order);
     sparseModel1(m,ismatch,order);
     distanceModel(m);
