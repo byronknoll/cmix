@@ -7,23 +7,27 @@
 
 Mixer::Mixer(const std::valarray<float>& inputs,
     const unsigned long long& context, float learning_rate,
-    unsigned long long input_size) : inputs_(inputs), p_(0.5),
-    learning_rate_(learning_rate), context_(context), max_steps_(1), steps_(0),
-    input_size_(input_size) {}
+    unsigned int extra_input_size) : inputs_(inputs),
+    extra_inputs_(extra_input_size), p_(0.5), learning_rate_(learning_rate),
+    context_(context), max_steps_(1), steps_(0) {}
 
 ContextData* Mixer::GetContextData() {
   ContextData* data = context_map_[context_].get();
   if (data == nullptr) {
     context_map_[context_] = std::unique_ptr<ContextData>(
-        new ContextData(input_size_));
+        new ContextData(inputs_.size(), extra_inputs_.size()));
     data = context_map_[context_].get();
   }
   return data;
 }
 
-float Mixer::Mix() {
+float Mixer::Mix(const std::vector<float>& extra_inputs) {
   ContextData* data = GetContextData();
   p_ = (inputs_ * data->weights).sum();
+  for (unsigned int i = 0; i < extra_inputs_.size(); ++i) {
+    extra_inputs_[i] = extra_inputs[i];
+  }
+  p_ += (extra_inputs_ * data->extra_weights).sum();
   return p_;
 }
 
@@ -38,8 +42,10 @@ void Mixer::Perceive(int bit) {
     max_steps_ = data->steps;
   }
   data->weights -= update * inputs_;
+  data->extra_weights -= update * extra_inputs_;
   if (data->steps % 1000 == 0) {
     data->weights *= 1.0 - 3.0e-6;
+    data->extra_weights *= 1.0 - 3.0e-6;
   }
 }
 

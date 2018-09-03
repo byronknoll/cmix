@@ -7,25 +7,27 @@
 #include <memory>
 
 struct ContextData {
-  ContextData(unsigned long long input_size) : steps(0),
-      weights(0.0, input_size) {};
+  ContextData(unsigned long long input_size,
+      unsigned long long extra_input_size) : steps(0), weights(input_size),
+      extra_weights(extra_input_size) {};
   unsigned long long steps;
-  std::valarray<float> weights;
+  std::valarray<float> weights, extra_weights;
 };
 
 class Mixer {
  public:
   Mixer(const std::valarray<float>& inputs, const unsigned long long& context,
-      float learning_rate, unsigned long long input_size);
-  float Mix();
+      float learning_rate, unsigned int extra_input_size);
+  float Mix(const std::vector<float>& extra_inputs);
   void Perceive(int bit);
 
  private:
   ContextData* GetContextData();
   const std::valarray<float>& inputs_;
+  std::valarray<float> extra_inputs_;
   float p_, learning_rate_;
   const unsigned long long& context_;
-  unsigned long long max_steps_, steps_, input_size_;
+  unsigned long long max_steps_, steps_;
   std::unordered_map<unsigned int, std::unique_ptr<ContextData>> context_map_;
 };
 

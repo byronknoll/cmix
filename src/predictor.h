@@ -25,7 +25,8 @@ class Predictor {
   unsigned long long GetNumModels();
   void AddModel(Model* model);
   void AddByteModel(ByteModel* model);
-  void AddMixer(int layer, Mixer* mixer);
+  void AddMixer(int layer, const unsigned long long& context,
+      float learning_rate);
   void AddByteMixer(ByteMixer* byte_mixer);
   void AddAuxiliary();
   void AddPAQ8();
