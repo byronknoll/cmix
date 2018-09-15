@@ -4402,16 +4402,45 @@ void im4bitModel(Mixer& m, int w) {
 }
 
 void im8bitModel(Mixer& m, int w, ModelStats *Stats = nullptr, int gray = 0) {
-  const int nMaps = 57;
+  static const int nOLS = 5;
+  static const int nMaps0 = 2;
+  static const int nMaps1 = 55;
+  static const int nMaps = nMaps0 + nMaps1 + nOLS;
   static ContextMap cm(MEM()*4, 48);
-  static StationaryMap Map[nMaps] = {
-    {12,8}, {8,8}, {8,8}, {8,8}, {8,8}, {8,8}, {8,8}, {8,8}, {8,8}, {8,8}, {8,8}, {8,8}, {8,8}, {8,8}, {8,8}, {8,8}, {8,8}, {8,8}, {8,8}, {8,8},
-     {8,8}, {8,8}, {8,8}, {8,8}, {8,8}, {8,8}, {8,8}, {8,8}, {8,8}, {8,8}, {8,8}, {8,8}, {8,8}, {8,8}, {8,8}, {8,8}, {8,8}, {8,8}, {8,8}, {8,8},
-     {8,8}, {8,8}, {8,8}, {8,8}, {8,8}, {8,8}, {8,8}, {8,8}, {8,8}, {8,8}, {8,8}, {8,8}, {8,8}, {8,8}, {8,8}, {8,8}, {0,8}
-  };
-  static U8 WWW, WW, W, NWW, NW, N, NE, NEE, NNWW, NNW, NN, NNE, NNEE, NNN; //pixel neighborhood
+  static StationaryMap Map[nMaps] = {{ 0,8}, {15,1}, {11,1}, {11,1}, {11,1}, {11,1}, {11,1}, {11,1},
+                                     {11,1}, {11,1}, {11,1}, {11,1}, {11,1}, {11,1}, {11,1}, {11,1},
+                                     {11,1}, {11,1}, {11,1}, {11,1}, {11,1}, {11,1}, {11,1}, {11,1},
+                                     {11,1}, {11,1}, {11,1}, {11,1}, {11,1}, {11,1}, {11,1}, {11,1},
+                                     {11,1}, {11,1}, {11,1}, {11,1}, {11,1}, {11,1}, {11,1}, {11,1},
+                                     {11,1}, {11,1}, {11,1}, {11,1}, {11,1}, {11,1}, {11,1}, {11,1},
+                                     {11,1}, {11,1}, {11,1}, {11,1}, {11,1}, {11,1}, {11,1}, {11,1},
+                                     {11,1}, {11,1}, {11,1}, {11,1}, {11,1}, {11,1}};
+  //pixel neighborhood
+  static U8 WWWWWW, WWWWW, WWWW, WWW, WW, W;
+  static U8 NWWWW, NWWW, NWW, NW, N, NE, NEE, NEEE, NEEEE;
+  static U8 NNWWW, NNWW, NNW, NN, NNE, NNEE, NNEEE;
+  static U8 NNNWW, NNNW, NNN, NNNE, NNNEE;
+  static U8 NNNNW, NNNN, NNNNE;
+  static U8 NNNNN;
+  static U8 NNNNNN;
   static int ctx, lastPos=0, col=0, x=0;
   static int columns[2] = {1,1}, column[2];
+  static U8 MapCtxs[nMaps1] = { 0 }, pOLS[nOLS] = { 0 };
+  static const double lambda[nOLS] ={ 0.996, 0.87, 0.93, 0.8, 0.9 };
+  static const int num[nOLS] ={ 32, 12, 15, 10, 14 };
+  static OLS<double, U8> ols[nOLS] = { 
+    {num[0], 1, lambda[0]},
+    {num[1], 1, lambda[1]},
+    {num[2], 1, lambda[2]},
+    {num[3], 1, lambda[3]},
+    {num[4], 1, lambda[4]}
+  };
+  static const U8 *ols_ctx1[32] = { &WWWWWW, &WWWWW, &WWWW, &WWW, &WW, &W, &NWWWW, &NWWW, &NWW, &NW, &N, &NE, &NEE, &NEEE, &NEEEE, &NNWWW, &NNWW, &NNW, &NN, &NNE, &NNEE, &NNEEE, &NNNWW, &NNNW, &NNN, &NNNE, &NNNEE, &NNNNW, &NNNN, &NNNNE, &NNNNN, &NNNNNN };
+  static const U8 *ols_ctx2[12] = { &WWW, &WW, &W, &NWW, &NW, &N, &NE, &NEE, &NNW, &NN, &NNE, &NNN }; 
+  static const U8 *ols_ctx3[15] = { &N, &NE, &NEE, &NEEE, &NEEEE, &NN, &NNE, &NNEE, &NNEEE, &NNN, &NNNE, &NNNEE, &NNNN, &NNNNE, &NNNNN };
+  static const U8 *ols_ctx4[10] = { &N, &NE, &NEE, &NEEE, &NN, &NNE, &NNEE, &NNN, &NNNE, &NNNN };
+  static const U8 *ols_ctx5[14] = { &WWWW, &WWW, &WW, &W, &NWWW, &NWW, &NW, &N, &NNWW, &NNW, &NN, &NNNW, &NNN, &NNNN };
+  static const U8 **ols_ctxs[nOLS] = { &ols_ctx1[0], &ols_ctx2[0], &ols_ctx3[0], &ols_ctx4[0], &ols_ctx5[0] };
   // Select nearby pixels as context
   if (!bpos) {
     if (pos!=lastPos+1){
@@ -4425,7 +4454,74 @@ void im8bitModel(Mixer& m, int w, ModelStats *Stats = nullptr, int gray = 0) {
     column[0]=x/columns[0];
     column[1]=x/columns[1];
     int i=0;
-    WWW=buf(3), WW=buf(2), W=buf(1), NWW=buf(w+2), NW=buf(w+1), N=buf(w), NE=buf(w-1), NEE=buf(w-2), NNWW=buf(w*2+2), NNW=buf(w*2+1), NN=buf(w*2), NNE=buf(w*2-1), NNEE=buf(w*2-2), NNN=buf(w*3);
+    WWWWW=buf(5), WWWW=buf(4), WWW=buf(3), WW=buf(2), W=buf(1);
+    NWWWW=buf(w+4), NWWW=buf(w+3), NWW=buf(w+2), NW=buf(w+1), N=buf(w), NE=buf(w-1), NEE=buf(w-2), NEEE=buf(w-3), NEEEE=buf(w-4);
+    NNWWW=buf(w*2+3), NNWW=buf(w*2+2), NNW=buf(w*2+1), NN=buf(w*2), NNE=buf(w*2-1), NNEE=buf(w*2-2), NNEEE=buf(w*2-3);
+    NNNWW=buf(w*3+2), NNNW=buf(w*3+1), NNN=buf(w*3), NNNE=buf(w*3-1), NNNEE=buf(w*3-2);
+    NNNNW=buf(w*4+1), NNNN=buf(w*4), NNNNE=buf(w*4-1);
+    NNNNN=buf(w*5);
+    NNNNNN=buf(w*6);
+
+    int j = 0;
+    MapCtxs[j++] = Clamp4(W+N-NW,W,NW,N,NE);
+    MapCtxs[j++] = Clip(W+N-NW);
+    MapCtxs[j++] = Clamp4(W+NE-N,W,NW,N,NE);
+    MapCtxs[j++] = Clip(W+NE-N);
+    MapCtxs[j++] = Clamp4(N+NW-NNW,W,NW,N,NE);
+    MapCtxs[j++] = Clip(N+NW-NNW);
+    MapCtxs[j++] = Clamp4(N+NE-NNE,W,N,NE,NEE);
+    MapCtxs[j++] = Clip(N+NE-NNE);
+    MapCtxs[j++] = (W+NEE)/2;
+    MapCtxs[j++] = Clip(N*3-NN*3+NNN);
+    MapCtxs[j++] = Clip(W*3-WW*3+WWW);
+    MapCtxs[j++] = (W+Clip(NE*3-NNE*3+buf(w*3-1)))/2;
+    MapCtxs[j++] = (W+Clip(NEE*3-buf(w*2-3)*3+buf(w*3-4)))/2;
+    MapCtxs[j++] = Clip(NN+buf(w*4)-buf(w*6));
+    MapCtxs[j++] = Clip(WW+buf(4)-buf(6));
+    MapCtxs[j++] = Clip((buf(w*5)-6*buf(w*4)+15*NNN-20*NN+15*N+Clamp4(W*2-NWW,W,NW,N,NN))/6);
+    MapCtxs[j++] = Clip((-3*WW+8*W+Clamp4(NEE*3-NNEE*3+buf(w*3-2),NE,NEE,buf(w-3),buf(w-4)))/6);
+    MapCtxs[j++] = Clip(NN+NW-buf(w*3+1));
+    MapCtxs[j++] = Clip(NN+NE-buf(w*3-1));
+    MapCtxs[j++] = Clip((W*2+NW)-(WW+2*NWW)+buf(w+3));
+    MapCtxs[j++] = Clip(((NW+NWW)/2)*3-buf(w*2+3)*3+(buf(w*3+4)+buf(w*3+5))/2);
+    MapCtxs[j++] = Clip(NEE+NE-buf(w*2-3));
+    MapCtxs[j++] = Clip(NWW+WW-buf(w+4));
+    MapCtxs[j++] = Clip(((W+NW)*3-NWW*6+buf(w+3)+buf(w*2+3))/2);
+    MapCtxs[j++] = Clip((NE*2+NNE)-(NNEE+buf(w*3-2)*2)+buf(w*4-3));
+    MapCtxs[j++] = buf(w*6);
+    MapCtxs[j++] = (buf(w-4)+buf(w-6))/2;
+    MapCtxs[j++] = (buf(4)+buf(6))/2;
+    MapCtxs[j++] = (W+N+buf(w-5)+buf(w-7))/4;
+    MapCtxs[j++] = Clip(buf(w-3)+W-NEE);
+    MapCtxs[j++] = Clip(4*NNN-3*buf(w*4));
+    MapCtxs[j++] = Clip(N+NN-NNN);
+    MapCtxs[j++] = Clip(W+WW-WWW);
+    MapCtxs[j++] = Clip(W+NEE-NE);
+    MapCtxs[j++] = Clip(WW+NEE-N);
+    MapCtxs[j++] = (Clip(W*2-NW)+Clip(W*2-NWW)+N+NE)/4;
+    MapCtxs[j++] = Clamp4(N*2-NN,W,N,NE,NEE);
+    MapCtxs[j++] = (N+NNN)/2;
+    MapCtxs[j++] = Clip(NN+W-NNW);
+    MapCtxs[j++] = Clip(NWW+N-NNWW);
+    MapCtxs[j++] = Clip((4*WWW-15*WW+20*W+Clip(NEE*2-NNEE))/10);
+    MapCtxs[j++] = Clip((buf(w*3-3)-4*NNEE+6*NE+Clip(W*3-NW*3+NNW))/4);
+    MapCtxs[j++] = Clip((N*2+NE)-(NN+2*NNE)+buf(w*3-1));
+    MapCtxs[j++] = Clip((NW*2+NNW)-(NNWW+buf(w*3+2)*2)+buf(w*4+3));
+    MapCtxs[j++] = Clip(NNWW+W-buf(w*2+3));
+    MapCtxs[j++] = Clip((-buf(w*4)+5*NNN-10*NN+10*N+Clip(W*4-NWW*6+buf(w*2+3)*4-buf(w*3+4)))/5);
+    MapCtxs[j++] = Clip(NEE+Clip(buf(w-3)*2-buf(w*2-4))-buf(w-4));
+    MapCtxs[j++] = Clip(NW+W-NWW);
+    MapCtxs[j++] = Clip((N*2+NW)-(NN+2*NNW)+buf(w*3+1));
+    MapCtxs[j++] = Clip(NN+Clip(NEE*2-buf(w*2-3))-NNE);
+    MapCtxs[j++] = Clip((-buf(4)+5*WWW-10*WW+10*W+Clip(NE*2-NNE))/5);
+    MapCtxs[j++] = Clip((-buf(5)+4*buf(4)-5*WWW+5*W+Clip(NE*2-NNE))/4);
+    MapCtxs[j++] = Clip((WWW-4*WW+6*W+Clip(NE*3-NNE*3+buf(w*3-1)))/4);
+    MapCtxs[j++] = Clip((-NNEE+3*NE+Clip(W*4-NW*6+NNW*4-buf(w*3+1)))/3);
+    MapCtxs[j++] = ((W+N)*3-NW*2)/4;
+    for (j=0; j<nOLS; j++) {
+      ols[j].Update(W);
+      pOLS[j] = Clip(floor(ols[j].Predict(ols_ctxs[j])));
+    }
 
     if (!gray){
       cm.set(hash(++i, W));
@@ -4477,7 +4573,7 @@ void im8bitModel(Mixer& m, int w, ModelStats *Stats = nullptr, int gray = 0) {
       cm.set(hash(++i, W, column[1] ));
       cm.set(++i);
 
-      ctx = min(0x1F,(x-1)/min(0x20,columns[0]));
+      ctx = min(0x1F,x/min(0x20,columns[0]));
     }
     else{
       cm.set(hash(++i, N));
@@ -4506,63 +4602,6 @@ void im8bitModel(Mixer& m, int w, ModelStats *Stats = nullptr, int gray = 0) {
       cm.set(hash(++i, Clip(W*2-WW), LogMeanDiffQt(NE,Clip(N*2-NW))));
       cm.set(~0xde7ec7ed);
 
-      Map[0].set( ((U8)Clip(W+N-NW))|(LogMeanDiffQt(Clip(N+NE-NNE),Clip(N+NW-NNW))<<8) );
-      Map[1].set(Clamp4(W+N-NW,W,NW,N,NE));
-      Map[2].set(Clip(W+N-NW));
-      Map[3].set(Clamp4(W+NE-N,W,NW,N,NE));
-      Map[4].set(Clip(W+NE-N));
-      Map[5].set(Clamp4(N+NW-NNW,W,NW,N,NE));
-      Map[6].set(Clip(N+NW-NNW));
-      Map[7].set(Clamp4(N+NE-NNE,W,N,NE,NEE));
-      Map[8].set(Clip(N+NE-NNE));
-      Map[9].set((W+NEE)/2);
-      Map[10].set(Clip(N*3-NN*3+NNN));
-      Map[11].set(Clip(W*3-WW*3+WWW));
-      Map[12].set((W+Clip(NE*3-NNE*3+buf(w*3-1)))/2);
-      Map[13].set((W+Clip(NEE*3-buf(w*2-3)*3+buf(w*3-4)))/2);
-      Map[14].set(Clip(NN+buf(w*4)-buf(w*6)));
-      Map[15].set(Clip(WW+buf(4)-buf(6)));
-      Map[16].set(Clip(N+NN-NNN));
-      Map[17].set(Clip(W+WW-WWW));
-      Map[18].set(Clip(W+NEE-NE));
-      Map[19].set(Clip((buf(w*5)-6*buf(w*4)+15*NNN-20*NN+15*N+Clamp4(W*2-NWW,W,NW,N,NN))/6));
-      Map[20].set(Clip((-3*WW+8*W+Clamp4(NEE*3-NNEE*3+buf(w*3-2),NE,NEE,buf(w-3),buf(w-4)))/6));
-      Map[21].set(Clip(NN+NW-buf(w*3+1)));
-      Map[22].set(Clip(NN+NE-buf(w*3-1)));
-      Map[23].set(Clip((W*2+NW)-(WW+2*NWW)+buf(w+3)));
-      Map[24].set(Clip(((NW+NWW)/2)*3-buf(w*2+3)*3+(buf(w*3+4)+buf(w*3+5))/2));
-      Map[25].set(Clip(NEE+NE-buf(w*2-3)));
-      Map[26].set(Clip(NWW+WW-buf(w+4)));
-      Map[27].set(Clip(((W+NW)*3-NWW*6+buf(w+3)+buf(w*2+3))/2));
-      Map[28].set(Clip((NE*2+NNE)-(NNEE+buf(w*3-2)*2)+buf(w*4-3)));
-      Map[29].set(buf(w*6));
-      Map[30].set((buf(w-4)+buf(w-6))/2);
-      Map[31].set((buf(4)+buf(6))/2);
-      Map[32].set((W+N+buf(w-5)+buf(w-7))/4);
-      Map[33].set(Clip(buf(w-3)+W-NEE));
-      Map[34].set(Clip(4*NNN-3*buf(w*4)));
-      Map[35].set(Clip(WW+NEE-N));
-      Map[36].set((Clip(W*2-NW)+Clip(W*2-NWW)+N+NE)/4);
-      Map[37].set(Clamp4(N*2-NN,W,N,NE,NEE));
-      Map[38].set((N+NNN)/2);
-      Map[39].set(Clip(NN+W-NNW));
-      Map[40].set(Clip(NWW+N-NNWW));
-      Map[41].set(Clip((4*WWW-15*WW+20*W+NEE)/10));
-      Map[42].set(Clip((buf(w*3-3)-4*NNEE+6*NE+Clip(W*3-NW*3+NNW))/4));
-      Map[43].set(Clip((N*2+NE)-(NN+2*NNE)+buf(w*3-1)));
-      Map[44].set(Clip((NW*2+NNW)-(NNWW+buf(w*3+2)*2)+buf(w*4+3)));
-      Map[45].set(Clip(NNWW+W-buf(w*2+3)));
-      Map[46].set(Clip((-buf(w*4)+5*NNN-10*NN+10*N+Clip(W*4-NWW*6+buf(w*2+3)*4-buf(w*3+4)))/5));
-      Map[47].set(Clip(NEE+Clip(buf(w-3)*2-buf(w*2-4))-buf(w-4)));
-      Map[48].set(Clip(NW+W-NWW));
-      Map[49].set(Clip((N*2+NW)-(NN+2*NNW)+buf(w*3+1)));
-      Map[50].set(Clip(NN+Clip(NEE*2-buf(w*2-3))-NNE));
-      Map[51].set(Clip((-buf(4)+5*WWW-10*WW+10*W+Clip(NE*2-NNE))/5));
-      Map[52].set(Clip((-buf(5)+4*buf(4)-5*WWW+5*W+Clip(NE*2-NNE))/4));
-      Map[53].set(Clip((WWW-4*WW+6*W+Clip(NE*3-NNE*3+buf(w*3-1)))/4));
-      Map[54].set(Clip((-NNEE+3*NE+Clip(W*4-NW*6+NNW*4-buf(w*3+1)))/3));
-      Map[55].set(((W+N)*3-NW*2)/4);
-
       ctx = min(0x1F,x/max(1,w/min(32,columns[0])))|( ( ((abs(W-N)*16>W+N)<<1)|(abs(N-NW)>8) )<<5 )|((W+N)&0x180);
     }
     if (Stats) {
@@ -4573,6 +4612,16 @@ void im8bitModel(Mixer& m, int w, ModelStats *Stats = nullptr, int gray = 0) {
       Stats->Image.ctx = ctx>>gray;
     }
   }
+  
+  U8 B=(c0<<(8-bpos));
+  int i=1;
+  Map[i++].set((((U8)(Clip(W+N-NW)-B))*8+bpos)|(LogMeanDiffQt(Clip(N+NE-NNE),Clip(N+NW-NNW))<<11));
+
+  for (int j=0; j<nMaps1; i++, j++)
+    Map[i].set((MapCtxs[j]-B)*8+bpos);
+
+  for (int j=0; i<nMaps; i++, j++)
+    Map[i].set((pOLS[j]-B)*8+bpos);
 
   cm.mix(m);
   if (gray){
