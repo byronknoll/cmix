@@ -492,7 +492,7 @@ void train(short *t, short *w, int n, int err) {
 }
 #endif
 
-#define NUM_INPUTS 1445
+#define NUM_INPUTS 1460
 #define NUM_SETS 23
 
 std::valarray<float> model_predictions(0.5, NUM_INPUTS + NUM_SETS + 11);
@@ -812,18 +812,30 @@ public:
   }
 };
 
+/*
+  Map for modelling contexts of (nearly-)stationary data.
+  The context is looked up directly. For each bit modelled, a 16bit prediction is stored.
+  The adaptation rate is controlled by the caller, see mix().
+
+  - BitsOfContext: How many bits to use for each context. Higher bits are discarded.
+  - BitsPerContext: How many bits [1..8] of input are to be modelled for each context.
+  New contexts must be set at those intervals.
+
+  Uses (2^(BitsOfContext+1))*((2^BitsPerContext)-1) bytes of memory.
+*/
+
 class SmallStationaryContextMap {
   Array<U16> Data;
-  int Context, Mask, bCount, B;
+  int Context, Mask, Stride, bCount, bTotal, B;
   U16 *cp;
 public:
-  SmallStationaryContextMap(int BitsOfContext, int BitsPerContext = 8) : Data(1ull<<(BitsOfContext+BitsPerContext)), Context(0), Mask(1<<BitsPerContext), bCount(1), B(1) {
+  SmallStationaryContextMap(int BitsOfContext, int BitsPerContext = 8) : Data((1ull<<BitsOfContext)*((1ull<<BitsPerContext)-1)), Context(0), Mask((1<<BitsOfContext)-1), Stride((1<<BitsPerContext)-1), bCount(0), bTotal(BitsPerContext), B(0) {
     Reset();
     cp=&Data[0];
   }
   void set(U32 ctx) {
-    Context = (ctx*Mask)&(Data.size() - Mask);
-    bCount=B=1;
+    Context = (ctx&Mask)*Stride;
+    bCount=B=0;
   }
   void Reset() {
     for (U32 i=0; i<Data.size(); ++i)
@@ -831,16 +843,14 @@ public:
   }
   void mix(Mixer& m, const int rate = 7, const int Multiplier = 1, const int Divisor = 4) {
     *cp+=((y<<16)-(*cp)+(1<<(rate-1)))>>rate;
-    B+=(y && B>1);
+    B+=(y && B>0);
     cp = &Data[Context+B];
     int Prediction = (*cp)>>4;
     m.add((stretch(Prediction)*Multiplier)/Divisor);
     m.add(((Prediction-2048)*Multiplier)/(Divisor*2));
-    bCount<<=1; B<<=1;
-    if (bCount==Mask) {
-      bCount=1;
-      B=1;
-    }
+    bCount++; B+=B+1;
+    if (bCount==bTotal)
+      bCount=B=0;
   }
 };
 
@@ -855,42 +865,42 @@ public:
   - Rate: Initial adaptation rate offset [0..1023]. Lower offsets mean faster adaptation.
     Will be increased on every occurrence until the higher bound is reached.
 
-  Uses 2^(BitsOfContext+BitsPerContext+2) bytes of memory.
+  Uses (2^(BitsOfContext+2))*((2^BitsPerContext)-1) bytes of memory.
 */
 
 class StationaryMap {
   Array<U32> Data;
-  int Context, Mask, bCount, B;
+  int Context, Mask, Stride, bCount, bTotal, B;
   U32 *cp;
 public:
-  StationaryMap(int BitsOfContext, int BitsPerContext, int Rate=0): Data(1<<(BitsOfContext+BitsPerContext)), Context(0), Mask(1<<BitsPerContext), bCount(1), B(1) {
+  StationaryMap(int BitsOfContext, int BitsPerContext = 8, int Rate = 0): Data((1ull<<BitsOfContext)*((1ull<<BitsPerContext)-1)), Context(0), Mask((1<<BitsOfContext)-1), Stride((1<<BitsPerContext)-1), bCount(0), bTotal(BitsPerContext), B(0) {
     Reset(Rate);
     cp=&Data[0];
   }
   void set(U32 ctx) {
-    Context = (ctx*Mask)&(Data.size()-Mask);
-    bCount=B=1;
+    Context = (ctx&Mask)*Stride;
+    bCount=B=0;
   }
   void Reset( int Rate = 0 ){
-    for (unsigned int i=0; i<Data.size(); ++i)
-      Data[i]=(0x7FF<<20)|min(0x3FF,Rate);
+    for (U32 i=0; i<Data.size(); ++i)
+      Data[i]=(0x7FF<<20)|min(1023,Rate);
   }
-  void mix(Mixer& m, const int Multiplier = 1, const int Divisor = 4, const U16 Limit = 0x3FF) {
-    U32 Count = min(0x3FF, ((*cp)&0x3FF)+1);
+  void mix(Mixer& m, const int Multiplier = 1, const int Divisor = 4, const U16 Limit = 1023) {
+    // update
+    U32 Count = min(min(Limit,0x3FF), ((*cp)&0x3FF)+1);
     int Prediction = (*cp)>>10, Error = (y<<22)-Prediction;
     Error = ((Error/8)*dt[Count])/1024;
     Prediction = min(0x3FFFFF,max(0,Prediction+Error));
     *cp = (Prediction<<10)|Count;
-    B+=(y && B>1);
+    // predict
+    B+=(y && B>0);
     cp=&Data[Context+B];
     Prediction = (*cp)>>20;
     m.add((stretch(Prediction)*Multiplier)/Divisor);
     m.add(((Prediction-2048)*Multiplier)/(Divisor*2));
-    bCount<<=1; B<<=1;
-    if (bCount==Mask){
-      bCount=1;
-      B=1;
-    }
+    bCount++; B+=B+1;
+    if (bCount==bTotal)
+      bCount=B=0;
   }
 };
 
@@ -1319,6 +1329,35 @@ public:
       if (!Factor()) Solve();
       km = 0;
     }
+  }
+};
+
+////////////////////////////// Indirect Context //////////////////////////////
+
+template <typename T>
+class IndirectContext {
+private:
+  Array<T> data;
+  T* ctx;
+  U32 ctxMask, inputMask, inputBits;
+public:
+  IndirectContext(const int BitsPerContext, const int InputBits = 8) :
+    data(1ull<<BitsPerContext),
+    ctx(&data[0]),
+    ctxMask((1ul<<BitsPerContext)-1),
+    inputMask((1ul<<InputBits)-1),
+    inputBits(InputBits)
+  {
+  }
+  void operator+=(const U32 i) {
+    (*ctx)<<=inputBits;
+    (*ctx)|=i&inputMask;
+  }
+  void operator=(const U32 i) {
+    ctx = &data[i&ctxMask];
+  }
+  T& operator()(void) {
+    return *ctx;
   }
 };
 
@@ -3315,6 +3354,7 @@ private:
   StateMap32 **StateMaps;
   SmallStationaryContextMap **SCM;
   StationaryMap **Maps;
+  IndirectContext<U8> iCtx;
   U32 hashes[NumHashes];
   U32 ctx[NumCtxs];
   U32 length;    // rebased length of match (length=1 represents the smallest accepted match length), or 0 if no match
@@ -3363,17 +3403,20 @@ private:
     for (U32 i=0; i<NumHashes; i++)
       Table[hashes[i]] = pos;
     expectedByte = buffer[index];
+    iCtx+=y, iCtx=(buffer(1)<<8)|expectedByte;
     SCM[0]->set(expectedByte);
     SCM[1]->set(expectedByte);
     SCM[2]->set(pos);
     Maps[0]->set((expectedByte<<8)|buffer(1));
     Maps[1]->set(hash(expectedByte, c0, buffer(1), buffer(2), min(3,(int)ilog2(length+1))));
+    Maps[2]->set(iCtx());
     if (Stats)
       Stats->Match.expectedByte = (length>0)?expectedByte:0;
   }
 public:
   MatchModel(const U32 Size) :
     Table(Size/sizeof(U32)),
+    iCtx{19,1},
     hashes{ 0 },
     ctx{ 0 },
     length(0),
@@ -3389,9 +3432,10 @@ public:
     SCM[0] = new SmallStationaryContextMap(8,8);
     SCM[1] = new SmallStationaryContextMap(11,1);
     SCM[2] = new SmallStationaryContextMap(8,8);
-    Maps = new StationaryMap*[2];
+    Maps = new StationaryMap*[3];
     Maps[0] = new StationaryMap(16,8);
     Maps[1] = new StationaryMap(22,1);
+    Maps[2] = new StationaryMap(4,1);
   }
   ~MatchModel(){
     for (U32 i=0; i<NumCtxs; i++)
@@ -3400,7 +3444,7 @@ public:
     for (U32 i=0; i<3; i++)
       delete SCM[i];
     delete[] SCM;
-    for (U32 i=0; i<2; i++)
+    for (U32 i=0; i<3; i++)
       delete Maps[i];
     delete[] Maps;
   }
@@ -3408,8 +3452,11 @@ public:
     if (bpos==0)
       Update(buffer, Stats);
     else{
-      SCM[1]->set((bpos<<8)|(expectedByte^U8(c0<<(8-bpos))));
+      U8 B = c0<<(8-bpos);
+      SCM[1]->set((bpos<<8)|(expectedByte^B));
       Maps[1]->set(hash(expectedByte, c0, buffer(1), buffer(2), min(3,(int)ilog2(length+1))));
+      iCtx+=y, iCtx=(bpos<<16)|(buffer(1)<<8)|(expectedByte^B);
+      Maps[2]->set(iCtx());
     }
     const int expectedBit = (expectedByte>>(7-bpos))&1;
 
@@ -3456,6 +3503,7 @@ public:
     SCM[2]->mix(mixer, 5);
     Maps[0]->mix(mixer, 1, 4, 255);
     Maps[1]->mix(mixer);
+    Maps[2]->mix(mixer);
     
     if (Stats)
       Stats->Match.length = length;
@@ -3479,6 +3527,8 @@ private:
   };
   Array<U32> Table;
   StationaryMap **Maps;
+  IndirectContext<U8> iCtx8;
+  IndirectContext<U16> iCtx16;
   sparseConfig sparse[NumHashes];
   U32 hashes[NumHashes];
   U32 hashIndex;   // index of hash used to find current match
@@ -3526,16 +3576,22 @@ private:
       Table[hashes[i]] = pos;
     
     expectedByte = buffer[index];
-    
+    if (valid)
+      iCtx8+=y, iCtx16+=buffer(1);
     valid = length>1; // only predict after at least one byte following the match
     if (valid) {
       Maps[0]->set(hash(expectedByte, c0, buffer(1), buffer(2), ilog2(length+1)*NumHashes+hashIndex));
       Maps[1]->set((expectedByte<<8)|buffer(1));
+      iCtx8=(buffer(1)<<8)|expectedByte, iCtx16=(buffer(1)<<8)|expectedByte;
+      Maps[2]->set(iCtx8());
+      Maps[3]->set(iCtx16());
     }
   }
 public:
   SparseMatchModel(const U64 Size, const bool AllowBypass = false) :
     Table(Size/sizeof(U32)),
+    iCtx8{19,1},
+    iCtx16{16},
     hashes{ 0 },
     hashIndex(0),
     length(0),
@@ -3543,15 +3599,17 @@ public:
     expectedByte(0),
     valid(false)
   {
-    Maps = new StationaryMap*[2];
+    Maps = new StationaryMap*[4];
     Maps[0] = new StationaryMap(22,1);
     Maps[1] = new StationaryMap(14,4);
+    Maps[2] = new StationaryMap(8,1);
+    Maps[3] = new StationaryMap(19,1);
     sparse[0].minLen=5, sparse[0].bitMask=0xDF;
     sparse[1].offset=1, sparse[1].minLen=4;
     sparse[2].stride=2, sparse[2].minLen=4, sparse[2].bitMask=0xDF;
   }
   ~SparseMatchModel(){
-    for (U32 i=0; i<2; i++)
+    for (U32 i=0; i<4; i++)
       delete Maps[i];
     delete[] Maps;
   }
@@ -3559,9 +3617,13 @@ public:
     if (bpos==0)
       Update(buffer, Stats);
     else if (valid) {
+      U8 B = c0<<(8-bpos);
       Maps[0]->set(hash(expectedByte, c0, buffer(1), buffer(2), ilog2(length+1)*NumHashes+hashIndex));
       if (bpos==4)
         Maps[1]->set(0x10000|((expectedByte^U8(c0<<4))<<8)|buffer(1));
+      iCtx8+=y, iCtx8=(bpos<<16)|(buffer(1)<<8)|(expectedByte^B);
+      Maps[2]->set(iCtx8());
+      Maps[3]->set((bpos<<16)|(iCtx16()^U32(B|(B<<8))));
     }
 
     // check if next bit matches the prediction, accounting for the required bitmask
@@ -3580,11 +3642,11 @@ public:
         mixer.add(0); mixer.add(0); mixer.add(0);
       }
 
-      Maps[0]->mix(mixer, 1, 2);
-      Maps[1]->mix(mixer, 1, 2);
+      for (int i=0;i<4;i++)
+        Maps[i]->mix(mixer, 1, 2);
     }
     else
-      for (int i=0; i<7; i++, mixer.add(0));
+      for (int i=0; i<11; i++, mixer.add(0));
 
     return length;
   }
@@ -3956,16 +4018,19 @@ void recordModel(Mixer& m, Filetype filetype, ModelStats *Stats = nullptr) {
   static int rlen[3] = {2,3,4}; // run length and 2 candidates
   static int rcount[2] = {0,0}; // candidate counts
   static U8 padding = 0; // detected padding byte
+  static U8 N, NN, NNN, NNNN;
   static int prevTransition = 0, nTransition = 0; // position of the last padding transition
   static int col = 0, mxCtx = 0;
-  static ContextMap cm(32768, 3), cn(32768/2, 3), co(32768*2, 3), cp(MEM(), 7);
-  static StationaryMap Map0(10,8), Map1(10,8);
+  static ContextMap cm(32768, 3), cn(32768/2, 3), co(32768*2, 3), cp(MEM(), 8);
+  static const int nMaps = 3;
+  static StationaryMap Maps[nMaps] ={ {10,8},{10,8},{11,1} };
+  static SmallStationaryContextMap sMap(11, 1);
   static bool MayBeImg24b = false;
   static dBASE dbase;
+  static IndirectContext<U16> iCtx(16);
 
   if (!bpos) {
     int w=c4&0xffff, c=w&255, d=w>>8;
-#if 1
     if (Stats && (*Stats).Record &&
           ((*Stats).Record>>16) != (unsigned int)rlen[0]) {
       rlen[0] = (*Stats).Record>>16;
@@ -4050,26 +4115,10 @@ void recordModel(Mixer& m, Filetype filetype, ModelStats *Stats = nullptr) {
         }
       }
     }
-#endif
-    cm.set(c<<8| (min(255, pos-cpos1[c])/4) );
-    cm.set(w<<9| llog(pos-wpos1[w])>>2);
-    cm.set(rlen[0]|buf(rlen[0])<<10|buf(rlen[0]*2)<<18);
-
-    cn.set(w|rlen[0]<<8);
-    cn.set(d|rlen[0]<<16);
-    cn.set(c|rlen[0]<<8);
-
-    co.set(buf(1)<<8|min(255, pos-cpos1[buf(1)]));
-    co.set(buf(1)<<17|buf(2)<<9|llog(pos-wpos1[w])>>2);
-    co.set(buf(1)<<8|buf(rlen[0]));
 
     col=pos%rlen[0];
-    if (!col)
-      nTransition = 0;
-    cp.set(rlen[0]|buf(rlen[0])<<10|col<<18);
-    cp.set(rlen[0]|buf(1)<<10|col<<18);
-    cp.set(col|rlen[0]<<12);
-
+    N = buf(rlen[0]), NN = buf(rlen[0]*2), NNN = buf(rlen[0]*3), NNNN = buf(rlen[0]*4);
+    iCtx+=c, iCtx=(c<<8)|N;
     /*
     Consider record structures that include fixed-length strings.
     These usually contain the text followed by either spaces or 0's,
@@ -4088,30 +4137,52 @@ void recordModel(Mixer& m, Filetype filetype, ModelStats *Stats = nullptr) {
     And with such simple structures, there's probably no need to be fancy
     anyway
     */
-
+    
+    if (!col)
+      nTransition = 0;
     if ((((c4>>8) == SPACE*0x010101) && (c != SPACE)) || (!(c4>>8) && c && ((padding != SPACE) || (pos-prevTransition > rlen[0])))){
       prevTransition = pos;
       nTransition+=(nTransition<31);
       padding = (U8)d;
     }
+    
+    // Set 2 dimensional contexts
+    cm.set(c<<8| (min(255, pos-cpos1[c])/4));
+    cm.set(w<<9| llog(pos-wpos1[w])>>2);
+    cm.set(rlen[0]|N<<10|NN<<18);
+
+    cn.set(w|rlen[0]<<8);
+    cn.set(d|rlen[0]<<16);
+    cn.set(c|rlen[0]<<8);
+
+    co.set(buf(1)<<8|min(255, pos-cpos1[buf(1)]));
+    co.set(buf(1)<<17|buf(2)<<9|llog(pos-wpos1[w])>>2);
+    co.set(buf(1)<<8|N);
+
+    cp.set(rlen[0]|N<<10|col<<18);
+    cp.set(rlen[0]|buf(1)<<10|col<<18);
+    cp.set(col|rlen[0]<<12);
+
     if (rlen[0]>8){
       cp.set( hash( min(min(0xFF,rlen[0]),pos-prevTransition), min(0x3FF,col), (w&0xF0F0)|(w==((padding<<8)|padding)), nTransition ) );
-      cp.set( hash( w, (buf(rlen[0]+1)==padding && buf(rlen[0])==padding), col/max(1,rlen[0]/32) ) );
+      cp.set( hash( w, (buf(rlen[0]+1)==padding && N==padding), col/max(1,rlen[0]/32) ) );
     }
     else
       cp.set(0), cp.set(0);
 
-    int last4 = (buf(rlen[0]*4)<<24)|(buf(rlen[0]*3)<<16)|(buf(rlen[0]*2)<<8)|buf(rlen[0]);
-    cp.set( (last4&0xFF)|((last4&0xF000)>>4)|((last4&0xE00000)>>9)|((last4&0xE0000000)>>14)|((col/max(1,rlen[0]/16))<<18) );
-    cp.set( (last4&0xF8F8)|(col<<16) );
+    cp.set( N|((NN&0xF0)<<4)|((NNN&0xE0)<<7)|((NNNN&0xE0)<<10)|((col/max(1,rlen[0]/16))<<18) );
+    cp.set( (N&0xF8)|((NN&0xF8)<<8)|(col<<16) );
+
+    cp.set(hash(col, iCtx()));
 
     int i=0x300;
     if (MayBeImg24b)
-      i = (col%3)<<8, Map0.set(Clip(((U8)(c4>>16))+c-(c4>>24))|i);
+      i = (col%3)<<8, Maps[0].set(Clip(((U8)(c4>>16))+c-(c4>>24))|i);
     else
-      Map0.set(Clip(c*2-d)|i);
-    Map1.set(Clip(c+buf(rlen[0])-buf(rlen[0]+1))|i);
+      Maps[0].set(Clip(c*2-d)|i);
+    Maps[1].set(Clip(c+N-buf(rlen[0]+1))|i);
 
+    // update last context positions
     cpos4[c]=cpos3[c];
     cpos3[c]=cpos2[c];
     cpos2[c]=cpos1[c];
@@ -4120,12 +4191,18 @@ void recordModel(Mixer& m, Filetype filetype, ModelStats *Stats = nullptr) {
 
     mxCtx = (rlen[0]>128)?(min(0x7F,col/max(1,rlen[0]/128))):col;
   }
+  U8 B = c0<<(8-bpos);
+  U32 ctx = (N^B)|(bpos<<8);
+  Maps[2].set(ctx);
+  sMap.set(ctx);
+  
   cm.mix(m);
   cn.mix(m);
   co.mix(m);
   cp.mix(m);
-  Map0.mix(m);
-  Map1.mix(m);
+  for (int i=0;i<nMaps;i++)
+    Maps[i].mix(m, 1, 3);
+  sMap.mix(m, 6, 1, 3);
 
   m.set( (rlen[0]>2)*( (bpos<<7)|mxCtx ), 1024 );
   m.set( ((buf(rlen[0])^((U8)(c0<<(8-bpos))))>>4)|(min(0x1F,col/max(1,rlen[0]/32))<<4), 512 );
@@ -4345,7 +4422,7 @@ void im1bitModel(Mixer& m, int w) {
 // Model for 4-bit image data
 void im4bitModel(Mixer& m, int w) {
   static HashTable<16> t(MEM()/2);
-  const int S=11; // number of contexts
+  const int S=13; // number of contexts
   static U8* cp[S];
   static StateMap sm[S];
   static U8 WW=0, W=0, NWW=0, NW=0, N=0, NE=0, NEE=0, NNWW = 0, NNW=0, NN=0, NNE=0, NNEE=0;
@@ -4376,7 +4453,9 @@ void im4bitModel(Mixer& m, int w) {
       cp[i++]=t[hash(NE, min(0x3FF, (col+line)/max(1,w*8)))]+1;
       cp[i++]=t[hash(NW, (col-line)/max(1,w*8))]+1;
       cp[i++]=t[hash(WW*16+W,NN*16+N,NNWW*16+NW)]+1;
-      cp[i++]=t[N+NN*16]+1;
+      cp[i++]=t[hash(1, N, NN)]+1;
+      cp[i++]=t[hash(2, W, WW)]+1;
+      cp[i++]=t[hash(3, W, NE)]+1;
       cp[i++]=t[-1]+1;
 
       col*=(++col)<w*2;
@@ -4406,7 +4485,8 @@ void im8bitModel(Mixer& m, int w, ModelStats *Stats = nullptr, int gray = 0) {
   static const int nMaps0 = 2;
   static const int nMaps1 = 55;
   static const int nMaps = nMaps0 + nMaps1 + nOLS;
-  static ContextMap cm(MEM()*4, 48);
+  static const int nPltMaps = 4;
+  static ContextMap cm(MEM()*4, 48 + nPltMaps);
   static StationaryMap Map[nMaps] = {{ 0,8}, {15,1}, {11,1}, {11,1}, {11,1}, {11,1}, {11,1}, {11,1},
                                      {11,1}, {11,1}, {11,1}, {11,1}, {11,1}, {11,1}, {11,1}, {11,1},
                                      {11,1}, {11,1}, {11,1}, {11,1}, {11,1}, {11,1}, {11,1}, {11,1},
@@ -4415,6 +4495,8 @@ void im8bitModel(Mixer& m, int w, ModelStats *Stats = nullptr, int gray = 0) {
                                      {11,1}, {11,1}, {11,1}, {11,1}, {11,1}, {11,1}, {11,1}, {11,1},
                                      {11,1}, {11,1}, {11,1}, {11,1}, {11,1}, {11,1}, {11,1}, {11,1},
                                      {11,1}, {11,1}, {11,1}, {11,1}, {11,1}, {11,1}};
+  static SmallStationaryContextMap pltMap[nPltMaps] = { {11,1},{11,1},{11,1},{11,1} };
+  static IndirectContext<U8> iCtx[nPltMaps] = { {16,8}, {16,8}, {16,8}, {16,8} };
   //pixel neighborhood
   static U8 WWWWWW, WWWWW, WWWW, WWW, WW, W;
   static U8 NWWWW, NWWW, NWW, NW, N, NE, NEE, NEEE, NEEEE;
@@ -4522,6 +4604,12 @@ void im8bitModel(Mixer& m, int w, ModelStats *Stats = nullptr, int gray = 0) {
       ols[j].Update(W);
       pOLS[j] = Clip(floor(ols[j].Predict(ols_ctxs[j])));
     }
+    for (j=0; j<nPltMaps; j++)
+      iCtx[j]+=W;
+    iCtx[0]=W|(NE<<8);
+    iCtx[1]=W|(N<<8);
+    iCtx[2]=W|(WW<<8);
+    iCtx[3]=N|(NN<<8);
 
     if (!gray){
       cm.set(hash(++i, W));
@@ -4572,6 +4660,8 @@ void im8bitModel(Mixer& m, int w, ModelStats *Stats = nullptr, int gray = 0) {
       cm.set(hash(++i, N, column[1] ));
       cm.set(hash(++i, W, column[1] ));
       cm.set(++i);
+      for (int j=0; j<nPltMaps; j++)
+        cm.set(hash(++i, iCtx[j]()));
 
       ctx = min(0x1F,x/min(0x20,columns[0]));
     }
@@ -4627,6 +4717,12 @@ void im8bitModel(Mixer& m, int w, ModelStats *Stats = nullptr, int gray = 0) {
   if (gray){
     for (int i=0;i<nMaps;i++)
       Map[i].mix(m);
+  }
+  else {
+    for (int i=0; i<nPltMaps; i++) {
+      pltMap[i].set((bpos<<8)|iCtx[i]());
+      pltMap[i].mix(m);
+    }
   }
   col=(col+1)&7;
   m.set(ctx, 2048);
