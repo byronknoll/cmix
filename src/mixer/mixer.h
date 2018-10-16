@@ -16,14 +16,16 @@ struct ContextData {
 
 class Mixer {
  public:
-  Mixer(const std::valarray<float>& inputs, const unsigned long long& context,
+  Mixer(const std::valarray<float>& inputs,
+      const std::vector<float>& extra_inputs, const unsigned long long& context,
       float learning_rate, unsigned int extra_input_size);
-  float Mix(const std::vector<float>& extra_inputs);
+  float Mix();
   void Perceive(int bit);
 
  private:
   ContextData* GetContextData();
   const std::valarray<float>& inputs_;
+  const std::vector<float>& extra_inputs_vec_;
   std::valarray<float> extra_inputs_;
   float p_, learning_rate_;
   const unsigned long long& context_;

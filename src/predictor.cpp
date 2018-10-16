@@ -61,8 +61,8 @@ void Predictor::AddByteModel(ByteModel* model) {
 void Predictor::AddMixer(int layer, const unsigned long long& context,
     float learning_rate) {
   mixers_[layer].push_back(std::unique_ptr<Mixer>(new Mixer(
-      layers_[layer]->Inputs(), context, learning_rate,
-      mixers_[layer].size())));
+      layers_[layer]->Inputs(), layers_[layer]->ExtraInputs(), context,
+      learning_rate, mixers_[layer].size())));
 }
 
 void Predictor::AddByteMixer(ByteMixer* byte_mixer) {
@@ -364,25 +364,25 @@ float Predictor::Predict() {
   auxiliary_average /= auxiliary_.size();
   manager_.auxiliary_context_ = auxiliary_average * 15;
 
-  std::vector<float> extra_inputs;
   for (unsigned int i = 0; i < mixers_[0].size(); ++i) {
-    float p = mixers_[0][i]->Mix(extra_inputs);
-    extra_inputs.push_back(p);
+    float p = mixers_[0][i]->Mix();
+    layers_[0]->SetExtraInput(p);
     layers_[1]->SetStretchedInput(i, p);
     layers_[2]->SetStretchedInput(i, p);
   }
+  layers_[0]->ClearExtraInputs();
   for (unsigned int i = 0; i < auxiliary_.size(); ++i) {
     float p = layers_[0]->Inputs()[auxiliary_[i]];
     layers_[1]->SetStretchedInput(mixers_[0].size() + i, p);
     layers_[2]->SetStretchedInput(mixers_[0].size() + mixers_[1].size() + i, p);
   }
-  extra_inputs.clear();
   for (unsigned int i = 0; i < mixers_[1].size(); ++i) {
-    float p = mixers_[1][i]->Mix(extra_inputs);
-    extra_inputs.push_back(p);
+    float p = mixers_[1][i]->Mix();
+    layers_[1]->SetExtraInput(p);
     layers_[2]->SetStretchedInput(mixers_[0].size() + i, p);
   }
-  float p = Sigmoid::Logistic(mixers_[2][0]->Mix({}));
+  layers_[1]->ClearExtraInputs();
+  float p = Sigmoid::Logistic(mixers_[2][0]->Mix());
   p = sse_.Predict(p);
   if (byte_mixer_override >= 0) {
     return byte_mixer_override;

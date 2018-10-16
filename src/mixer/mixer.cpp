@@ -6,10 +6,12 @@
 #include <math.h>
 
 Mixer::Mixer(const std::valarray<float>& inputs,
+    const std::vector<float>& extra_inputs,
     const unsigned long long& context, float learning_rate,
     unsigned int extra_input_size) : inputs_(inputs),
-    extra_inputs_(extra_input_size), p_(0.5), learning_rate_(learning_rate),
-    context_(context), max_steps_(1), steps_(0) {}
+    extra_inputs_vec_(extra_inputs), extra_inputs_(extra_input_size), p_(0.5),
+    learning_rate_(learning_rate), context_(context), max_steps_(1), steps_(0)
+    {}
 
 ContextData* Mixer::GetContextData() {
   ContextData* data = context_map_[context_].get();
@@ -21,11 +23,11 @@ ContextData* Mixer::GetContextData() {
   return data;
 }
 
-float Mixer::Mix(const std::vector<float>& extra_inputs) {
+float Mixer::Mix() {
   ContextData* data = GetContextData();
   p_ = (inputs_ * data->weights).sum();
   for (unsigned int i = 0; i < extra_inputs_.size(); ++i) {
-    extra_inputs_[i] = extra_inputs[i];
+    extra_inputs_[i] = extra_inputs_vec_[i];
   }
   p_ += (extra_inputs_ * data->extra_weights).sum();
   return p_;
