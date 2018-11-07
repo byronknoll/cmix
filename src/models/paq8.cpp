@@ -492,7 +492,7 @@ void train(short *t, short *w, int n, int err) {
 }
 #endif
 
-#define NUM_INPUTS 1489
+#define NUM_INPUTS 1525
 #define NUM_SETS 23
 
 std::valarray<float> model_predictions(0.5, NUM_INPUTS + NUM_SETS + 11);
@@ -3628,7 +3628,7 @@ private:
   enum Parameters : U32 {
     MaxLen    = 0xFFFF, // longest allowed match
     MinLen    = 3,      // default minimum required match length
-    NumHashes = 3,      // number of hashes used
+    NumHashes = 4,      // number of hashes used
   };
   struct sparseConfig {
     U32 offset    = 0;      // number of last input bytes to ignore when searching for a match
@@ -3719,8 +3719,9 @@ public:
     Maps[2] = new StationaryMap(8,1);
     Maps[3] = new StationaryMap(19,1);
     sparse[0].minLen=5, sparse[0].bitMask=0xDF;
-    sparse[1].offset=1, sparse[1].minLen=4;
-    sparse[2].stride=2, sparse[2].minLen=4, sparse[2].bitMask=0xDF;
+    sparse[1].minLen=5, sparse[1].bitMask=0x5F;
+    sparse[2].offset=1, sparse[2].minLen=4;
+    sparse[3].stride=2, sparse[3].minLen=4, sparse[3].bitMask=0xDF;
   }
   ~SparseMatchModel(){
     for (U32 i=0; i<4; i++)
@@ -4132,16 +4133,17 @@ void recordModel(Mixer& m, Filetype filetype, ModelStats *Stats = nullptr) {
   static int rlen[3] = {2,3,4}; // run length and 2 candidates
   static int rcount[2] = {0,0}; // candidate counts
   static U8 padding = 0; // detected padding byte
-  static U8 N=0, NN=0, NNN=0, NNNN=0;
+  static U8 N=0, NN=0, NNN=0, NNNN=0, WxNW=0;
   static int prevTransition = 0, nTransition = 0; // position of the last padding transition
   static int col = 0, mxCtx = 0;
-  static ContextMap cm(32768, 3), cn(32768/2, 3), co(32768*2, 3), cp(MEM(), 10);
+  static ContextMap cm(32768, 3), cn(32768/2, 3), co(32768*2, 3), cp(MEM(), 15);
   static const int nMaps = 3;
   static StationaryMap Maps[nMaps] ={ {10,8},{10,8},{11,1} };
-  static SmallStationaryContextMap sMap(11, 1);
+  static SmallStationaryContextMap sMap[3]{ {11, 1}, {3, 1}, {19,1} };
   static bool MayBeImg24b = false;
   static dBASE dbase {};
-  static IndirectContext<U16> iCtx(16), iCtx2(16);
+  static const int nIndCtxs = 5;
+  static IndirectContext<U16> iCtx[nIndCtxs]{ {16,8}, {16,8}, {16,8}, {20,8}, {11,1} };
 
   if (!bpos) {
     int w=c4&0xffff, c=w&255, d=w>>8;
@@ -4232,8 +4234,12 @@ void recordModel(Mixer& m, Filetype filetype, ModelStats *Stats = nullptr) {
 
     col=pos%rlen[0];
     N = buf(rlen[0]), NN = buf(rlen[0]*2), NNN = buf(rlen[0]*3), NNNN = buf(rlen[0]*4);
-    iCtx+=c, iCtx=(c<<8)|N;
-    iCtx2+=c, iCtx2=(buf(rlen[0]-1)<<8)|N;
+    for (int i=0; i<nIndCtxs-1; iCtx[i]+=c, i++);
+    iCtx[0]=(c<<8)|N;
+    iCtx[1]=(buf(rlen[0]-1)<<8)|N;
+    iCtx[2]=(c<<8)|buf(rlen[0]-1);
+    iCtx[3]=finalize64(hash(c, N, buf(rlen[0]+1)), 20);
+
     /*
     Consider record structures that include fixed-length strings.
     These usually contain the text followed by either spaces or 0's,
@@ -4289,9 +4295,16 @@ void recordModel(Mixer& m, Filetype filetype, ModelStats *Stats = nullptr) {
     cp.set(hash(++i, N|((NN&0xF0)<<4)|((NNN&0xE0)<<7)|((NNNN&0xE0)<<10)|((col/max(1,rlen[0]/16))<<18) ));
     cp.set(hash(++i, (N&0xF8)|((NN&0xF8)<<8)|(col<<16) ));
 
-    cp.set(hash(++i, col, iCtx()));
-    cp.set(hash(++i, col, iCtx2()));
-    cp.set(hash(++i, col, iCtx()&0xFF, iCtx2()&0xFF));
+    cp.set(hash(++i, col, iCtx[0]()));
+    cp.set(hash(++i, col, iCtx[1]()));
+    cp.set(hash(++i, col, iCtx[0]()&0xFF, iCtx[1]()&0xFF));
+
+    cp.set(hash(++i, iCtx[2]()));  
+    cp.set(hash(++i, iCtx[3]()));
+    cp.set(hash(++i, iCtx[1]()&0xFF, iCtx[3]()&0xFF));
+
+    cp.set(hash(++i, N, (WxNW=c^buf(rlen[0]+1))));
+    cp.set(hash(++i, (Stats!=nullptr && Stats->Match.length>0)?Stats->Match.expectedByte:0x100|U8(iCtx[1]()), N, WxNW));
 
     int k=0x300;
     if (MayBeImg24b)
@@ -4311,8 +4324,11 @@ void recordModel(Mixer& m, Filetype filetype, ModelStats *Stats = nullptr) {
   }
   U8 B = c0<<(8-bpos);
   U32 ctx = (N^B)|(bpos<<8);
+  iCtx[nIndCtxs-1]+=y, iCtx[nIndCtxs-1]=ctx;
   Maps[2].set_direct(ctx);
-  sMap.set(ctx);
+  sMap[0].set(ctx);
+  sMap[1].set(iCtx[nIndCtxs-1]());
+  sMap[2].set((ctx<<8)|WxNW);
   
   cm.mix(m);
   cn.mix(m);
@@ -4320,7 +4336,9 @@ void recordModel(Mixer& m, Filetype filetype, ModelStats *Stats = nullptr) {
   cp.mix(m);
   for (int i=0;i<nMaps;i++)
     Maps[i].mix(m, 1, 3);
-  sMap.mix(m, 6, 1, 3);
+  sMap[0].mix(m, 6, 1, 3);
+  sMap[1].mix(m, 6, 1, 3);
+  sMap[2].mix(m, 5, 1, 2);
 
   m.set( (rlen[0]>2)*( (bpos<<7)|mxCtx ), 1024 );
   m.set( ((buf(rlen[0])^((U8)(c0<<(8-bpos))))>>4)|(min(0x1F,col/max(1,rlen[0]/32))<<4), 512 );
@@ -5682,7 +5700,7 @@ int jpegModel(Mixer& m) {
     //   xx is the first 2 extra bits, and the last 2 bits are 1 (since
     //   this never occurs in a valid RS code).
   static int cpos=0;  // position in cbuf
-  static int rs1;  // last RS code
+  static int rs1=0;  // last RS code
   static int rstpos=0,rstlen=0; // reset position
   static int ssum=0, ssum1=0, ssum2=0, ssum3=0;
     // sum of S in RS codes in block and sum of S in first component
@@ -7829,10 +7847,10 @@ void XMLModel(Mixer& m, ModelStats *Stats = nullptr){
 U32 last_prediction = 2048;
 
 int contextModel2(ModelStats *Stats) {
-  static ContextMap2 cm(MEM()*16, 9);
+  static ContextMap2 cm(MEM()*16, 10);
   static TextModel textModel(MEM()*16);
   static MatchModel matchModel(MEM()*2);
-  static SparseMatchModel sparseMatchModel(MEM()/4);
+  static SparseMatchModel sparseMatchModel(MEM()/2);
   static dmcForest dmcforest;
   static RunContextMap rcm7(MEM()), rcm9(MEM()), rcm10(MEM());
   static StateMap32 StateMaps[2]={{256},{256*256}};
@@ -7867,8 +7885,11 @@ int contextModel2(ModelStats *Stats) {
   m.add(64);
   
   if (bpos==0) {
-    for (int i=15; i>0; --i)
-      cxt[i]=combine64(cxt[i-1],c4&255);
+    const U8 B=c4&0xFF;
+    cxt[15]=(isalpha(B))?combine64(cxt[15], tolower(B)):0;
+    cm.set(cxt[15]);
+    for (int i=14; i>0; --i)
+      cxt[i]=combine64(cxt[i-1],B);
     for (int i=0; i<7; ++i)
       cm.set(cxt[i]);
     rcm7.set(cxt[7]);
