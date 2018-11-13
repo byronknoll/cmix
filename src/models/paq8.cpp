@@ -493,7 +493,7 @@ void train(short *t, short *w, int n, int err) {
 #endif
 
 #define NUM_INPUTS 1525
-#define NUM_SETS 23
+#define NUM_SETS 25
 
 std::valarray<float> model_predictions(0.5, NUM_INPUTS + NUM_SETS + 11);
 unsigned int prediction_index = 0;
@@ -1468,6 +1468,41 @@ public:
   }
   T& operator()(void) {
     return *ctx;
+  }
+};
+
+////////////////////////////// Move-to-Front list //////////////////////////////
+
+class MTFList{
+private:
+  int Root, Index;
+  Array<int, 16> Previous;
+  Array<int, 16> Next;
+public:
+  MTFList(const U16 n): Root(0), Index(0), Previous(n), Next(n) {
+    for (int i=0;i<n;i++) {
+      Previous[i] = i-1;
+      Next[i] = i+1;
+    }
+    Next[n-1] = -1;
+  }
+  inline int GetFirst(){
+    return Index=Root;
+  }
+  inline int GetNext(){
+    if(Index>=0){Index=Next[Index];return Index;}
+    return Index; //-1
+  }
+  inline void MoveToFront(int i){
+    if ((Index=i)==Root) return;
+    int p=Previous[Index];
+    int n=Next[Index];
+    if(p>=0)Next[p] = Next[Index];
+    if(n>=0)Previous[n] = Previous[Index];
+    Previous[Root] = Index;
+    Next[Index] = Root;
+    Root=Index;
+    Previous[Root]=-1;
   }
 };
 
@@ -3641,6 +3676,7 @@ private:
   StationaryMap **Maps;
   IndirectContext<U8> iCtx8;
   IndirectContext<U16> iCtx16;
+  MTFList list;
   sparseConfig sparse[NumHashes];
   U32 hashes[NumHashes];
   U32 hashIndex;   // index of hash used to find current match
@@ -3666,7 +3702,7 @@ private:
     }
     // or find a new match
     else {     
-      for (U32 i=0; i<NumHashes; i++) {
+      for (int i=list.GetFirst(); i>=0; i=list.GetNext()) {
         index = Table[hashes[i]];
         if (index>0) {
           U32 offset = sparse[i].offset+1;
@@ -3678,6 +3714,7 @@ private:
             length-=(sparse[i].minLen-1);
             index+=sparse[i].deletions;
             hashIndex = i;
+            list.MoveToFront(i);
             break;
           }
         }
@@ -3705,6 +3742,7 @@ public:
     Table(Size/sizeof(U32)),
     iCtx8{19,1},
     iCtx16{16},
+    list(NumHashes),
     hashes{ 0 },
     hashIndex(0),
     length(0),
@@ -3719,9 +3757,9 @@ public:
     Maps[2] = new StationaryMap(8,1);
     Maps[3] = new StationaryMap(19,1);
     sparse[0].minLen=5, sparse[0].bitMask=0xDF;
-    sparse[1].minLen=5, sparse[1].bitMask=0x5F;
-    sparse[2].offset=1, sparse[2].minLen=4;
-    sparse[3].stride=2, sparse[3].minLen=4, sparse[3].bitMask=0xDF;
+    sparse[1].offset=1, sparse[1].minLen=4;
+    sparse[2].stride=2, sparse[2].minLen=4, sparse[2].bitMask=0xDF;
+    sparse[3].minLen=5, sparse[3].bitMask=0xF;
   }
   ~SparseMatchModel(){
     for (U32 i=0; i<4; i++)
@@ -3729,10 +3767,10 @@ public:
     delete[] Maps;
   }
   int Predict(Mixer& mixer, Buf& buffer, ModelStats *Stats = nullptr) {
+    const U8 B = c0<<(8-bpos);
     if (bpos==0)
       Update(buffer, Stats);
     else if (valid) {
-      U8 B = c0<<(8-bpos);
       Maps[0]->set(hash(expectedByte, c0, buffer(1), buffer(2), ilog2(length+1)*NumHashes+hashIndex));
       if (bpos==4)
         Maps[1]->set_direct(0x10000|((expectedByte^U8(c0<<4))<<8)|buffer(1));
@@ -3742,7 +3780,7 @@ public:
     }
 
     // check if next bit matches the prediction, accounting for the required bitmask
-    if (length>0 && (((expectedByte^U8(c0<<(8-bpos)))&sparse[hashIndex].bitMask)>>(8-bpos))!=0)
+    if (length>0 && (((expectedByte^B)&sparse[hashIndex].bitMask)>>(8-bpos))!=0)
       length = 0;
 
     if (valid) {
@@ -3762,6 +3800,8 @@ public:
     }
     else
       for (int i=0; i<11; i++, mixer.add(0));
+
+    mixer.set((hashIndex<<6)|(bpos<<3)|min(7, length), 256);
 
     return length;
   }
@@ -4299,7 +4339,7 @@ void recordModel(Mixer& m, Filetype filetype, ModelStats *Stats = nullptr) {
     cp.set(hash(++i, col, iCtx[1]()));
     cp.set(hash(++i, col, iCtx[0]()&0xFF, iCtx[1]()&0xFF));
 
-    cp.set(hash(++i, iCtx[2]()));  
+    cp.set(hash(++i, iCtx[2]()));
     cp.set(hash(++i, iCtx[3]()));
     cp.set(hash(++i, iCtx[1]()&0xFF, iCtx[3]()&0xFF));
 
@@ -4560,9 +4600,10 @@ void im1bitModel(Mixer& m, int w) {
 // Model for 4-bit image data
 void im4bitModel(Mixer& m, int w) {
   static HashTable<16> t(MEM()/2);
-  const int S=13; // number of contexts
+  const int S=14; // number of contexts
   static U8* cp[S];
   static StateMap sm[S];
+  static StateMap32 map(16);
   static U8 WW=0, W=0, NWW=0, NW=0, N=0, NE=0, NEE=0, NNWW = 0, NNW=0, NN=0, NNE=0, NNEE=0;
   static int col=0, line=0, run=0, prevColor=0, px=0;
   if (!cp[0]){
@@ -4573,29 +4614,30 @@ void im4bitModel(Mixer& m, int w) {
     *cp[i]=nex(*cp[i],y);
 
   if (!bpos || bpos==4){
-      WW=W, NWW=NW, NW=N, N=NE, NE=NEE, NNWW=NWW, NNW=NN, NN=NNE, NNE=NNEE;
-      if (!bpos)
-        W=c4&0xF, NEE=buf(w-1)>>4, NNEE=buf(w*2-1)>>4;
-      else
-        W=c0&0xF, NEE=buf(w-1)&0xF, NNEE=buf(w*2-1)&0xF;
-      run=(W!=WW || !col)?(prevColor=WW,0):min(0xFFF,run+1);
-      px=1;
-      U64 i=0; cp[i]=t[hash(i,W,NW,N)];
-          i++; cp[i]=t[hash(i,N, min(0xFFF, col/8))];
-          i++; cp[i]=t[hash(i,W,NW,N,NN,NE)];
-          i++; cp[i]=t[hash(i,W, N, NE+NNE*16, NEE+NNEE*16)];
-          i++; cp[i]=t[hash(i,W, N, NW+NNW*16, NWW+NNWW*16)];
-          i++; cp[i]=t[hash(i,W, ilog2(run+1), prevColor, col/max(1,w/2) )];
-          i++; cp[i]=t[hash(i,NE, min(0x3FF, (col+line)/max(1,w*8)))];
-          i++; cp[i]=t[hash(i,NW, (col-line)/max(1,w*8))];
-          i++; cp[i]=t[hash(i,WW*16+W,NN*16+N,NNWW*16+NW)];
-          i++; cp[i]=t[hash(i,N,NN)];
-          i++; cp[i]=t[hash(i,W,WW)];
-          i++; cp[i]=t[hash(i,W,NE)];
-          i++; cp[i]=t[-1];
+    WW=W, NWW=NW, NW=N, N=NE, NE=NEE, NNWW=NWW, NNW=NN, NN=NNE, NNE=NNEE;
+    if (!bpos)
+      W=c4&0xF, NEE=buf(w-1)>>4, NNEE=buf(w*2-1)>>4;
+    else
+      W=c0&0xF, NEE=buf(w-1)&0xF, NNEE=buf(w*2-1)&0xF;
+    run=(W!=WW || !col)?(prevColor=WW,0):min(0xFFF,run+1);
+    px=1;
+    U64 i=0; cp[i]=t[hash(i,W,NW,N)];
+        i++; cp[i]=t[hash(i,N, min(0xFFF, col/8))];
+        i++; cp[i]=t[hash(i,W,NW,N,NN,NE)];
+        i++; cp[i]=t[hash(i,W, N, NE+NNE*16, NEE+NNEE*16)];
+        i++; cp[i]=t[hash(i,W, N, NW+NNW*16, NWW+NNWW*16)];
+        i++; cp[i]=t[hash(i,W, ilog2(run+1), prevColor, col/max(1,w/2) )];
+        i++; cp[i]=t[hash(i,NE, min(0x3FF, (col+line)/max(1,w*8)))];
+        i++; cp[i]=t[hash(i,NW, (col-line)/max(1,w*8))];
+        i++; cp[i]=t[hash(i,WW*16+W,NN*16+N,NNWW*16+NW)];
+        i++; cp[i]=t[hash(i,N,NN)];
+        i++; cp[i]=t[hash(i,W,WW)];
+        i++; cp[i]=t[hash(i,W,NE)];
+        i++; cp[i]=t[hash(i,WW,NN,NEE)];
+        i++; cp[i]=t[-1];
 
-      col*=(++col)<w*2;
-      line+=(!col);
+    col*=(++col)<w*2;
+    line+=(!col);
   }
   else{
     px+=px+y;
@@ -4605,8 +4647,16 @@ void im4bitModel(Mixer& m, int w) {
   }
 
   // predict
-  for (int i=0; i<S; i++)
-    m.add(stretch(sm[i].p(*cp[i])));
+  for (int i=0; i<S; i++) {
+    const U8 s = *cp[i];
+    const int n0=-!nex(s, 2), n1=-!nex(s, 3);
+    const int p1 = sm[i].p(s);
+    const int st = stretch(p1)>>1;
+    m.add(st);
+    m.add((p1-2047)>>2);
+    m.add(st*abs(n1-n0));
+  }
+  m.add(stretch(map.p(px))>>1);
 
   m.set(W*16+px, 256);
   m.set(min(31,col/max(1,w/16))+N*32, 512);
@@ -7854,7 +7904,7 @@ int contextModel2(ModelStats *Stats) {
   static dmcForest dmcforest;
   static RunContextMap rcm7(MEM()), rcm9(MEM()), rcm10(MEM());
   static StateMap32 StateMaps[2]={{256},{256*256}};
-  static Mixer m(NUM_INPUTS, 10800+1024*21+16384+8192, NUM_SETS, 32);
+  static Mixer m(NUM_INPUTS, 10864+1024*21+16384+8192+256, NUM_SETS, 32);
   static U32 cxt[16];
   static Filetype ft2,filetype=preprocessor::DEFAULT;
   static int size=0;  // bytes remaining in block
@@ -7915,25 +7965,23 @@ int contextModel2(ModelStats *Stats) {
   if ((filetype!=preprocessor::EXE && jpegModel(m)) || (size>0 && imgModel(m, Stats)) || audioModel(m, Stats))
     return m.p();
 
-  if (level>=4) {
-    sparseMatchModel.Predict(m, buf, Stats);
-    sparseModel(m,ismatch,order);
-    sparseModel1(m,ismatch,order);
-    distanceModel(m);
-    picModel(m);
-    recordModel(m, filetype, Stats);
-    recordModel1(m);
-    wordModel(m);
-    nestModel(m);
-    indirectModel(m);
-    dmcforest.mix(m);
-    XMLModel(m, Stats);
-    textModel.Predict(m, buf, Stats);
-    exeModel(m, true, Stats);
-  }
-
-  order = order-5;
-  if(order<0) order=0;
+  sparseMatchModel.Predict(m, buf, Stats);
+  sparseModel(m,ismatch,order);
+  sparseModel1(m,ismatch,order);
+  distanceModel(m);
+  picModel(m);
+  recordModel(m, filetype, Stats);
+  recordModel1(m);
+  wordModel(m);
+  nestModel(m);
+  indirectModel(m);
+  dmcforest.mix(m);
+  XMLModel(m, Stats);
+  textModel.Predict(m, buf, Stats);
+  exeModel(m, true, Stats);
+  
+  m.set((max(0, order-3)<<3)|bpos, 64);
+  order=max(0,order-5);
 
   U32 d=c0<<(8-bpos),c=(d+(bpos==1?b3/2:0))&192;
   if(!bpos)c=words*16&192;
