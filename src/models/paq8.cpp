@@ -48,7 +48,7 @@
 #define NOASM
 #endif
 
-namespace {
+namespace paq8 {
 typedef unsigned char U8;
 typedef unsigned short U16;
 typedef unsigned int U32;
@@ -8157,23 +8157,23 @@ void Predictor::update() {
   last_prediction = pr;
 }
 
-Predictor paq8;
 }
 
 PAQ8::PAQ8(int memory) {
-  level = memory;
-  buf.setsize(MEM()*8);
+  paq8::level = memory;
+  paq8::buf.setsize(paq8::MEM()*8);
+  predictor_.reset(new paq8::Predictor());
 }
 
 const std::valarray<float>& PAQ8::Predict() {
-  return model_predictions;
+  return paq8::model_predictions;
 }
 
 unsigned int PAQ8::NumOutputs() {
-  return model_predictions.size();
+  return paq8::model_predictions.size();
 }
 
 void PAQ8::Perceive(int bit) {
-  y = bit;
-  paq8.update();
+  paq8::y = bit;
+  predictor_->update();
 }
