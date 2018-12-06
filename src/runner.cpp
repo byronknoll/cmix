@@ -202,7 +202,7 @@ bool RunDecompression(bool enable_preprocess, const std::string& input_path,
     FILE* data_out = fopen(output_path.c_str(), "wb");
     if (!data_out) return false;
     fseek(in, 5L, SEEK_SET);
-    preprocessor::Decode(in, data_out, temp_path, dictionary);
+    preprocessor::Decode(in, data_out, dictionary);
     fseek(data_out, 0L, SEEK_END);
     *output_bytes = ftell(data_out);
     fclose(in);
@@ -224,7 +224,7 @@ bool RunDecompression(bool enable_preprocess, const std::string& input_path,
   FILE* data_out = fopen(output_path.c_str(), "wb");
   if (!data_out) return false;
 
-  preprocessor::Decode(temp_in, data_out, temp_path, dictionary);
+  preprocessor::Decode(temp_in, data_out, dictionary);
   fseek(data_out, 0L, SEEK_END);
   *output_bytes = ftell(data_out);
   fclose(temp_in);

@@ -21,7 +21,7 @@ void NoPreprocess(FILE* in, FILE* out, int n);
 
 void Pretrain(Predictor* p, FILE* dictionary);
 
-void Decode(FILE* in, FILE* out, std::string temp_path, FILE* dictionary);
+void Decode(FILE* in, FILE* out, FILE* dictionary);
 
 }
 

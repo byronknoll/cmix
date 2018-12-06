@@ -4,8 +4,8 @@
 #include <cstdlib>
 #include <string.h>
 
-#include "textfilter.cpp"
 #include "preprocessor.h"
+#include "dictionary.h"
 
 namespace preprocessor {
 
@@ -441,89 +441,52 @@ int decode_exe(FILE* in) {
   return c[--q];
 }
 
-void encode_text(FILE* in, FILE* out, int len, string temp_path,
+void encode_text(FILE* in, FILE* out, int len, std::string temp_path,
     FILE* dictionary) {
-  string path1 = temp_path + "2";
-  FILE* temp_input = fopen(path1.c_str(), "wb+");
-  if (!temp_input) abort();
-
-  for (int i = 0; i < len; ++i) {
-    putc(getc(in), temp_input);
-  }
-  rewind(temp_input);
-
-  string path2 = temp_path + "3";
-  FILE* temp_output = fopen(path2.c_str(), "wb+");
+  std::string path = temp_path + "2";
+  FILE* temp_output = fopen(path.c_str(), "wb+");
   if (!temp_output) abort();
+  int orig_pos = ftell(in);
 
-  WRT wrt;
-  wrt.defaultSettings(0, NULL);
-  wrt.WRT_start_encoding(temp_input, temp_output, len, false, dictionary);
+  Dictionary dict(dictionary, true, false);
+  dict.Encode(in, len, temp_output);
 
   int size = ftell(temp_output);
   if (size > len - 50) {
-    for (int i = 0; i < 4; ++i) {
-      putc(0, out);
-    }
-    rewind(temp_input);
+    putc(0, out);
+    fseek(in, orig_pos, SEEK_SET);
     for (int i = 0; i < len; ++i) {
-      putc(getc(temp_input), out);
+      putc(getc(in), out);
     }
   } else {
+    putc(1, out);
     rewind(temp_output);
     for (int i = 0; i < size; ++i) {
       putc(getc(temp_output), out);
     }
   }
 
-  fclose(temp_input);
   fclose(temp_output);
-  remove(path1.c_str());
-  remove(path2.c_str());
+  remove(path.c_str());
 }
 
-FILE* wrt_temp;
-WRT* wrt_decoder = NULL;
+Dictionary* dict = NULL;
 bool wrt_enabled = true;
 
-void reset_text_decoder(FILE* in, string path) {
-  if (wrt_temp) {
-    fclose(wrt_temp);
-    remove(path.c_str());
-  }
-  wrt_temp = fopen(path.c_str(), "wb+");
-  if (!wrt_temp) abort();
-
-  unsigned int size = 0;
-  for (int i = 4; i != 0; --i) {
-    int c = getc(in);
-    size = size * 256 + c;
-    putc(c, wrt_temp);
-  }
-  if (size == 0) {
-    wrt_enabled = false;
-    return;
-  }
-  wrt_enabled = true;
-  size -= 8;
-
-  for (unsigned int i = 0; i < size; ++i) {
-    putc(getc(in), wrt_temp);
-  }
-  rewind(wrt_temp);
-
-  if (wrt_decoder != NULL) delete wrt_decoder;
-  wrt_decoder = new WRT();
-  wrt_decoder->defaultSettings(0, NULL);
-  wrt_decoder->WRT_prepare_decoding();
+void reset_text_decoder(FILE* in, FILE* dictionary) {
+  if (dict == NULL) dict = new Dictionary(dictionary, false, true);
+  int c = getc(in);
+  if (c) wrt_enabled = true;
+  else wrt_enabled = false;
 }
 
-int decode_text(FILE* in, FILE* dictionary) {
+int decode_text(FILE* in) {
   if (!wrt_enabled) return getc(in);
-  return wrt_decoder->WRT_decode_char(wrt_temp, NULL, 0, dictionary);
+  return dict->Decode(in);
 }
 
-void Encode(FILE* in, FILE* out, int n, string temp_path, FILE* dictionary) {
+void Encode(FILE* in, FILE* out, int n, std::string temp_path,
+    FILE* dictionary) {
   Filetype type=DEFAULT;
   long begin=ftell(in);
 
@@ -580,7 +543,7 @@ void NoPreprocess(FILE* in, FILE* out, int n) {
   encode_default(in, out, n);
 }
 
-int decode2(FILE* in, string temp_path, FILE* dictionary) {
+int DecodeByte(FILE* in, FILE* dictionary) {
   static Filetype type=DEFAULT;
   static int len=0, reset=0;
   while (len==0) {
@@ -593,13 +556,13 @@ int decode2(FILE* in, string temp_path, FILE* dictionary) {
     len|=getc(in)<<8;
     len|=getc(in);
     if (len<0) len=1;
-    if (type == TEXT) reset_text_decoder(in, temp_path);
+    if (type == TEXT) reset_text_decoder(in, dictionary);
   }
   --len;
   switch (type) {
     case IMAGE24: return decode_bmp(in, reset);
     case EXE:     return decode_exe(in);
-    case TEXT:    return decode_text(in, dictionary);
+    case TEXT:    return decode_text(in);
     default: {
       if (reset && HasInfo(type)){
         for (int i=info=0;i<4;i++) info=(info<<8)|getc(in); //read info
@@ -610,15 +573,11 @@ int decode2(FILE* in, string temp_path, FILE* dictionary) {
   }
 }
 
-void Decode(FILE* in, FILE* out, string temp_path, FILE* dictionary) {
-  string path = temp_path + "2";
+void Decode(FILE* in, FILE* out, FILE* dictionary) {
   while (true) {
-    int result = decode2(in, path, dictionary);
+    int result = DecodeByte(in, dictionary);
     if (result == -1) {
-      if (wrt_temp) {
-        fclose(wrt_temp);
-        remove(path.c_str());
-      }
+      if (dict != NULL) delete dict;
       return;
     }
     putc(result, out);

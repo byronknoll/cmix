@@ -1,11 +1,11 @@
-CC = g++
+CC = g++-8
 CFLAGS = -std=c++11 -Wall -c
 LFLAGS = -std=c++11 -Wall
 
-OBJS = build/preprocessor.o build/encoder.o build/decoder.o build/predictor.o build/sigmoid.o build/mixer-input.o build/mixer.o build/byte-mixer.o build/byte-model.o build/sse.o build/context-manager.o build/direct.o build/direct-hash.o build/indirect.o build/nonstationary.o build/run-map.o build/byte-run.o build/match.o build/ppmd.o build/bracket.o build/paq8.o build/paq8hp.o build/bracket-context.o build/context-hash.o build/sparse.o build/lstm.o build/lstm-layer.o build/indirect-hash.o build/interval.o build/interval-hash.o build/bit-context.o build/combined-context.o
+OBJS = build/preprocessor.o build/dictionary.o build/encoder.o build/decoder.o build/predictor.o build/sigmoid.o build/mixer-input.o build/mixer.o build/byte-mixer.o build/byte-model.o build/sse.o build/context-manager.o build/direct.o build/direct-hash.o build/indirect.o build/nonstationary.o build/run-map.o build/byte-run.o build/match.o build/ppmd.o build/bracket.o build/paq8.o build/paq8hp.o build/bracket-context.o build/context-hash.o build/sparse.o build/lstm.o build/lstm-layer.o build/indirect-hash.o build/interval.o build/interval-hash.o build/bit-context.o build/combined-context.o
 
-all: CFLAGS += -Ofast
-all: LFLAGS += -Ofast
+all: CFLAGS += -Ofast -march=native
+all: LFLAGS += -Ofast -march=native
 all: build cmix
 
 debug: CFLAGS += -ggdb
@@ -15,7 +15,10 @@ debug: build cmix
 cmix: $(OBJS) src/runner.cpp
 	$(CC) $(LFLAGS) $(OBJS) src/runner.cpp -o cmix
 
-build/preprocessor.o: src/preprocess/preprocessor.h src/preprocess/preprocessor.cpp src/preprocess/textfilter.cpp src/predictor.h
+build/dictionary.o: src/preprocess/dictionary.h src/preprocess/dictionary.cpp
+	$(CC) $(CFLAGS) src/preprocess/dictionary.cpp -o build/dictionary.o
+
+build/preprocessor.o: src/preprocess/preprocessor.h src/preprocess/preprocessor.cpp src/predictor.h src/preprocess/dictionary.h
 	$(CC) $(CFLAGS) src/preprocess/preprocessor.cpp -o build/preprocessor.o
 
 build/encoder.o: src/coder/encoder.h src/coder/encoder.cpp src/predictor.h
