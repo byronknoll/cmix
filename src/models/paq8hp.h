@@ -3,6 +3,11 @@
 
 #include "model.h"
 #include <vector>
+#include <memory>
+
+namespace paq8hp {
+  class Predictor;
+}
 
 class PAQ8HP : public Model {
  public:
@@ -11,6 +16,9 @@ class PAQ8HP : public Model {
   unsigned int NumOutputs();
   void Perceive(int bit);
   void ByteUpdate() {};
+
+ private:
+  std::unique_ptr<paq8hp::Predictor> predictor_;
 };
 
 #endif

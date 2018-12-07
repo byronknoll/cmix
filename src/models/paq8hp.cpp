@@ -37,7 +37,7 @@
 #define NOASM
 #endif
 
-namespace {
+namespace paq8hp {
 
 typedef unsigned char U8;
 typedef unsigned short U16;
@@ -194,7 +194,9 @@ public:
 };
 
 int level=DEFAULT_OPTION;
-#define MEM (0x10000<<level)
+unsigned long long MEM() {
+  return 0x10000<<level;
+}
 int y=0;
 
 int c0=1;
@@ -801,7 +803,7 @@ static U32 col, frstchar=0, spafdo=0, spaces=0, spacecount=0, words=0, wordcount
 
 void wordModel(Mixer& m) {
   static U32 word0=0, word1=0, word2=0, word3=0, word4=0;
-  static ContextMap cm((unsigned int)MEM*16, 46);
+  static ContextMap cm((unsigned int)MEM()*16, 46);
   static int nl1=-3, nl=-2;
   static U32 t1[256];
   static U16 t2[0x10000];
@@ -957,7 +959,7 @@ void recordModel(Mixer& m) {
 }
 
 void sparseModel(Mixer& m) {
-  static ContextMap cn(MEM*2, 5);
+  static ContextMap cn(MEM()*2, 5);
   static SmallStationaryContextMap scm1(0x20000,17), scm2(0x20000,12), scm3(0x20000,12),
        scm4(0x20000,13), scm5(0x10000,12), scm6(0x20000,12),
        scm7(0x2000 ,12), scm8(0x8000 ,13), scm9(0x1000 ,12), scma(0x10000,16);
@@ -997,8 +999,8 @@ static U32 WRT_mpw[16]= { 3, 3, 3, 2, 2, 2, 1, 1, 1, 1, 1, 1, 1, 0, 0, 0 }, tri[
 static U32 WRT_mtt[16]= { 0, 0, 1, 2, 3, 4, 5, 5, 6, 6, 6, 6, 6, 7, 7, 7 };
 
 int contextModel2() {
-  static ContextMap cm((unsigned int)MEM*16, 7);
-  static RunContextMap rcm7(MEM/4,14), rcm9(MEM/4,18), rcm10(MEM/2,20);
+  static ContextMap cm((unsigned int)MEM()*16, 7);
+  static RunContextMap rcm7(MEM()/4,14), rcm9(MEM()/4,18), rcm10(MEM()/2,20);
   static Mixer m(456, 128*(16+14+14+12+14+16), 6, 512);
   static U32 cxt[16];
 
@@ -1168,29 +1170,29 @@ void Predictor::update() {
   ResetPredictions();
 }
 
-Predictor paq8;
 }
 
 PAQ8HP::PAQ8HP(int memory) {
-  level = memory;
-  buf.setsize(MEM*8);
+  paq8hp::level = memory;
+  paq8hp::buf.setsize(paq8hp::MEM()*8);
+  predictor_.reset(new paq8hp::Predictor());
 }
 
 const std::valarray<float>& PAQ8HP::Predict() {
-  return model_predictions;
+  return paq8hp::model_predictions;
 }
 
 unsigned int PAQ8HP::NumOutputs() {
-  return model_predictions.size();
+  return paq8hp::model_predictions.size();
 }
 
 void PAQ8HP::Perceive(int bit) {
-  y = bit;
+  paq8hp::y = bit;
   if (bit) {
-    sm_add_y = sm_add;
+    paq8hp::sm_add_y = paq8hp::sm_add;
   } else {
-    sm_add_y = 0;
+    paq8hp::sm_add_y = 0;
   }
-  paq8.update();
+  predictor_->update();
 }
 
