@@ -47,7 +47,7 @@ Dictionary::Dictionary(FILE* dictionary, bool encode, bool decode) {
     unsigned char c = getc(dictionary);
     if (c >= 'a' && c <= 'z') line += c;
     else if (!line.empty()) {
-      if (line.size() > longest_word_) longest_word_ = line.size();
+      if ((int)line.size() > longest_word_) longest_word_ = line.size();
       unsigned int bytes;
       if (line_count < kBoundary1) {
         bytes = 0x80 + line_count;
