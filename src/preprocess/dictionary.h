@@ -18,8 +18,7 @@ class Dictionary {
  private:
   void EncodeWord(const std::string& word, int num_upper, bool next_lower,
       FILE* output);
-  bool EncodePrefix(const std::string& word, FILE* output);
-  bool EncodeSuffix(const std::string& word, FILE* output);
+  bool EncodeSubstring(const std::string& word, FILE* output);
   void AddToBuffer(FILE* input);
 
   std::unordered_map<std::string, unsigned int> byte_map_;

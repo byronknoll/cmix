@@ -125,9 +125,10 @@ void Dictionary::EncodeWord(const std::string& word, int num_upper,
     bool next_lower, FILE* output) {
   if (num_upper > 1) putc(kUppercase, output);
   else if (num_upper == 1) putc(kCapitalized, output);
-  if (byte_map_.find(word) != byte_map_.end()) {
-    EncodeBytes(byte_map_[word], output);
-  } else if (!EncodeSuffix(word, output) && !EncodePrefix(word, output)) {
+  auto it = byte_map_.find(word);
+  if (it != byte_map_.end()) {
+    EncodeBytes(it->second, output);
+  } else if (!EncodeSubstring(word, output)) {
     for (unsigned int i = 0; i < word.size(); ++i) {
       putc((unsigned char)word[i], output);
     }
@@ -137,38 +138,33 @@ void Dictionary::EncodeWord(const std::string& word, int num_upper,
   }
 }
 
-bool Dictionary::EncodePrefix(const std::string& word, FILE* output) {
+bool Dictionary::EncodeSubstring(const std::string& word, FILE* output) {
   if (word.size() <= 7) return false;
   int size = word.size() - 1;
   if (size > longest_word_) size = longest_word_;
+  std::string suffix = word.substr(word.size() - size, size);
+  while (suffix.size() >= 7) {
+    auto it = byte_map_.find(suffix);
+    if (it != byte_map_.end()) {
+      for (unsigned int i = 0; i < word.size() - suffix.size(); ++i) {
+        putc((unsigned char)word[i], output);
+      }
+      EncodeBytes(it->second, output);
+      return true;
+    }
+    suffix.erase(0, 1);
+  }
   std::string prefix = word.substr(0, size);
   while (prefix.size() >= 7) {
-    if (byte_map_.find(prefix) != byte_map_.end()) {
-      EncodeBytes(byte_map_[prefix], output);
+    auto it = byte_map_.find(prefix);
+    if (it != byte_map_.end()) {
+      EncodeBytes(it->second, output);
       for (unsigned int i = prefix.size(); i < word.size(); ++i) {
         putc((unsigned char)word[i], output);
       }
       return true;
     }
     prefix.erase(prefix.size() - 1, 1);
-  }
-  return false;
-}
-
-bool Dictionary::EncodeSuffix(const std::string& word, FILE* output) {
-  if (word.size() <= 7) return false;
-  int size = word.size() - 1;
-  if (size > longest_word_) size = longest_word_;
-  std::string suffix = word.substr(word.size() - size, size);
-  while (suffix.size() >= 7) {
-    if (byte_map_.find(suffix) != byte_map_.end()) {
-      for (unsigned int i = 0; i < word.size() - suffix.size(); ++i) {
-        putc((unsigned char)word[i], output);
-      }
-      EncodeBytes(byte_map_[suffix], output);
-      return true;
-    }
-    suffix.erase(0, 1);
   }
   return false;
 }
@@ -184,36 +180,16 @@ unsigned char Dictionary::Decode(FILE* input) {
 
 void Dictionary::AddToBuffer(FILE* input) {
   unsigned char c = getc(input);
-  if (!(c == kEndUpper || c == kEscape || c == kUppercase ||
-          c == kCapitalized || c >= 0x80)) {
-    if (!((c >= 'a' && c <= 'z') || (c >= 'A' && c <= 'Z'))) {
-      decode_upper_ = false;
-    }
-    if (decode_capital_ || decode_upper_) {
-      c = (c - 'a') + 'A';
-    }
-    if (decode_capital_) decode_capital_ = false;
-    output_buffer_.push_back(c);
-    return;
-  }
   if (c == kEscape) {
     decode_upper_ = false;
     output_buffer_.push_back(getc(input));
-    return;
-  }
-  if (c == kUppercase) {
+  } else if (c == kUppercase) {
     decode_upper_ = true;
-    return;
-  }
-  if (c == kCapitalized) {
+  } else if (c == kCapitalized) {
     decode_capital_ = true;
-    return;
-  }
-  if (c == kEndUpper) {
+  } else if (c == kEndUpper) {
     decode_upper_ = false;
-    return;
-  }
-  if (c >= 0x80) {
+  } else if (c >= 0x80) {
     unsigned int bytes = c;
     if (c > 0xCF) {
       c = getc(input);
@@ -234,9 +210,16 @@ void Dictionary::AddToBuffer(FILE* input) {
       }
       output_buffer_.push_back(word[i]);
     }
-    return;
+  } else {
+    if (!((c >= 'a' && c <= 'z') || (c >= 'A' && c <= 'Z'))) {
+      decode_upper_ = false;
+    }
+    if (decode_capital_ || decode_upper_) {
+      c = (c - 'a') + 'A';
+    }
+    if (decode_capital_) decode_capital_ = false;
+    output_buffer_.push_back(c);
   }
-  output_buffer_.push_back(c);
 }
 
 }
