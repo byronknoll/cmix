@@ -47,7 +47,7 @@ Dictionary::Dictionary(FILE* dictionary, bool encode, bool decode) {
     unsigned char c = getc(dictionary);
     if (c >= 'a' && c <= 'z') line += c;
     else if (!line.empty()) {
-      if ((int)line.size() > longest_word_) longest_word_ = line.size();
+      if (line.size() > longest_word_) longest_word_ = line.size();
       unsigned int bytes;
       if (line_count < kBoundary1) {
         bytes = 0x80 + line_count;
@@ -140,7 +140,7 @@ void Dictionary::EncodeWord(const std::string& word, int num_upper,
 
 bool Dictionary::EncodeSubstring(const std::string& word, FILE* output) {
   if (word.size() <= 7) return false;
-  int size = word.size() - 1;
+  unsigned int size = word.size() - 1;
   if (size > longest_word_) size = longest_word_;
   std::string suffix = word.substr(word.size() - size, size);
   while (suffix.size() >= 7) {

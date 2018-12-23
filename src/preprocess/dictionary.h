@@ -25,7 +25,7 @@ class Dictionary {
   std::unordered_map<unsigned int, std::string> reverse_map_;
   std::list<unsigned char> output_buffer_;
   bool decode_upper_ = false, decode_capital_ = false;
-  int longest_word_ = 0;
+  unsigned int longest_word_ = 0;
 };
 
 }
