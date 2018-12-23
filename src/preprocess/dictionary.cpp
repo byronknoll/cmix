@@ -73,7 +73,7 @@ void Dictionary::Encode(FILE* input, int len, FILE* output) {
   for (int pos = 0; pos < len; ++pos) {
     unsigned char c = getc(input);
     bool advance = false;
-    if (word.size() > 50) {
+    if (word.size() > longest_word_) {
       advance = true;
     } else if (c >= 'a' && c <= 'z') {
       if (num_upper > 1) {
