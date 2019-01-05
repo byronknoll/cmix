@@ -42,7 +42,7 @@ Dictionary::Dictionary(FILE* dictionary, bool encode, bool decode) {
   std::string line;
   int line_count = 0;
   const int kBoundary1 = 80, kBoundary2 = kBoundary1 + 3840,
-      kBoundary3 = kBoundary2 + 40960;
+      kBoundary3 = kBoundary2 + 40960, kBoundary4 = kBoundary3 + 81920;
   for (unsigned pos = 0; pos < len; ++pos) {
     unsigned char c = getc(dictionary);
     if (c >= 'a' && c <= 'z') line += c;
@@ -56,6 +56,10 @@ Dictionary::Dictionary(FILE* dictionary, bool encode, bool decode) {
         bytes += (0x80 + ((line_count-kBoundary1) % 80)) << 8;
       } else if (line_count < kBoundary3) {
         bytes = 0xF0 + (((line_count-kBoundary2) / 80) / 32);
+        bytes += (0xD0 + (((line_count-kBoundary2) / 80) % 32)) << 8;
+        bytes += (0x80 + ((line_count-kBoundary2) % 80)) << 16;
+      } else if (line_count < kBoundary4) {
+        bytes = 0xD0 + (((line_count-kBoundary2) / 80) / 32);
         bytes += (0xD0 + (((line_count-kBoundary2) / 80) % 32)) << 8;
         bytes += (0x80 + ((line_count-kBoundary2) % 80)) << 16;
       }
