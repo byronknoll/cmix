@@ -3,6 +3,7 @@
 #include <stdio.h>
 #include <cstdlib>
 #include <vector>
+#include <string.h>
 
 #include "preprocess/preprocessor.h"
 #include "coder/encoder.h"
@@ -14,21 +15,28 @@ namespace {
 }
 
 int Help() {
-  printf("cmix version 16\n");
-  printf("With preprocessing:\n");
-  printf("    compress:           cmix -c [dictionary] [input] [output]\n");
+  printf("cmix version 17\n");
+  printf("Compress:\n");
+  printf("    with dictionary:    cmix -c [dictionary] [input] [output]\n");
+  printf("    without dictionary: cmix -c [input] [output]\n");
+  printf("    no preprocessing:   cmix -n [input] [output]\n");
   printf("    only preprocessing: cmix -s [dictionary] [input] [output]\n");
-  printf("    decompress:         cmix -d [dictionary] [input] [output]\n");
-  printf("Without preprocessing:\n");
-  printf("    compress:   cmix -c [input] [output]\n");
-  printf("    decompress: cmix -d [input] [output]\n");
+  printf("                        cmix -s [input] [output]\n");
+  printf("Decompress:\n");
+  printf("    with dictionary:    cmix -d [dictionary] [input] [output]\n");
+  printf("    without dictionary: cmix -d [input] [output]\n");
   return -1;
 }
 
 void WriteHeader(unsigned long long length, const std::vector<bool>& vocab,
-    std::ofstream* os) {
+    bool enable_preprocessing, bool dictionary_used, std::ofstream* os) {
   for (int i = 4; i >= 0; --i) {
     char c = length >> (8*i);
+    if (i == 4) {
+      c &= 0x3F;
+      if (enable_preprocessing) c |= 0x80;
+      if (dictionary_used) c |= 0x40;
+    }
     os->put(c);
   }
   if (length < kMinVocabFileSize) return;
@@ -41,18 +49,29 @@ void WriteHeader(unsigned long long length, const std::vector<bool>& vocab,
   }
 }
 
-void WriteStorageHeader(FILE* out) {
+void WriteStorageHeader(FILE* out, bool dictionary_used) {
   for (int i = 4; i >= 0; --i) {
-    putc(0, out);
+    char c = 0;
+    if (i == 4 && dictionary_used) c = 0x40;
+    putc(c, out);
   }
 }
 
 void ReadHeader(std::ifstream* is, unsigned long long* length,
+    bool* enable_preprocessing, bool* dictionary_used,
     std::vector<bool>* vocab) {
   *length = 0;
-  for (int i = 0; i < 5; ++i) {
+  for (int i = 0; i <= 4; ++i) {
     *length <<= 8;
-    *length += (unsigned char)(is->get());
+    unsigned char c = is->get();
+    if (i == 0) {
+      if (c&0x80) *enable_preprocessing = true;
+      else *enable_preprocessing = false;
+      if (c&0x40) *dictionary_used = true;
+      else *dictionary_used = false;
+      c &= 0x3F;
+    }
+    *length += c;
   }
   if (*length == 0) return;
   if (*length < kMinVocabFileSize) {
@@ -122,7 +141,7 @@ bool Store(const std::string& input_path, const std::string& temp_path,
   fseek(data_in, 0L, SEEK_END);
   *input_bytes = ftell(data_in);
   fseek(data_in, 0L, SEEK_SET);
-  WriteStorageHeader(data_out);
+  WriteStorageHeader(data_out, dictionary != NULL);
   preprocessor::Encode(data_in, data_out, *input_bytes, temp_path, dictionary);
   fseek(data_out, 0L, SEEK_END);
   *output_bytes = ftell(data_out);
@@ -171,7 +190,8 @@ bool RunCompression(bool enable_preprocess, const std::string& input_path,
     temp_in.seekg(0, std::ios::beg);
   }
 
-  WriteHeader(temp_bytes, vocab, &data_out);
+  WriteHeader(temp_bytes, vocab, enable_preprocess, dictionary != NULL,
+      &data_out);
   Predictor p(vocab);
   if (enable_preprocess) preprocessor::Pretrain(&p, dictionary);
   Compress(temp_bytes, &temp_in, &data_out, output_bytes, &p);
@@ -181,7 +201,7 @@ bool RunCompression(bool enable_preprocess, const std::string& input_path,
   return true;
 }
 
-bool RunDecompression(bool enable_preprocess, const std::string& input_path,
+bool RunDecompression(const std::string& input_path,
     const std::string& temp_path, const std::string& output_path,
     FILE* dictionary, unsigned long long* input_bytes,
     unsigned long long* output_bytes) {
@@ -192,10 +212,13 @@ bool RunDecompression(bool enable_preprocess, const std::string& input_path,
   *input_bytes = data_in.tellg();
   data_in.seekg(0, std::ios::beg);
   std::vector<bool> vocab(256, false);
-  ReadHeader(&data_in, output_bytes, &vocab);
+  bool enable_preprocess, dictionary_used;
+  ReadHeader(&data_in, output_bytes, &enable_preprocess, &dictionary_used,
+      &vocab);
+  if (!dictionary_used && dictionary != NULL) return false;
+  if (dictionary_used && dictionary == NULL) return false;
 
   if (*output_bytes == 0) {  // undo store
-    if (!enable_preprocess) return false;
     data_in.close();
     FILE* in = fopen(input_path.c_str(), "rb");
     if (!in) return false;
@@ -234,19 +257,21 @@ bool RunDecompression(bool enable_preprocess, const std::string& input_path,
 }
 
 int main(int argc, char* argv[]) {
-  if (argc < 4 || argc > 5 || argv[1][0] != '-' ||
-      (argv[1][1] != 'c' && argv[1][1] != 'd' && argv[1][1] != 's')) {
+  if (argc < 4 || argc > 5 || strlen(argv[1]) != 2 || argv[1][0] != '-' ||
+      (argv[1][1] != 'c' && argv[1][1] != 'd' && argv[1][1] != 's' &&
+      argv[1][1] != 'n')) {
     return Help();
   }
 
   clock_t start = clock();
 
-  bool enable_preprocess = false;
+  bool enable_preprocess = true;
+  if (argv[1][1] == 'n') enable_preprocess = false;
   std::string input_path = argv[2];
   std::string output_path = argv[3];
   FILE* dictionary = NULL;
   if (argc == 5) {
-    enable_preprocess = true;
+    if (argv[1][1] == 'n') return Help();
     dictionary = fopen(argv[2], "rb");
     if (!dictionary) return Help();
     input_path = argv[3];
@@ -258,19 +283,18 @@ int main(int argc, char* argv[]) {
   unsigned long long input_bytes = 0, output_bytes = 0;
 
   if (argv[1][1] == 's') {
-    if (!enable_preprocess) return Help();
     if (!Store(input_path, temp_path, output_path, dictionary, &input_bytes,
         &output_bytes)) {
       return Help();
     }
-  } else if (argv[1][1] == 'c') {
+  } else if (argv[1][1] == 'c' || argv[1][1] == 'n') {
     if (!RunCompression(enable_preprocess, input_path, temp_path, output_path,
         dictionary, &input_bytes, &output_bytes)) {
       return Help();
     }
   } else {
-    if (!RunDecompression(enable_preprocess, input_path, temp_path, output_path,
-        dictionary, &input_bytes, &output_bytes)) {
+    if (!RunDecompression(input_path, temp_path, output_path, dictionary,
+        &input_bytes, &output_bytes)) {
       return Help();
     }
   }

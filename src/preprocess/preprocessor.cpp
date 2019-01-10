@@ -35,6 +35,7 @@ bool IsAscii(int byte) {
 int info;
 
 void Pretrain(Predictor* p, FILE* dictionary) {
+  if (dictionary == NULL) return;
   fseek(dictionary, 0L, SEEK_END);
   unsigned int len = ftell(dictionary);
   fseek(dictionary, 0L, SEEK_SET);
@@ -443,6 +444,13 @@ int decode_exe(FILE* in) {
 
 void encode_text(FILE* in, FILE* out, int len, std::string temp_path,
     FILE* dictionary) {
+  if (dictionary == NULL) {
+    putc(0, out);
+    for (int i = 0; i < len; ++i) {
+      putc(getc(in), out);
+    }
+    return;
+  }
   std::string path = temp_path + "2";
   FILE* temp_output = fopen(path.c_str(), "wb+");
   if (!temp_output) abort();
@@ -474,10 +482,13 @@ Dictionary* dict = NULL;
 bool wrt_enabled = true;
 
 void reset_text_decoder(FILE* in, FILE* dictionary) {
-  if (dict == NULL) dict = new Dictionary(dictionary, false, true);
   int c = getc(in);
-  if (c) wrt_enabled = true;
-  else wrt_enabled = false;
+  if (c) {
+    wrt_enabled = true;
+    if (dict == NULL) dict = new Dictionary(dictionary, false, true);
+  } else {
+    wrt_enabled = false;
+  }
 }
 
 int decode_text(FILE* in) {
