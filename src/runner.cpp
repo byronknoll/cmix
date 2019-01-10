@@ -29,13 +29,12 @@ int Help() {
 }
 
 void WriteHeader(unsigned long long length, const std::vector<bool>& vocab,
-    bool enable_preprocessing, bool dictionary_used, std::ofstream* os) {
+    bool dictionary_used, std::ofstream* os) {
   for (int i = 4; i >= 0; --i) {
     char c = length >> (8*i);
     if (i == 4) {
-      c &= 0x3F;
-      if (enable_preprocessing) c |= 0x80;
-      if (dictionary_used) c |= 0x40;
+      c &= 0x7F;
+      if (dictionary_used) c |= 0x80;
     }
     os->put(c);
   }
@@ -52,24 +51,21 @@ void WriteHeader(unsigned long long length, const std::vector<bool>& vocab,
 void WriteStorageHeader(FILE* out, bool dictionary_used) {
   for (int i = 4; i >= 0; --i) {
     char c = 0;
-    if (i == 4 && dictionary_used) c = 0x40;
+    if (i == 4 && dictionary_used) c = 0x80;
     putc(c, out);
   }
 }
 
 void ReadHeader(std::ifstream* is, unsigned long long* length,
-    bool* enable_preprocessing, bool* dictionary_used,
-    std::vector<bool>* vocab) {
+    bool* dictionary_used, std::vector<bool>* vocab) {
   *length = 0;
   for (int i = 0; i <= 4; ++i) {
     *length <<= 8;
     unsigned char c = is->get();
     if (i == 0) {
-      if (c&0x80) *enable_preprocessing = true;
-      else *enable_preprocessing = false;
-      if (c&0x40) *dictionary_used = true;
+      if (c&0x80) *dictionary_used = true;
       else *dictionary_used = false;
-      c &= 0x3F;
+      c &= 0x7F;
     }
     *length += c;
   }
@@ -190,8 +186,7 @@ bool RunCompression(bool enable_preprocess, const std::string& input_path,
     temp_in.seekg(0, std::ios::beg);
   }
 
-  WriteHeader(temp_bytes, vocab, enable_preprocess, dictionary != NULL,
-      &data_out);
+  WriteHeader(temp_bytes, vocab, dictionary != NULL, &data_out);
   Predictor p(vocab);
   if (enable_preprocess) preprocessor::Pretrain(&p, dictionary);
   Compress(temp_bytes, &temp_in, &data_out, output_bytes, &p);
@@ -212,9 +207,8 @@ bool RunDecompression(const std::string& input_path,
   *input_bytes = data_in.tellg();
   data_in.seekg(0, std::ios::beg);
   std::vector<bool> vocab(256, false);
-  bool enable_preprocess, dictionary_used;
-  ReadHeader(&data_in, output_bytes, &enable_preprocess, &dictionary_used,
-      &vocab);
+  bool dictionary_used;
+  ReadHeader(&data_in, output_bytes, &dictionary_used, &vocab);
   if (!dictionary_used && dictionary != NULL) return false;
   if (dictionary_used && dictionary == NULL) return false;
 
@@ -233,7 +227,7 @@ bool RunDecompression(const std::string& input_path,
     return true;
   }
   Predictor p(vocab);
-  if (enable_preprocess) preprocessor::Pretrain(&p, dictionary);
+  if (dictionary_used) preprocessor::Pretrain(&p, dictionary);
 
   std::ofstream temp_out(temp_path, std::ios::out | std::ios::binary);
   if (!temp_out.is_open()) return false;
