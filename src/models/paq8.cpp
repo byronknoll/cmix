@@ -196,6 +196,7 @@ U32 c4=0;
 int bpos=0;
 int blpos=0;
 Buf buf;
+U8 grp0; // Quantized partial byte as ASCII group
 
 int dt[1024];  // i -> 16K/(i+3)
 
@@ -492,8 +493,8 @@ void train(short *t, short *w, int n, int err) {
 }
 #endif
 
-#define NUM_INPUTS 1525
-#define NUM_SETS 25
+#define NUM_INPUTS 1552
+#define NUM_SETS 28
 
 std::valarray<float> model_predictions(0.5, NUM_INPUTS + NUM_SETS + 11);
 unsigned int prediction_index = 0;
@@ -989,6 +990,40 @@ public:
   }
 };
 
+class IndirectMap {
+  Array<U8> Data;
+  StateMap32 Map;
+  const int mask, maskbits, stride;
+  int Context, bCount, bTotal, B;
+  U8 *cp;
+public:
+  IndirectMap(int BitsOfContext, int BitsPerContext = 8): Data((1ull<<BitsOfContext)*((1ull<<BitsPerContext)-1)), mask((1<<BitsOfContext)-1), maskbits(BitsOfContext), stride((1<<BitsPerContext)-1), Context(0), bCount(0), bTotal(BitsPerContext), B(0) {
+    cp=&Data[0];
+  }
+  void set_direct(const U32 ctx) {
+    Context = (ctx&mask)*stride;
+    bCount=B=0;
+  }
+  void set(const U64 ctx) {
+    Context = (finalize64(ctx,maskbits)&mask)*stride;
+    bCount=B=0;
+  }
+  void mix(Mixer& m, const int Multiplier = 1, const int Divisor = 4, const U16 Limit = 1023) {
+    // update
+    *cp = nex(*cp, y);
+    // predict
+    B+=(y && B>0);
+    cp=&Data[Context+B];
+    const U8 state = *cp;
+    const int p1 = Map.p(state, Limit);
+    m.add((stretch(p1)*Multiplier)/Divisor);
+    m.add(((p1-2048)*Multiplier)/(Divisor*2));
+    bCount++; B+=B+1;
+    if (bCount==bTotal)
+      bCount=B=0;
+  }
+};
+
 class ContextMap {
   const int C;
   class E {
@@ -1415,6 +1450,10 @@ public:
     if (index<n)
       x[index++] = F(val)-sub;
   }
+  void AddFloat(const F val) {
+    if (index<n)
+      x[index++] = val-sub;
+  }
   F Predict(const T **p) {
     F sum = 0.;
     for (int i=0; i<n; i++)
@@ -1480,7 +1519,7 @@ private:
   Array<int, 16> Next;
 public:
   MTFList(const U16 n): Root(0), Index(0), Previous(n), Next(n) {
-    for (int i=0;i<n;i++) {
+    for (int i=0; i<n; i++) {
       Previous[i] = i-1;
       Next[i] = i+1;
     }
@@ -1490,18 +1529,17 @@ public:
     return Index=Root;
   }
   inline int GetNext(){
-    if(Index>=0){Index=Next[Index];return Index;}
-    return Index; //-1
+    if (Index>=0) Index = Next[Index];
+    return Index;
   }
   inline void MoveToFront(int i){
     if ((Index=i)==Root) return;
-    int p=Previous[Index];
-    int n=Next[Index];
-    if(p>=0)Next[p] = Next[Index];
-    if(n>=0)Previous[n] = Previous[Index];
+    const int p=Previous[Index], n=Next[Index];
+    if (p>=0) Next[p] = Next[Index];
+    if (n>=0) Previous[n] = Previous[Index];
     Previous[Root] = Index;
     Next[Index] = Root;
-    Root=Index;
+    Root = Index;
     Previous[Root]=-1;
   }
 };
@@ -3015,29 +3053,40 @@ public:
   (25/02/2018) v139: Uses 26 contexts
   (27/02/2018) v140: Sets 6 mixer contexts
   (12/05/2018) v142: Sets 7 mixer contexts
+  (02/12/2018) v172: Sets 8 mixer contexts
 */
+
+const U8 AsciiGroupC0[254] ={
+  0, 10,
+  0, 1, 10, 10,
+  0, 4, 2, 3, 10, 10, 10, 10,
+  0, 0, 5, 4, 2, 2, 3, 3, 10, 10, 10, 10, 10, 10, 10, 10,
+  0, 0, 0, 0, 5, 5, 9, 4, 2, 2, 2, 2, 3, 3, 3, 3, 10, 10, 10, 10, 10, 10, 10, 10, 10, 10, 10, 10, 10, 10, 10, 10,
+  0, 0, 0, 0, 0, 0, 0, 0, 5, 8, 8, 5, 9, 9, 6, 5, 2, 2, 2, 2, 2, 2, 2, 8, 3, 3, 3, 3, 3, 3, 3, 8, 10, 10, 10, 10, 10, 10, 10, 10, 10, 10, 10, 10, 10, 10, 10, 10, 10, 10, 10, 10, 10, 10, 10, 10, 10, 10, 10, 10, 10, 10, 10, 10,
+  0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 7, 8, 8, 8, 8, 8, 5, 5, 9, 9, 9, 9, 9, 7, 8, 5, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 8, 8, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 8, 8, 10, 10, 10, 10, 10, 10, 10, 10, 10, 10, 10, 10, 10, 10, 10, 10, 10, 10, 10, 10, 10, 10, 10, 10, 10, 10, 10, 10, 10, 10, 10, 10, 10, 10, 10, 10, 10, 10, 10, 10, 10, 10, 10, 10, 10, 10, 10, 10, 10, 10, 10, 10, 10, 10, 10, 10, 10, 10, 10, 10, 10, 10, 10, 10
+};
+const U8 AsciiGroup[128] = {
+  0,  5,  5,  5,  5,  5,  5,  5,
+  5,  5,  4,  5,  5,  4,  5,  5,
+  5,  5,  5,  5,  5,  5,  5,  5,
+  5,  5,  5,  5,  5,  5,  5,  5,
+  6,  7,  8, 17, 17,  9, 17, 10,
+  11, 12, 17, 17, 13, 14, 15, 16,
+  1,  1,  1,  1,  1,  1,  1,  1,
+  1,  1, 18, 19, 20, 23, 21, 22,
+  23,  2,  2,  2,  2,  2,  2,  2,
+  2,  2,  2,  2,  2,  2,  2,  2,
+  2,  2,  2,  2,  2,  2,  2,  2,
+  2,  2,  2, 24, 27, 25, 27, 26,
+  27,  3,  3,  3,  3,  3,  3,  3,
+  3,  3,  3,  3,  3,  3,  3,  3,
+  3,  3,  3,  3,  3,  3,  3,  3,
+  3,  3,  3, 28, 30, 29, 30, 30
+};
 
 class TextModel {
 private:
   const U32 MIN_RECOGNIZED_WORDS = 4;
-  const U8 AsciiGroup[128] = {
-     0,  5,  5,  5,  5,  5,  5,  5,
-     5,  5,  4,  5,  5,  4,  5,  5,
-     5,  5,  5,  5,  5,  5,  5,  5,
-     5,  5,  5,  5,  5,  5,  5,  5,
-     6,  7,  8, 17, 17,  9, 17, 10,
-    11, 12, 17, 17, 13, 14, 15, 16,
-     1,  1,  1,  1,  1,  1,  1,  1,
-     1,  1, 18, 19, 20, 23, 21, 22,
-    23,  2,  2,  2,  2,  2,  2,  2,
-     2,  2,  2,  2,  2,  2,  2,  2,
-     2,  2,  2,  2,  2,  2,  2,  2,
-     2,  2,  2, 24, 27, 25, 27, 26,
-    27,  3,  3,  3,  3,  3,  3,  3,
-     3,  3,  3,  3,  3,  3,  3,  3,
-     3,  3,  3,  3,  3,  3,  3,  3,
-     3,  3,  3, 28, 30, 29, 30, 30
-  };
   ContextMap2 Map;
   Array<Stemmer*> Stemmers;
   Array<Language*> Languages;
@@ -3135,20 +3184,21 @@ public:
       ((Info.lastPunct<Info.wordLength[0]+Info.wordGap)<<2)|
       ((Info.lastUpper<Info.wordLength[0])<<3)
     ), 11), 2048);
-    mixer.set(finalize64(hash(Info.masks[1]&0x3FF, Info.lastUpper<Info.wordLength[0], Info.lastUpper<Info.lastLetter+Info.wordLength[1]), 11), 2048);
-    mixer.set(finalize64(hash(Info.spaces&0x1FF,
+    mixer.set(finalize64(hash(Info.masks[1]&0x3FF, grp0, Info.lastUpper<Info.wordLength[0], Info.lastUpper<Info.lastLetter+Info.wordLength[1]), 12), 4096);
+    mixer.set(finalize64(hash(Info.spaces&0x1FF, grp0,
       (Info.lastUpper<Info.wordLength[0])|
       ((Info.lastUpper<Info.lastLetter+Info.wordLength[1])<<1)|
       ((Info.lastPunct<Info.lastLetter)<<2)|
       ((Info.lastPunct<Info.wordLength[0]+Info.wordGap)<<3)|
       ((Info.lastPunct<Info.lastLetter+Info.wordLength[1]+Info.wordGap)<<4)
-    ), 11), 2048);
+    ), 12), 4096);
     mixer.set(finalize64(hash(Info.firstLetter*(Info.wordLength[0]<4), min(6, Info.wordLength[0]), c0), 11), 2048);
     mixer.set(finalize64(hash((*pWord)[0], (*pWord)(0), min(4, Info.wordLength[0]), Info.lastPunct<Info.lastLetter), 11), 2048);
-    mixer.set(finalize64(hash(min(4, Info.wordLength[0]), c0,
+    mixer.set(finalize64(hash(min(4, Info.wordLength[0]), grp0,
       Info.lastUpper<Info.wordLength[0],
       (Info.nestHash>0)?Info.nestHash&0xFF:0x100|(Info.firstLetter*(Info.wordLength[0]>0 && Info.wordLength[0]<4))
     ), 12), 4096);
+    mixer.set(finalize64(hash(grp0, Info.masks[4]&0x1F, (Info.masks[4]>>5)&0x1F), 13), 8192);
   }
 };
 
@@ -3599,7 +3649,7 @@ public:
     if (bpos==0)
       Update(buffer, Stats);
     else{
-      U8 B = c0<<(8-bpos);
+      const U8 B = c0<<(8-bpos);
       SCM[1]->set((bpos<<8)|(expectedByte^B));
       Maps[1]->set(hash(expectedByte, c0, buffer(1), buffer(2), min(3,(int)ilog2(length+1))));
       iCtx+=y, iCtx=(bpos<<16)|(buffer(1)<<8)|(expectedByte^B);
@@ -3801,7 +3851,8 @@ public:
     else
       for (int i=0; i<11; i++, mixer.add(0));
 
-    mixer.set((hashIndex<<6)|(bpos<<3)|min(7, length), 256);
+    mixer.set((hashIndex<<6)|(bpos<<3)|min(7, length), NumHashes*64);
+    mixer.set((hashIndex<<11)|(min(7, ilog2(length+1))<<8)|(c0^(expectedByte>>(8-bpos))), NumHashes*2048);
 
     return length;
   }
@@ -4175,11 +4226,12 @@ void recordModel(Mixer& m, Filetype filetype, ModelStats *Stats = nullptr) {
   static U8 padding = 0; // detected padding byte
   static U8 N=0, NN=0, NNN=0, NNNN=0, WxNW=0;
   static int prevTransition = 0, nTransition = 0; // position of the last padding transition
-  static int col = 0, mxCtx = 0;
-  static ContextMap cm(32768, 3), cn(32768/2, 3), co(32768*2, 3), cp(MEM(), 15);
-  static const int nMaps = 3;
-  static StationaryMap Maps[nMaps] ={ {10,8},{10,8},{11,1} };
+  static int col = 0, mxCtx = 0, x = 0;
+  static ContextMap cm(32768, 3), cn(32768/2, 3), co(32768*2, 3), cp(MEM(), 16);
+  static const int nMaps = 6;
+  static StationaryMap Maps[nMaps] ={ {10,8},{10,8},{8,8},{8,8},{8,8},{11,1} };
   static SmallStationaryContextMap sMap[3]{ {11, 1}, {3, 1}, {19,1} };
+  static IndirectMap iMap[3]{{8,8},{8,8},{8,8}};
   static bool MayBeImg24b = false;
   static dBASE dbase {};
   static const int nIndCtxs = 5;
@@ -4273,6 +4325,7 @@ void recordModel(Mixer& m, Filetype filetype, ModelStats *Stats = nullptr) {
     }
 
     col=pos%rlen[0];
+    x = min(0x1F,col/max(1,rlen[0]/32));
     N = buf(rlen[0]), NN = buf(rlen[0]*2), NNN = buf(rlen[0]*3), NNNN = buf(rlen[0]*4);
     for (int i=0; i<nIndCtxs-1; iCtx[i]+=c, i++);
     iCtx[0]=(c<<8)|N;
@@ -4334,6 +4387,7 @@ void recordModel(Mixer& m, Filetype filetype, ModelStats *Stats = nullptr) {
 
     cp.set(hash(++i, N|((NN&0xF0)<<4)|((NNN&0xE0)<<7)|((NNNN&0xE0)<<10)|((col/max(1,rlen[0]/16))<<18) ));
     cp.set(hash(++i, (N&0xF8)|((NN&0xF8)<<8)|(col<<16) ));
+    cp.set(hash(++i, N, NN));
 
     cp.set(hash(++i, col, iCtx[0]()));
     cp.set(hash(++i, col, iCtx[1]()));
@@ -4352,6 +4406,12 @@ void recordModel(Mixer& m, Filetype filetype, ModelStats *Stats = nullptr) {
     else
       Maps[0].set_direct(Clip(c*2-d)|k);
     Maps[1].set_direct(Clip(c+N-buf(rlen[0]+1))|k);
+    Maps[2].set_direct(Clip(N+NN-NNN));
+    Maps[3].set_direct(Clip(N*2-NN));
+    Maps[4].set_direct(Clip(N*3-NN*3+NNN));
+    iMap[0].set_direct(N+NN-NNN);
+    iMap[1].set_direct(N*2-NN);
+    iMap[2].set_direct(N*3-NN*3+NNN);
 
     // update last context positions
     cpos4[c]=cpos3[c];
@@ -4365,7 +4425,7 @@ void recordModel(Mixer& m, Filetype filetype, ModelStats *Stats = nullptr) {
   U8 B = c0<<(8-bpos);
   U32 ctx = (N^B)|(bpos<<8);
   iCtx[nIndCtxs-1]+=y, iCtx[nIndCtxs-1]=ctx;
-  Maps[2].set_direct(ctx);
+  Maps[nMaps-1].set_direct(ctx);
   sMap[0].set(ctx);
   sMap[1].set(iCtx[nIndCtxs-1]());
   sMap[2].set((ctx<<8)|WxNW);
@@ -4376,12 +4436,15 @@ void recordModel(Mixer& m, Filetype filetype, ModelStats *Stats = nullptr) {
   cp.mix(m);
   for (int i=0;i<nMaps;i++)
     Maps[i].mix(m, 1, 3);
+  for (int i=0; i<3; i++)
+    iMap[i].mix(m, 1, 3, 255);
   sMap[0].mix(m, 6, 1, 3);
   sMap[1].mix(m, 6, 1, 3);
   sMap[2].mix(m, 5, 1, 2);
 
   m.set( (rlen[0]>2)*( (bpos<<7)|mxCtx ), 1024 );
-  m.set( ((buf(rlen[0])^((U8)(c0<<(8-bpos))))>>4)|(min(0x1F,col/max(1,rlen[0]/32))<<4), 512 );
+  m.set( ((N^B)>>4)|(x<<4), 512 );
+  m.set( (grp0<<5)|x, 11*32);
   if (Stats)
     (*Stats).Record = (min(0xFFFF,rlen[0])<<16)|min(0xFFFF,col);
 }
@@ -4425,6 +4488,34 @@ void recordModel1(Mixer& m) {
   co.mix(m);
   cq.mix(m);
   cp.mix(m);
+}
+
+void linearPredictionModel(Mixer& m) {
+  static const int nOLS=3, nLnrPrd=nOLS+2;
+  static SmallStationaryContextMap sMap[nLnrPrd]{ {11,1},{11,1},{11,1},{11,1},{11,1} };
+  static OLS<double, U8> ols[nOLS]{ {32, 4, 0.995}, {32, 4, 0.995}, {32, 4, 0.995} };
+  static U8 prd[nLnrPrd]{ 0 };
+
+  if (bpos==0) {
+    const U8 W=buf(1), WW=buf(2), WWW=buf(3);
+    int i=0;
+    for (; i<nOLS; i++)
+      ols[i].Update(W);
+    for (i=1; i<=32; i++) {
+      ols[0].Add(buf(i));
+      ols[1].Add(buf(i*2-1));
+      ols[2].Add(buf(i*2));
+    }
+    for (i=0; i<nOLS; i++)
+      prd[i]=Clip(floor(ols[i].Predict()));
+    prd[i++]=Clip(W*2-WW);
+    prd[i  ]=Clip(W*3-WW*3+WWW);
+  }
+  const U8 B=c0<<(8-bpos);
+  for (int i=0; i<nLnrPrd; i++) {
+    sMap[i].set((prd[i]-B)*8+bpos);
+    sMap[i].mix(m, 6, 1, 2);
+  }
 }
 
 void sparseModel(Mixer& m, int seenbefore, int howmany) {
@@ -4691,7 +4782,7 @@ void im8bitModel(Mixer& m, int w, ModelStats *Stats = nullptr, int gray = 0) {
   static U8 NNNNW, NNNN, NNNNE;
   static U8 NNNNN;
   static U8 NNNNNN;
-  static int ctx, lastPos=0, col=0, x=0;
+  static int ctx, lastPos=0, col=0, x=0, line=0;
   static int columns[2] = {1,1}, column[2];
   static U8 MapCtxs[nMaps1] = { 0 }, pOLS[nOLS] = { 0 };
   static const double lambda[nOLS] ={ 0.996, 0.87, 0.93, 0.8, 0.9 };
@@ -4712,12 +4803,14 @@ void im8bitModel(Mixer& m, int w, ModelStats *Stats = nullptr, int gray = 0) {
   // Select nearby pixels as context
   if (!bpos) {
     if (pos!=lastPos+1){
-      x = 0;
+      x = line = 0;
       columns[0] = max(1,w/max(1,ilog2(w)*2));
       columns[1] = max(1,columns[0]/max(1,ilog2(columns[0])));
     }
-    else
+    else{
       x*=(++x)<w;
+      line+=(x==0);
+    }
     lastPos = pos;
     column[0]=x/columns[0];
     column[1]=x/columns[1];
@@ -4918,6 +5011,7 @@ void im8bitModel(Mixer& m, int w, ModelStats *Stats = nullptr, int gray = 0) {
   m.set( ((abs((int)(W-N))>4)<<9)|((abs((int)(N-NE))>4)<<8)|((abs((int)(W-NW))>4)<<7)|((W>N)<<6)|((N>NE)<<5)|((W>NW)<<4)|((W>WW)<<3)|((N>NN)<<2)|((NW>NNWW)<<1)|(NE>NNEE), 1024 );
   m.set(min(63,column[0]), 64);
   m.set(min(127,column[1]), 128);
+  m.set(min(255,(x+line)/32), 256);
 }
 
 void im24bitModel(Mixer& m, int w, ModelStats *Stats = nullptr, int alpha=0) {
@@ -4956,7 +5050,7 @@ void im24bitModel(Mixer& m, int w, ModelStats *Stats = nullptr, int alpha=0) {
   static U8 WWp1, Wp1, p1, NWp1, Np1, NEp1, NNp1;
   static U8 WWp2, Wp2, p2, NWp2, Np2, NEp2, NNp2;
   static int color = -1, stride = 3;
-  static int ctx[2], padding, lastPos, x = 0;
+  static int ctx[2], padding, lastPos, x = 0, line = 0;
   static int columns[2] = {1,1}, column[2];
   static U8 MapCtxs[nMaps1] = { 0 }, SCMapCtxs[nSCMaps-1] = { 0 }, pOLS[nOLS] = { 0 };
   static const double lambda[nOLS] ={ 0.98, 0.87, 0.9, 0.8, 0.9, 0.7 };
@@ -4982,12 +5076,13 @@ void im24bitModel(Mixer& m, int w, ModelStats *Stats = nullptr, int alpha=0) {
     if ((color < 0) || (pos-lastPos != 1)){
       stride = 3+alpha;
       padding = w%stride;
-      x = 0;
+      x = line = 0;
       columns[0] = max(1,w/max(1,ilog2(w)*3));
       columns[1] = max(1,columns[0]/max(1,ilog2(columns[0])));
     }
     lastPos = pos;
     x*=(++x)<w;
+    line+=(x==0);
     if (x+padding<w)
       color*=(++color)<stride;
     else
@@ -5267,6 +5362,7 @@ void im24bitModel(Mixer& m, int w, ModelStats *Stats = nullptr, int alpha=0) {
   m.set(finalize64(hash(ctx[0], column[0]/8),13), 8192);
   m.set(finalize64(hash(LogQt(N,5), LogMeanDiffQt(N,NN,3), c0),13), 8192);
   m.set(finalize64(hash(LogQt(W,5), LogMeanDiffQt(W,WW,3), c0),13), 8192);
+  m.set(min(255,(x+line)/32), 256);
 }
 
 #define CheckIfGrayscale(x,a) {\
@@ -5458,6 +5554,121 @@ inline int X2(int i) {
   }
 }
 
+inline int signedClip8(const int i) {
+  return max(-128, min(127, i));
+}
+
+inline U32 SQR(U32 x) {
+  return x*x;
+}
+
+void audio8bModel(Mixer& m, int info, ModelStats *Stats) {
+  static const int nOLS=8, nLnrPrd=nOLS+3;
+  static SmallStationaryContextMap sMap1b[nLnrPrd][3]{
+    {{11,1}, {11,1}, {11,1}}, {{11,1}, {11,1}, {11,1}}, {{11,1}, {11,1}, {11,1}}, {{11,1}, {11,1}, {11,1}},
+    {{11,1}, {11,1}, {11,1}}, {{11,1}, {11,1}, {11,1}}, {{11,1}, {11,1}, {11,1}}, {{11,1}, {11,1}, {11,1}},
+    {{11,1}, {11,1}, {11,1}}, {{11,1}, {11,1}, {11,1}}, {{11,1}, {11,1}, {11,1}}
+  };
+  static OLS<double, int8_t> ols[nOLS][2]{
+    {{128, 24, 0.9975}, {128, 24, 0.9975}},
+    {{90, 30, 0.9965}, {90, 30, 0.9965}},
+    {{90, 31, 0.996}, {90, 31, 0.996}},
+    {{90, 32, 0.995}, {90, 32, 0.995}},
+    {{90, 33, 0.995}, {90, 33, 0.995}},
+    {{90, 34, 0.9985}, {90, 34, 0.9985}},
+    {{28, 4, 0.98}, {28, 4, 0.98}},
+    {{28, 3, 0.992}, {28, 3, 0.992}}
+  };
+  static int prd[nLnrPrd][2][2]{ 0 }, residuals[nLnrPrd][2]{ 0 };
+  static int stereo=0, ch=0, rpos=0, lastPos=0;
+  static U32 mask=0, errLog=0, mxCtx=0;
+
+  const int8_t B = c0<<(8-bpos);
+  if (bpos==0) {
+    rpos = (pos==lastPos+1)?rpos+1:0;
+    lastPos = pos;
+    if (rpos==0) {
+      stereo = (info&1);
+      mask = 0;
+      Stats->Record = ((stereo+1)<<16)|(Stats->Record&0xFFFF);
+      wmode=info;
+    }
+    ch=(stereo)?blpos&1:0;
+    const int8_t s = int(((info&4)>0)?buf(1)^128:buf(1))-128;
+    const int pCh = ch^stereo;
+    int i = 0;
+    for (errLog=0; i<nOLS; i++) {
+      ols[i][pCh].Update(s);
+      residuals[i][pCh] = s-prd[i][pCh][0];
+      const U32 absResidual = (U32)abs(residuals[i][pCh]);
+      mask+=mask+(absResidual>4);
+      errLog+=SQR(absResidual);
+    }
+    for (; i<nLnrPrd; i++)
+      residuals[i][pCh] = s-prd[i][pCh][0];
+    errLog = min(0xF, ilog2(errLog));
+    mxCtx = ilog2(min(0x1F, BitCount(mask)))*2+ch;
+
+    int k1=90, k2=k1-12*stereo;
+    for (int j=(i=1); j<=k1; j++, i+=1<<((j>8)+(j>16)+(j>64))) ols[1][ch].Add(X1(i));
+    for (int j=(i=1); j<=k2; j++, i+=1<<((j>5)+(j>10)+(j>17)+(j>26)+(j>37))) ols[2][ch].Add(X1(i));
+    for (int j=(i=1); j<=k2; j++, i+=1<<((j>3)+(j>7)+(j>14)+(j>20)+(j>33)+(j>49))) ols[3][ch].Add(X1(i));
+    for (int j=(i=1); j<=k2; j++, i+=1+(j>4)+(j>8)) ols[4][ch].Add(X1(i));
+    for (int j=(i=1); j<=k1; j++, i+=2+((j>3)+(j>9)+(j>19)+(j>36)+(j>61))) ols[5][ch].Add(X1(i));
+    if (stereo) {
+      for (i=1; i<=k1-k2; i++) {
+        const double s = (double)X2(i);
+        ols[2][ch].AddFloat(s);
+        ols[3][ch].AddFloat(s);
+        ols[4][ch].AddFloat(s);
+      }
+    }
+    k1=28, k2=k1-6*stereo;
+    for (i=1; i<=k2; i++) {
+      const double s = (double)X1(i);
+      ols[0][ch].AddFloat(s);
+      ols[6][ch].AddFloat(s);
+      ols[7][ch].AddFloat(s);
+    }
+    for (; i<=96; i++) ols[0][ch].Add(X1(i));
+    if (stereo) {
+      for (i=1; i<=k1-k2; i++) {
+        const double s = (double)X2(i);
+        ols[0][ch].AddFloat(s);
+        ols[6][ch].AddFloat(s);
+        ols[7][ch].AddFloat(s);
+      }
+      for (; i<=32; i++) ols[0][ch].Add(X2(i));
+    }
+    else
+      for (; i<=128; i++) ols[0][ch].Add(X1(i));
+
+    for (i=0; i<nOLS; i++) {
+      prd[i][ch][0] = signedClip8(floor(ols[i][ch].Predict()));
+      prd[i][ch][1] = signedClip8(prd[i][ch][0]+residuals[i][pCh]);
+    }
+    prd[i++][ch][0] = signedClip8(X1(1)*2-X1(2));
+    prd[i++][ch][0] = signedClip8(X1(1)*3-X1(2)*3+X1(3));
+    prd[i  ][ch][0] = signedClip8(X1(1)*4-X1(2)*6+X1(3)*4-X1(4));
+    for (i=nOLS; i<nLnrPrd; i++)
+      prd[i][ch][1] = signedClip8(prd[i][ch][0]+residuals[i][pCh]);
+  }
+  for (int i=0; i<nLnrPrd; i++) {
+    const U32 ctx = (prd[i][ch][0]-B)*8+bpos;
+    sMap1b[i][0].set(ctx);
+    sMap1b[i][1].set(ctx);
+    sMap1b[i][2].set((prd[i][ch][1]-B)*8+bpos);
+    sMap1b[i][0].mix(m, 6, 1, 2+(i>=nOLS));
+    sMap1b[i][1].mix(m, 9, 1, 2+(i>=nOLS));
+    sMap1b[i][2].mix(m, 7, 1, 3);
+  }
+  m.set((errLog<<8)|c0, 4096);
+  m.set((U8(mask)<<3)|(ch<<2)|(bpos>>1), 2048);
+  m.set((mxCtx<<7)|(buf(1)>>1), 1280);
+  m.set((errLog<<4)|(ch<<3)|bpos, 256);
+  m.set(mxCtx, 10);
+}
+
 void wavModel(Mixer& m, int info, ModelStats *Stats = nullptr) {
   static int pr[3][2], n[2], counter[2];
   static double F[49][49][2],L[49][49];
@@ -5597,7 +5808,6 @@ void wavModel(Mixer& m, int info, ModelStats *Stats = nullptr) {
   cm.mix(m);
   if (Stats)
     (*Stats).Record = (w<<16)|((*Stats).Record&0xFFFF);
-  recordModel(m, preprocessor::AUDIO, Stats);
   if (++col>=w*8) col=0;
   m.set( ch+4*ilog2(col&(bits-1)), 4*8 );
   m.set(col%bits<8, 2);
@@ -5657,8 +5867,13 @@ int audioModel(Mixer& m, ModelStats *Stats = nullptr) {
   if (pos>(int)eoi)
     return info=0;
 
-  if (info)
-    wavModel(m, info-1, Stats);
+  if (info){
+    if (((info-1)&2)==0)
+      audio8bModel(m, info-1, Stats);
+    else
+      wavModel(m, info-1, Stats);
+    recordModel(m, preprocessor::AUDIO, Stats);
+  }
 
   if (bpos==7 && (pos+1)==(int)eoi)
     memset(&WAV, 0, sizeof(WAVAudio));
@@ -7904,7 +8119,7 @@ int contextModel2(ModelStats *Stats) {
   static dmcForest dmcforest;
   static RunContextMap rcm7(MEM()), rcm9(MEM()), rcm10(MEM());
   static StateMap32 StateMaps[2]={{256},{256*256}};
-  static Mixer m(NUM_INPUTS, 10864+1024*21+16384+8192+256, NUM_SETS, 32);
+  static Mixer m(NUM_INPUTS, 77472, NUM_SETS, 32);
   static U32 cxt[16];
   static Filetype ft2,filetype=preprocessor::DEFAULT;
   static int size=0;  // bytes remaining in block
@@ -7979,6 +8194,7 @@ int contextModel2(ModelStats *Stats) {
   XMLModel(m, Stats);
   textModel.Predict(m, buf, Stats);
   exeModel(m, true, Stats);
+  linearPredictionModel(m);
   
   m.set((max(0, order-3)<<3)|bpos, 64);
   order=max(0,order-5);
@@ -8068,6 +8284,7 @@ void Predictor::update() {
      c0=1;
   }
   bpos=(bpos+1)&7;
+  grp0 = (bpos>0)?AsciiGroupC0[(1<<bpos)-2+(c0&((1<<bpos)-1))]:0;
   
   int pr0=contextModel2(&stats);
   AddPrediction(pr0);
