@@ -12,10 +12,11 @@ const unsigned char kCapitalized = 0x40;
 const unsigned char kUppercase = 0x07;
 const unsigned char kEndUpper = 0x06;
 const unsigned char kEscape = 0x0C;
+const unsigned char kQuote = 0x08;
 
 void EncodeByte(unsigned char c, FILE* output) {
   if (c == kEndUpper || c == kEscape || c == kUppercase ||
-      c == kCapitalized || c >= 0x80) {
+      c == kCapitalized || c == kQuote || c >= 0x80) {
     putc(kEscape, output);
   }
   putc(c, output);
@@ -127,6 +128,10 @@ void Dictionary::Encode(FILE* input, int len, FILE* output) {
 
 void Dictionary::EncodeWord(const std::string& word, int num_upper,
     bool next_lower, FILE* output) {
+  if (word == "quot" && num_upper == 0) {
+    putc(kQuote, output);
+    return;
+  }
   if (num_upper > 1) putc(kUppercase, output);
   else if (num_upper == 1) putc(kCapitalized, output);
   auto it = byte_map_.find(word);
@@ -187,6 +192,11 @@ void Dictionary::AddToBuffer(FILE* input) {
   if (c == kEscape) {
     decode_upper_ = false;
     output_buffer_.push_back(getc(input));
+  } else if (c == kQuote) {
+    output_buffer_.push_back('q');
+    output_buffer_.push_back('u');
+    output_buffer_.push_back('o');
+    output_buffer_.push_back('t');
   } else if (c == kUppercase) {
     decode_upper_ = true;
   } else if (c == kCapitalized) {
