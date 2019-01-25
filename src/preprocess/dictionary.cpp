@@ -13,6 +13,7 @@ const unsigned char kUppercase = 0x07;
 const unsigned char kEndUpper = 0x06;
 const unsigned char kEscape = 0x0C;
 const unsigned char kQuote = 0x08;
+const char* kQuoteStr = "&quot;";
 
 void EncodeByte(unsigned char c, FILE* output) {
   if (c == kEndUpper || c == kEscape || c == kUppercase ||
@@ -74,9 +75,21 @@ Dictionary::Dictionary(FILE* dictionary, bool encode, bool decode) {
 
 void Dictionary::Encode(FILE* input, int len, FILE* output) {
   std::string word;
-  int num_upper = 0, num_lower = 0;
+  int num_upper = 0, num_lower = 0, quote_state = 0;
   for (int pos = 0; pos < len; ++pos) {
     unsigned char c = getc(input);
+    if (c == kQuoteStr[quote_state]) {
+      ++quote_state;
+      if (quote_state == 6) {
+        putc(kQuote, output);
+        num_upper = 0;
+        num_lower = 0;
+        word.clear();
+        continue;
+      }
+    } else {
+      quote_state = 0;
+    }
     bool advance = false;
     if (word.size() > longest_word_) {
       advance = true;
@@ -128,10 +141,6 @@ void Dictionary::Encode(FILE* input, int len, FILE* output) {
 
 void Dictionary::EncodeWord(const std::string& word, int num_upper,
     bool next_lower, FILE* output) {
-  if (word == "quot" && num_upper == 0) {
-    putc(kQuote, output);
-    return;
-  }
   if (num_upper > 1) putc(kUppercase, output);
   else if (num_upper == 1) putc(kCapitalized, output);
   auto it = byte_map_.find(word);
@@ -193,10 +202,9 @@ void Dictionary::AddToBuffer(FILE* input) {
     decode_upper_ = false;
     output_buffer_.push_back(getc(input));
   } else if (c == kQuote) {
-    output_buffer_.push_back('q');
-    output_buffer_.push_back('u');
-    output_buffer_.push_back('o');
-    output_buffer_.push_back('t');
+    for (int i = 1; i < 6; ++i) {
+      output_buffer_.push_back(kQuoteStr[i]);
+    }
   } else if (c == kUppercase) {
     decode_upper_ = true;
   } else if (c == kCapitalized) {
