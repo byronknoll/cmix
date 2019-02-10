@@ -66,8 +66,6 @@ void Pretrain(Predictor* p, FILE* dictionary) {
       p->Pretrain((c>>j)&1);
     }
   }
-  fprintf(stderr, "\r                     \r");
-  fflush(stderr);
 }
 
 Filetype detect(FILE* in, int n, Filetype type) {

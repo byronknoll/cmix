@@ -90,10 +90,16 @@ void ExtractVocab(unsigned long long input_bytes, std::ifstream* is,
   }
 }
 
+void ClearOutput() {
+  fprintf(stderr, "\r                     \r");
+  fflush(stderr);
+}
+
 void Compress(unsigned long long input_bytes, std::ifstream* is,
     std::ofstream* os, unsigned long long* output_bytes, Predictor* p) {
   Encoder e(os, p);
   unsigned long long percent = 1 + (input_bytes / 10000);
+  ClearOutput();
   for (unsigned long long pos = 0; pos < input_bytes; ++pos) {
     char c = is->get();
     for (int j = 7; j >= 0; --j) {
@@ -113,6 +119,7 @@ void Decompress(unsigned long long output_length, std::ifstream* is,
                 std::ofstream* os, Predictor* p) {
   Decoder d(is, p);
   unsigned long long percent = 1 + (output_length / 10000);
+  ClearOutput();
   for(unsigned long long pos = 0; pos < output_length; ++pos) {
     int byte = 1;
     while (byte < 256) {
@@ -138,6 +145,8 @@ bool Store(const std::string& input_path, const std::string& temp_path,
   *input_bytes = ftell(data_in);
   fseek(data_in, 0L, SEEK_SET);
   WriteStorageHeader(data_out, dictionary != NULL);
+  fprintf(stderr, "\rencoding...");
+  fflush(stderr);
   preprocessor::Encode(data_in, data_out, *input_bytes, temp_path, dictionary);
   fseek(data_out, 0L, SEEK_END);
   *output_bytes = ftell(data_out);
@@ -160,6 +169,8 @@ bool RunCompression(bool enable_preprocess, const std::string& input_path,
   fseek(data_in, 0L, SEEK_SET);
 
   if (enable_preprocess) {
+    fprintf(stderr, "\rpreprocessing...");
+    fflush(stderr);
     preprocessor::Encode(data_in, temp_out, *input_bytes, temp_path,
         dictionary);
   } else {
@@ -219,6 +230,8 @@ bool RunDecompression(const std::string& input_path,
     FILE* data_out = fopen(output_path.c_str(), "wb");
     if (!data_out) return false;
     fseek(in, 5L, SEEK_SET);
+    fprintf(stderr, "\rdecoding...");
+    fflush(stderr);
     preprocessor::Decode(in, data_out, dictionary);
     fseek(data_out, 0L, SEEK_END);
     *output_bytes = ftell(data_out);
