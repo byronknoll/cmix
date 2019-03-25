@@ -1,9 +1,7 @@
 #include "context-manager.h"
 
-ContextManager::ContextManager() : bit_context_(1), long_bit_context_(1),
-    zero_context_(0), history_pos_(0), line_break_(0), longest_match_(0),
-    auxiliary_context_(0), history_(100000000, 0), shared_map_(256*8000000, 0),
-    words_(8, 0), recent_bytes_(8, 0) {}
+ContextManager::ContextManager() : history_(100000000, 0),
+    shared_map_(256*8000000, 0), words_(8, 0), recent_bytes_(8, 0) {}
 
 const Context& ContextManager::AddContext(std::unique_ptr<Context> context) {
   for (const auto& old : contexts_) {
@@ -56,6 +54,18 @@ void ContextManager::UpdateRecentBytes() {
   recent_bytes_[0] = bit_context_;
 }
 
+void ContextManager::UpdateWRTContext() {
+  if (bit_context_ < 0x80) {
+    wrt_state_ = 0;
+  } else {
+    if (wrt_state_ == 0) wrt_context_ = 0;
+    wrt_state_ = 1;
+    wrt_context_ <<= 8;
+    wrt_context_ += bit_context_;
+    if (wrt_context_ > 0xFFEFCF) wrt_context_ = 0;
+  }
+}
+
 void ContextManager::UpdateContexts(int bit) {
   bit_context_ += bit_context_ + bit;
   long_bit_context_ = bit_context_;
@@ -73,6 +83,7 @@ void ContextManager::UpdateContexts(int bit) {
     UpdateHistory();
     UpdateWords();
     UpdateRecentBytes();
+    UpdateWRTContext();
     for (const auto& context : contexts_) {
       context->Update();
     }

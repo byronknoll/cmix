@@ -215,6 +215,7 @@ void Predictor::AddMixers() {
   AddMixer(0, manager_.zero_context_, 0.00005);
   AddMixer(0, manager_.line_break_, 0.0007);
   AddMixer(0, manager_.longest_match_, 0.0005);
+  AddMixer(0, manager_.wrt_context_, 0.0005);
   AddMixer(0, manager_.auxiliary_context_, 0.0005);
 
   std::vector<int> map(256, 0);
@@ -314,6 +315,7 @@ void Predictor::AddMixers() {
   AddMixer(1, manager_.recent_bytes_[1], 0.005);
   AddMixer(1, manager_.recent_bytes_[2], 0.005);
   AddMixer(1, manager_.longest_match_, 0.0005);
+  AddMixer(1, manager_.wrt_context_, 0.0005);
   AddMixer(1, interval1.GetContext(), 0.001);
   AddMixer(1, interval2.GetContext(), 0.001);
   AddMixer(1, interval3.GetContext(), 0.001);

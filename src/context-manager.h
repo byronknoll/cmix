@@ -17,10 +17,12 @@ struct ContextManager {
   void UpdateHistory();
   void UpdateWords();
   void UpdateRecentBytes();
+  void UpdateWRTContext();
 
-  unsigned int bit_context_;
-  unsigned long long long_bit_context_, zero_context_, history_pos_,
-      line_break_, longest_match_, auxiliary_context_;
+  unsigned int bit_context_ = 1, wrt_state_ = 0;
+  unsigned long long long_bit_context_ = 1, zero_context_ = 0, history_pos_ = 0,
+      line_break_ = 0, longest_match_ = 0, auxiliary_context_ = 0,
+      wrt_context_ = 0;
   std::vector<unsigned char> history_, shared_map_;
   std::vector<unsigned long long> words_, recent_bytes_;
   std::vector<std::unique_ptr<Context>> contexts_;
