@@ -1,6 +1,6 @@
-cmix version 16
+cmix version 17
 http://www.byronknoll.com/cmix.html
-Released by Byron Knoll on October 3, 2018.
+Released by Byron Knoll on March 24, 2019.
 
 cmix is a lossless data compression program aimed at optimizing compression ratio at the cost of high CPU/memory usage. cmix is free software distributed under the GNU General Public License.
 
@@ -15,6 +15,12 @@ cmix can only compress/decompress single files. To compress multiple files or di
 For some files, preprocessing using "precomp" may improve compression: https://github.com/schnaader/precomp-cpp
 
 Compiling with "-Ofast" will have the fastest performance, but might lead to incompatibility between different computers (due to floating-point precision differences). Compile with "-O3" to fix compatibility issues.
+
+Changes from version 16 to version 17:
+- New dictionary from phda 2017 November release
+- Rewrote WRT dictionary preprocessor
+- Improvements ported from paq8px
+- Some other minor improvements, bug fixes, and refactoring
 
 Changes from version 15 to version 16:
 - Improvements ported from paq8px
