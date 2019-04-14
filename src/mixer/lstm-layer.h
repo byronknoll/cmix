@@ -9,7 +9,7 @@ class LstmLayer {
  public:
   LstmLayer(unsigned int input_size, unsigned int auxiliary_input_size,
       unsigned int output_size, unsigned int num_cells, int horizon,
-      float gradient_clip);
+      float gradient_clip, float learning_rate);
   void ForwardPass(const std::valarray<float>& input, int input_symbol,
       std::valarray<float>* hidden, int hidden_start);
   void BackwardPass(const std::valarray<float>& input, int epoch,
@@ -26,7 +26,7 @@ class LstmLayer {
       forget_gate_, input_node_, output_gate_, forget_gate_update_,
       input_node_update_, output_gate_update_, forget_gate_m_, input_node_m_,
       output_gate_m_, forget_gate_v_, input_node_v_, output_gate_v_;
-  float gradient_clip_;
+  float gradient_clip_, learning_rate_;
   unsigned int num_cells_, epoch_, horizon_, input_size_, output_size_;
   unsigned long long update_steps_ = 0;
 

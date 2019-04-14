@@ -9,9 +9,10 @@
 namespace {
 
 void Adam(std::valarray<float>* g, std::valarray<float>* m,
-    std::valarray<float>* v, std::valarray<float>* w, float t) {
-  float beta1 = 0.9, beta2 = 0.999, alpha = 0.002 / sqrt(5e-5 * t + 1),
-      eps = 1e-8;
+    std::valarray<float>* v, std::valarray<float>* w, float learning_rate,
+    float t) {
+  float beta1 = 0.9, beta2 = 0.999, alpha = learning_rate * 0.067 /
+      sqrt(5e-5 * t + 1), eps = 1e-8;
   (*m) *= beta1;
   (*m) += (1 - beta1) * (*g);
   (*v) *= beta2;
@@ -24,9 +25,10 @@ void Adam(std::valarray<float>* g, std::valarray<float>* m,
 
 LstmLayer::LstmLayer(unsigned int input_size, unsigned int auxiliary_input_size,
     unsigned int output_size, unsigned int num_cells, int horizon,
-    float gradient_clip) : state_(num_cells), output_gate_error_(num_cells),
-    state_error_(num_cells), input_node_error_(num_cells),
-    forget_gate_error_(num_cells), stored_error_(num_cells),
+    float gradient_clip, float learning_rate) : state_(num_cells),
+    output_gate_error_(num_cells), state_error_(num_cells),
+    input_node_error_(num_cells), forget_gate_error_(num_cells),
+    stored_error_(num_cells),
     tanh_state_(std::valarray<float>(num_cells), horizon),
     output_gate_state_(std::valarray<float>(num_cells), horizon),
     input_node_state_(std::valarray<float>(num_cells), horizon),
@@ -45,9 +47,9 @@ LstmLayer::LstmLayer(unsigned int input_size, unsigned int auxiliary_input_size,
     forget_gate_v_(std::valarray<float>(input_size), num_cells),
     input_node_v_(std::valarray<float>(input_size), num_cells),
     output_gate_v_(std::valarray<float>(input_size), num_cells),
-    gradient_clip_(gradient_clip), num_cells_(num_cells), epoch_(0),
-    horizon_(horizon), input_size_(auxiliary_input_size),
-    output_size_(output_size) {
+    gradient_clip_(gradient_clip), learning_rate_(learning_rate),
+    num_cells_(num_cells), epoch_(0), horizon_(horizon),
+    input_size_(auxiliary_input_size), output_size_(output_size) {
   float low = -0.2;
   float range = 0.4;
   for (unsigned int i = 0; i < num_cells_; ++i) {
@@ -156,11 +158,11 @@ void LstmLayer::BackwardPass(const std::valarray<float>&input, int epoch,
     ++update_steps_;
     for (unsigned int i = 0; i < num_cells_; ++i) {
       Adam(&forget_gate_update_[i], &forget_gate_m_[i], &forget_gate_v_[i],
-          &forget_gate_[i], update_steps_);
+          &forget_gate_[i], learning_rate_, update_steps_);
       Adam(&input_node_update_[i], &input_node_m_[i], &input_node_v_[i],
-          &input_node_[i], update_steps_);
+          &input_node_[i], learning_rate_, update_steps_);
       Adam(&output_gate_update_[i], &output_gate_m_[i], &output_gate_v_[i],
-          &output_gate_[i], update_steps_);
+          &output_gate_[i], learning_rate_, update_steps_);
     }
   }
 }
