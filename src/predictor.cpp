@@ -184,7 +184,7 @@ void Predictor::AddMixers() {
   for (unsigned int i = 0; i < vocab_.size(); ++i) {
     if (vocab_[i]) ++vocab_size;
   }
-  AddByteMixer(new ByteMixer(byte_models_.size(), 200, 2, 40, 0.035, 10,
+  AddByteMixer(new ByteMixer(byte_models_.size(), 200, 2, 40, 0.03, 10,
       manager_.bit_context_, vocab_, vocab_size));
   AddAuxiliary();
 
