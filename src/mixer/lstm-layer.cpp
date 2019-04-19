@@ -12,7 +12,7 @@ void Adam(std::valarray<float>* g, std::valarray<float>* m,
     std::valarray<float>* v, std::valarray<float>* w, float learning_rate,
     float t) {
   float beta1 = 0.0, beta2 = 0.9999, alpha = learning_rate * 0.067 /
-      sqrt(5e-5 * t + 1), eps = 1e-5;
+      sqrt(5e-5 * t + 1), eps = 1e-6;
   (*m) *= beta1;
   (*m) += (1 - beta1) * (*g);
   (*v) *= beta2;
