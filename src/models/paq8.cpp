@@ -703,9 +703,6 @@ public:
 #define MUL64_12 UINT64_C(0xF501F1D0944B2383)
 #define MUL64_13 UINT64_C(0xE3E4E8AA829AB9B5)
 
-static inline U32 finalize32(const U32 hash, const int hashbits) {
-  return hash>>(32-hashbits);
-}
 static inline U32 finalize64(const U64 hash, const int hashbits) {
   return U32(hash>>(64-hashbits));
 }
@@ -748,44 +745,6 @@ static inline U64 hash(const U64 x0, const U64 x1, const U64 x2, const U64 x3, c
          (x3+1)*MUL64_3 + (x4+1)*MUL64_4 + (x5+1)*MUL64_5 +
          (x6+1)*MUL64_6 + (x7+1)*MUL64_7;
 }
-static inline U64 hash(const U64 x0, const U64 x1, const U64 x2, const U64 x3, const U64 x4,
-                  const U64 x5, const U64 x6, const U64 x7, const U64 x8) {
-  return (x0+1)*PHI64   + (x1+1)*MUL64_1 + (x2+1)*MUL64_2 +
-         (x3+1)*MUL64_3 + (x4+1)*MUL64_4 + (x5+1)*MUL64_5 +
-         (x6+1)*MUL64_6 + (x7+1)*MUL64_7 + (x8+1)*MUL64_8;
-}
-static inline U64 hash(const U64 x0, const U64 x1, const U64 x2, const U64 x3, const U64 x4,
-                  const U64 x5, const U64 x6, const U64 x7, const U64 x8, const U64 x9) {
-  return (x0+1)*PHI64   + (x1+1)*MUL64_1 + (x2+1)*MUL64_2 +
-         (x3+1)*MUL64_3 + (x4+1)*MUL64_4 + (x5+1)*MUL64_5 +
-         (x6+1)*MUL64_6 + (x7+1)*MUL64_7 + (x8+1)*MUL64_8 +
-         (x9+1)*MUL64_9;
-}
-static inline U64 hash(const U64 x0, const U64 x1, const U64 x2, const U64 x3, const U64 x4,
-                  const U64 x5, const U64 x6, const U64 x7, const U64 x8, const U64 x9,
-                  const U64 x10) {
-  return (x0+1)*PHI64   + (x1+1)*MUL64_1 + (x2+1)*MUL64_2 +
-         (x3+1)*MUL64_3 + (x4+1)*MUL64_4 + (x5+1)*MUL64_5 +
-         (x6+1)*MUL64_6 + (x7+1)*MUL64_7 + (x8+1)*MUL64_8 +
-         (x9+1)*MUL64_9 + (x10+1)*MUL64_10;
-}
-static inline U64 hash(const U64 x0, const U64 x1, const U64 x2, const U64 x3, const U64 x4,
-                  const U64 x5, const U64 x6, const U64 x7, const U64 x8, const U64 x9,
-                  const U64 x10,const U64 x11) {
-  return (x0+1)*PHI64   + (x1+1)*MUL64_1 + (x2+1)*MUL64_2 +
-         (x3+1)*MUL64_3 + (x4+1)*MUL64_4 + (x5+1)*MUL64_5 +
-         (x6+1)*MUL64_6 + (x7+1)*MUL64_7 + (x8+1)*MUL64_8 +
-         (x9+1)*MUL64_9 + (x10+1)*MUL64_10 + (x11+1)*MUL64_11;
-}
-static inline U64 hash(const U64 x0, const U64 x1, const U64 x2, const U64 x3, const U64 x4,
-                  const U64 x5, const U64 x6, const U64 x7, const U64 x8, const U64 x9,
-                  const U64 x10,const U64 x11,const U64 x12) {
-  return (x0+1)*PHI64   + (x1+1)*MUL64_1 + (x2+1)*MUL64_2 +
-         (x3+1)*MUL64_3 + (x4+1)*MUL64_4 + (x5+1)*MUL64_5 +
-         (x6+1)*MUL64_6 + (x7+1)*MUL64_7 + (x8+1)*MUL64_8 +
-         (x9+1)*MUL64_9 + (x10+1)*MUL64_10 + (x11+1)*MUL64_11 + (x12+1)*MUL64_12;
-}
-
 static inline U64 combine64(const U64 seed, const U64 x) {
   return hash(seed+x);
 }
@@ -3151,7 +3110,7 @@ private:
   void Update(Buf& buffer, ModelStats *Stats = nullptr);
   void SetContexts(Buf& buffer, ModelStats *Stats = nullptr);
 public:
-  TextModel(const U32 Size) : Map(Size, 33), Stemmers(Language::Count-1), Languages(Language::Count-1), WordPos(0x10000), State(Parse::Unknown), pState(State), Lang{ 0, 0, Language::Unknown, Language::Unknown }, Info{ 0 }, ParseCtx(0) {
+  TextModel(const U32 Size) : Map(Size, 33), Stemmers(Language::Count-1), Languages(Language::Count-1), WordPos(0x10000), State(Parse::Unknown), pState(State), Lang{ {0}, {0}, Language::Unknown, Language::Unknown }, Info{}, ParseCtx(0) {
     Stemmers[Language::English-1] = new EnglishStemmer();
     Stemmers[Language::French-1] = new FrenchStemmer();
     Stemmers[Language::German-1] = new GermanStemmer();
@@ -3427,7 +3386,7 @@ void TextModel::Update(Buf& buffer, ModelStats *Stats) {
     Info.UTF8Remaining--;
   else
     Info.UTF8Remaining = (leadingBitsSet!=1)?(c!=0xC0 && c!=0xC1 && c<0xF5)?(leadingBitsSet-(leadingBitsSet>0)):-1:0;
-  Info.maskPunct = (BytePos[',']>BytePos['.'])|((BytePos[',']>BytePos['!'])<<1)|((BytePos[',']>BytePos['?'])<<2)|((BytePos[',']>BytePos[':'])<<3)|((BytePos[',']>BytePos[';'])<<4);
+  Info.maskPunct = (BytePos[(unsigned char)',']>BytePos[(unsigned char)'.'])|((BytePos[(unsigned char)',']>BytePos[(unsigned char)'!'])<<1)|((BytePos[(unsigned char)',']>BytePos[(unsigned char)'?'])<<2)|((BytePos[(unsigned char)',']>BytePos[(unsigned char)':'])<<3)|((BytePos[(unsigned char)',']>BytePos[(unsigned char)';'])<<4);
   if (Stats) {
     Stats->Text.state = State;
     Stats->Text.lastPunct = std::min<U32>(0x1F, Info.lastPunct);
@@ -4726,8 +4685,8 @@ void im4bitModel(Mixer& m, int w) {
         i++; cp[i]=t[hash(i,W,NE)];
         i++; cp[i]=t[hash(i,WW,NN,NEE)];
         i++; cp[i]=t[-1];
-
-    col*=(++col)<w*2;
+    ++col;
+    col*=col<w*2;
     line+=(!col);
   }
   else{
@@ -4808,7 +4767,8 @@ void im8bitModel(Mixer& m, int w, ModelStats *Stats = nullptr, int gray = 0) {
       columns[1] = max(1,columns[0]/max(1,ilog2(columns[0])));
     }
     else{
-      x*=(++x)<w;
+      ++x;
+      x*=x<w;
       line+=(x==0);
     }
     lastPos = pos;
@@ -5081,12 +5041,15 @@ void im24bitModel(Mixer& m, int w, ModelStats *Stats = nullptr, int alpha=0) {
       columns[1] = max(1,columns[0]/max(1,ilog2(columns[0])));
     }
     lastPos = pos;
-    x*=(++x)<w;
+    ++x;
+    x*=x<w;
     line+=(x==0);
-    if (x+padding<w)
-      color*=(++color)<stride;
-    else
+    if (x+padding<w) {
+      ++color;
+      color*=color<stride;
+    } else {
       color=(padding>0)*(stride+1);
+    }
 
     column[0]=x/columns[0];
     column[1]=x/columns[1];
@@ -5579,7 +5542,7 @@ void audio8bModel(Mixer& m, int info, ModelStats *Stats) {
     {{28, 4, 0.98}, {28, 4, 0.98}},
     {{28, 3, 0.992}, {28, 3, 0.992}}
   };
-  static int prd[nLnrPrd][2][2]{ 0 }, residuals[nLnrPrd][2]{ 0 };
+  static int prd[nLnrPrd][2][2]{}, residuals[nLnrPrd][2]{};
   static int stereo=0, ch=0, rpos=0, lastPos=0;
   static U32 mask=0, errLog=0, mxCtx=0;
 
