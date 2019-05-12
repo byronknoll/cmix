@@ -26,16 +26,16 @@ void Adam(std::valarray<float>* g, std::valarray<float>* m,
 LstmLayer::LstmLayer(unsigned int input_size, unsigned int auxiliary_input_size,
     unsigned int output_size, unsigned int num_cells, int horizon,
     float gradient_clip, float learning_rate) :
-    forget_gate_(input_size, num_cells, horizon),
-    input_node_(input_size, num_cells, horizon),
-    output_gate_(input_size, num_cells, horizon),
     state_(num_cells), state_error_(num_cells), stored_error_(num_cells),
     tanh_state_(std::valarray<float>(num_cells), horizon),
     input_gate_state_(std::valarray<float>(num_cells), horizon),
     last_state_(std::valarray<float>(num_cells), horizon),
     gradient_clip_(gradient_clip), learning_rate_(learning_rate),
     num_cells_(num_cells), epoch_(0), horizon_(horizon),
-    input_size_(auxiliary_input_size), output_size_(output_size) {
+    input_size_(auxiliary_input_size), output_size_(output_size),
+    forget_gate_(input_size, num_cells, horizon, output_size_ + input_size_),
+    input_node_(input_size, num_cells, horizon, output_size_ + input_size_),
+    output_gate_(input_size, num_cells, horizon, output_size_ + input_size_) {
   float low = -0.2;
   float range = 0.4;
   for (unsigned int i = 0; i < num_cells_; ++i) {
@@ -90,6 +90,12 @@ void LstmLayer::BackwardPass(const std::valarray<float>&input, int epoch,
       forget_gate_.update_[i] = 0;
       input_node_.update_[i] = 0;
       output_gate_.update_[i] = 0;
+      int offset = output_size_ + input_size_;
+      for (unsigned int j = 0; j < input_node_.transpose_.size(); ++j) {
+        forget_gate_.transpose_[j][i] = forget_gate_.weights_[i][j + offset];
+        input_node_.transpose_[j][i] = input_node_.weights_[i][j + offset];
+        output_gate_.transpose_[j][i] = output_gate_.weights_[i][j + offset];
+      }
     }
   } else {
     stored_error_ += *hidden_error;
@@ -106,32 +112,32 @@ void LstmLayer::BackwardPass(const std::valarray<float>&input, int epoch,
 
   *hidden_error = 0;
   if (layer > 0) {
-    int offset = output_size_ + num_cells_ + input_size_;
     for (unsigned int i = 0; i < num_cells_; ++i) {
-      for (unsigned int j = offset; j < offset + num_cells_; ++j) {
-        (*hidden_error)[j-offset] += input_node_.weights_[i][j] *
-            input_node_.error_[i];
-        (*hidden_error)[j-offset] += forget_gate_.weights_[i][j] *
-            forget_gate_.error_[i];
-        (*hidden_error)[j-offset] += output_gate_.weights_[i][j] *
-            output_gate_.error_[i];
-      }
+      (*hidden_error)[i] += std::inner_product(
+        &forget_gate_.error_[0], &forget_gate_.error_[num_cells_],
+        &forget_gate_.transpose_[num_cells_ + i][0], 0.0);
+      (*hidden_error)[i] += std::inner_product(
+        &input_node_.error_[0], &input_node_.error_[num_cells_],
+        &input_node_.transpose_[num_cells_ + i][0], 0.0);
+      (*hidden_error)[i] += std::inner_product(
+        &output_gate_.error_[0], &output_gate_.error_[num_cells_],
+        &output_gate_.transpose_[num_cells_ + i][0], 0.0);
     }
   }
 
   if (epoch > 0) {
     state_error_ *= forget_gate_.state_[epoch];
     stored_error_ = 0;
-    int offset = output_size_ + input_size_;
     for (unsigned int i = 0; i < num_cells_; ++i) {
-      for (unsigned int j = offset; j < offset + num_cells_; ++j) {
-        stored_error_[j-offset] += input_node_.weights_[i][j] *
-            input_node_.error_[i];
-        stored_error_[j-offset] += forget_gate_.weights_[i][j] *
-            forget_gate_.error_[i];
-        stored_error_[j-offset] += output_gate_.weights_[i][j] *
-            output_gate_.error_[i];
-      }
+      stored_error_[i] += std::inner_product(
+        &forget_gate_.error_[0], &forget_gate_.error_[num_cells_],
+        &forget_gate_.transpose_[i][0], 0.0);
+      stored_error_[i] += std::inner_product(
+        &input_node_.error_[0], &input_node_.error_[num_cells_],
+        &input_node_.transpose_[i][0], 0.0);
+      stored_error_[i] += std::inner_product(
+        &output_gate_.error_[0], &output_gate_.error_[num_cells_],
+        &output_gate_.transpose_[i][0], 0.0);
     }
   }
 
