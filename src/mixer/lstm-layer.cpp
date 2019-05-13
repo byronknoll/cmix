@@ -27,6 +27,7 @@ LstmLayer::LstmLayer(unsigned int input_size, unsigned int auxiliary_input_size,
     unsigned int output_size, unsigned int num_cells, int horizon,
     float gradient_clip, float learning_rate) :
     state_(num_cells), state_error_(num_cells), stored_error_(num_cells),
+    cache_(num_cells), cache2_(num_cells),
     tanh_state_(std::valarray<float>(num_cells), horizon),
     input_gate_state_(std::valarray<float>(num_cells), horizon),
     last_state_(std::valarray<float>(num_cells), horizon),
@@ -101,14 +102,15 @@ void LstmLayer::BackwardPass(const std::valarray<float>&input, int epoch,
     stored_error_ += *hidden_error;
   }
 
-  output_gate_.error_ = tanh_state_[epoch] * stored_error_ *
-      output_gate_.state_[epoch] * (1.0f - output_gate_.state_[epoch]);
-  state_error_ += stored_error_ * output_gate_.state_[epoch] * (1.0f -
-      (tanh_state_[epoch] * tanh_state_[epoch]));
-  input_node_.error_ = state_error_ * input_gate_state_[epoch] * (1.0f -
-      (input_node_.state_[epoch] * input_node_.state_[epoch]));
+  cache_ = stored_error_ * output_gate_.state_[epoch];
+  cache2_ = cache_ * tanh_state_[epoch];
+  output_gate_.error_ = cache2_ * (1.0f - output_gate_.state_[epoch]);
+  state_error_ += cache_ - (cache2_ * tanh_state_[epoch]);
+  cache_ = state_error_ * input_gate_state_[epoch];
+  input_node_.error_ = cache_ * (1.0f - (input_node_.state_[epoch] *
+      input_node_.state_[epoch]));
   forget_gate_.error_ = (last_state_[epoch] - input_node_.state_[epoch]) *
-      state_error_ * forget_gate_.state_[epoch] * input_gate_state_[epoch];
+      cache_ * forget_gate_.state_[epoch];
 
   *hidden_error = 0;
   if (layer > 0) {
