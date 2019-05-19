@@ -43,6 +43,9 @@ class LstmLayer {
   NeuronLayer forget_gate_, input_node_, output_gate_;
 
   void ClipGradients(std::valarray<float>* arr);
+  void BackwardPass(NeuronLayer& neurons, const std::valarray<float>&input,
+      int epoch, int layer, int input_symbol,
+      std::valarray<float>* hidden_error);
 };
 
 #endif

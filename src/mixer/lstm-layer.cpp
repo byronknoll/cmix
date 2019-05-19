@@ -87,17 +87,6 @@ void LstmLayer::BackwardPass(const std::valarray<float>&input, int epoch,
   if (epoch == (int)horizon_ - 1) {
     stored_error_ = *hidden_error;
     state_error_ = 0;
-    for (unsigned int i = 0; i < num_cells_; ++i) {
-      forget_gate_.update_[i] = 0;
-      input_node_.update_[i] = 0;
-      output_gate_.update_[i] = 0;
-      int offset = output_size_ + input_size_;
-      for (unsigned int j = 0; j < input_node_.transpose_.size(); ++j) {
-        forget_gate_.transpose_[j][i] = forget_gate_.weights_[i][j + offset];
-        input_node_.transpose_[j][i] = input_node_.weights_[i][j + offset];
-        output_gate_.transpose_[j][i] = output_gate_.weights_[i][j + offset];
-      }
-    }
   } else {
     stored_error_ += *hidden_error;
   }
@@ -113,58 +102,56 @@ void LstmLayer::BackwardPass(const std::valarray<float>&input, int epoch,
       cache_ * forget_gate_.state_[epoch];
 
   *hidden_error = 0;
-  if (layer > 0) {
-    for (unsigned int i = 0; i < num_cells_; ++i) {
-      (*hidden_error)[i] += std::inner_product(
-        &forget_gate_.error_[0], &forget_gate_.error_[num_cells_],
-        &forget_gate_.transpose_[num_cells_ + i][0], 0.0);
-      (*hidden_error)[i] += std::inner_product(
-        &input_node_.error_[0], &input_node_.error_[num_cells_],
-        &input_node_.transpose_[num_cells_ + i][0], 0.0);
-      (*hidden_error)[i] += std::inner_product(
-        &output_gate_.error_[0], &output_gate_.error_[num_cells_],
-        &output_gate_.transpose_[num_cells_ + i][0], 0.0);
-    }
-  }
-
   if (epoch > 0) {
     state_error_ *= forget_gate_.state_[epoch];
     stored_error_ = 0;
-    for (unsigned int i = 0; i < num_cells_; ++i) {
-      stored_error_[i] += std::inner_product(
-        &forget_gate_.error_[0], &forget_gate_.error_[num_cells_],
-        &forget_gate_.transpose_[i][0], 0.0);
-      stored_error_[i] += std::inner_product(
-        &input_node_.error_[0], &input_node_.error_[num_cells_],
-        &input_node_.transpose_[i][0], 0.0);
-      stored_error_[i] += std::inner_product(
-        &output_gate_.error_[0], &output_gate_.error_[num_cells_],
-        &output_gate_.transpose_[i][0], 0.0);
-    }
+  } else {
+    ++update_steps_;
   }
+
+  BackwardPass(forget_gate_, input, epoch, layer, input_symbol, hidden_error);
+  BackwardPass(input_node_, input, epoch, layer, input_symbol, hidden_error);
+  BackwardPass(output_gate_, input, epoch, layer, input_symbol, hidden_error);
 
   ClipGradients(&state_error_);
   ClipGradients(&stored_error_);
   ClipGradients(hidden_error);
+}
 
+void LstmLayer::BackwardPass(NeuronLayer& neurons,
+    const std::valarray<float>&input, int epoch, int layer, int input_symbol,
+    std::valarray<float>* hidden_error) {
+  if (epoch == (int)horizon_ - 1) {
+    for (unsigned int i = 0; i < num_cells_; ++i) {
+      neurons.update_[i] = 0;
+      int offset = output_size_ + input_size_;
+      for (unsigned int j = 0; j < neurons.transpose_.size(); ++j) {
+        neurons.transpose_[j][i] = neurons.weights_[i][j + offset];
+      }
+    }
+  }
+  if (layer > 0) {
+    for (unsigned int i = 0; i < num_cells_; ++i) {
+      (*hidden_error)[i] += std::inner_product(&neurons.error_[0],
+          &neurons.error_[num_cells_], &neurons.transpose_[num_cells_ + i][0],
+          0.0);
+    }
+  }
+  if (epoch > 0) {
+    for (unsigned int i = 0; i < num_cells_; ++i) {
+      stored_error_[i]  += std::inner_product(&neurons.error_[0],
+          &neurons.error_[num_cells_], &neurons.transpose_[i][0], 0.0);
+    }
+  }
   std::slice slice = std::slice(output_size_, input.size(), 1);
   for (unsigned int i = 0; i < num_cells_; ++i) {
-    forget_gate_.update_[i][slice] += forget_gate_.error_[i] * input;
-    input_node_.update_[i][slice] += input_node_.error_[i] * input;
-    output_gate_.update_[i][slice] += output_gate_.error_[i] * input;
-    forget_gate_.update_[i][input_symbol] += forget_gate_.error_[i];
-    input_node_.update_[i][input_symbol] += input_node_.error_[i];
-    output_gate_.update_[i][input_symbol] += output_gate_.error_[i];
+    neurons.update_[i][slice] += neurons.error_[i] * input;
+    neurons.update_[i][input_symbol] += neurons.error_[i];
   }
   if (epoch == 0) {
-    ++update_steps_;
     for (unsigned int i = 0; i < num_cells_; ++i) {
-      Adam(&forget_gate_.update_[i], &forget_gate_.m_[i], &forget_gate_.v_[i],
-          &forget_gate_.weights_[i], learning_rate_, update_steps_);
-      Adam(&input_node_.update_[i], &input_node_.m_[i], &input_node_.v_[i],
-          &input_node_.weights_[i], learning_rate_, update_steps_);
-      Adam(&output_gate_.update_[i], &output_gate_.m_[i], &output_gate_.v_[i],
-          &output_gate_.weights_[i], learning_rate_, update_steps_);
+      Adam(&neurons.update_[i], &neurons.m_[i], &neurons.v_[i],
+          &neurons.weights_[i], learning_rate_, update_steps_);
     }
   }
 }
