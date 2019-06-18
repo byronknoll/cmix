@@ -11,7 +11,7 @@ namespace {
 void Adam(std::valarray<float>* g, std::valarray<float>* m,
     std::valarray<float>* v, std::valarray<float>* w, float learning_rate,
     float t) {
-  float beta1 = 0.025, beta2 = 0.9999, alpha = learning_rate * 0.067 /
+  float beta1 = 0.025, beta2 = 0.9999, alpha = learning_rate * 0.1 /
       sqrt(5e-5 * t + 1), eps = 1e-6;
   (*m) *= beta1;
   (*m) += (1 - beta1) * (*g);
@@ -52,18 +52,15 @@ LstmLayer::LstmLayer(unsigned int input_size, unsigned int auxiliary_input_size,
 void LstmLayer::ForwardPass(const std::valarray<float>& input, int input_symbol,
     std::valarray<float>* hidden, int hidden_start) {
   last_state_[epoch_] = state_;
+  ForwardPass(forget_gate_, input, input_symbol);
+  ForwardPass(input_node_, input, input_symbol);
+  ForwardPass(output_gate_, input, input_symbol);
   for (unsigned int i = 0; i < num_cells_; ++i) {
-    forget_gate_.state_[epoch_][i] = Sigmoid::Logistic(std::inner_product(
-        &input[0], &input[input.size()],
-        &forget_gate_.weights_[i][output_size_],
-        forget_gate_.weights_[i][input_symbol]));
-    input_node_.state_[epoch_][i] = tanh(std::inner_product(&input[0],
-        &input[input.size()], &input_node_.weights_[i][output_size_],
-        input_node_.weights_[i][input_symbol]));
-    output_gate_.state_[epoch_][i] = Sigmoid::Logistic(std::inner_product(
-        &input[0], &input[input.size()],
-        &output_gate_.weights_[i][output_size_],
-        output_gate_.weights_[i][input_symbol]));
+    forget_gate_.state_[epoch_][i] = Sigmoid::Logistic(
+        forget_gate_.state_[epoch_][i]);
+    input_node_.state_[epoch_][i] = tanh(input_node_.state_[epoch_][i]);
+    output_gate_.state_[epoch_][i] = Sigmoid::Logistic(
+        output_gate_.state_[epoch_][i]);
   }
   input_gate_state_[epoch_] = 1.0f - forget_gate_.state_[epoch_];
   state_ *= forget_gate_.state_[epoch_];
@@ -73,6 +70,22 @@ void LstmLayer::ForwardPass(const std::valarray<float>& input, int input_symbol,
   (*hidden)[slice] = output_gate_.state_[epoch_] * tanh_state_[epoch_];
   ++epoch_;
   if (epoch_ == horizon_) epoch_ = 0;
+}
+
+void LstmLayer::ForwardPass(NeuronLayer& neurons,
+    const std::valarray<float>& input, int input_symbol) {
+  for (unsigned int i = 0; i < num_cells_; ++i) {
+    neurons.norm_[epoch_][i] = std::inner_product(&input[0],
+        &input[input.size()], &neurons.weights_[i][output_size_],
+        neurons.weights_[i][input_symbol]);
+  }
+  float mean = neurons.norm_[epoch_].sum() / num_cells_;
+  neurons.norm_[epoch_] -= mean;
+  neurons.ivar_[epoch_] = 1.0 / sqrt(((neurons.norm_[epoch_] *
+      neurons.norm_[epoch_]).sum() / num_cells_) + 1e-5);
+  neurons.norm_[epoch_] *= neurons.ivar_[epoch_];
+  neurons.state_[epoch_] = neurons.norm_[epoch_] * neurons.gamma_ +
+      neurons.beta_;
 }
 
 void LstmLayer::ClipGradients(std::valarray<float>* arr) {
@@ -122,6 +135,8 @@ void LstmLayer::BackwardPass(NeuronLayer& neurons,
     const std::valarray<float>&input, int epoch, int layer, int input_symbol,
     std::valarray<float>* hidden_error) {
   if (epoch == (int)horizon_ - 1) {
+    neurons.gamma_u_ = 0;
+    neurons.beta_u_ = 0;
     for (unsigned int i = 0; i < num_cells_; ++i) {
       neurons.update_[i] = 0;
       int offset = output_size_ + input_size_;
@@ -130,6 +145,12 @@ void LstmLayer::BackwardPass(NeuronLayer& neurons,
       }
     }
   }
+  neurons.beta_u_ += neurons.error_;
+  neurons.gamma_u_ += neurons.error_ * neurons.norm_[epoch];
+  neurons.error_ *= neurons.gamma_ * neurons.ivar_[epoch];
+  neurons.error_ -= ((neurons.error_ * neurons.norm_[epoch]).sum() /
+      num_cells_) * neurons.norm_[epoch];
+  neurons.error_ -= neurons.error_.sum() / num_cells_;
   if (layer > 0) {
     for (unsigned int i = 0; i < num_cells_; ++i) {
       (*hidden_error)[i] += std::inner_product(&neurons.error_[0],
@@ -153,5 +174,9 @@ void LstmLayer::BackwardPass(NeuronLayer& neurons,
       Adam(&neurons.update_[i], &neurons.m_[i], &neurons.v_[i],
           &neurons.weights_[i], learning_rate_, update_steps_);
     }
+    Adam(&neurons.gamma_u_, &neurons.gamma_m_, &neurons.gamma_v_,
+        &neurons.gamma_, learning_rate_, update_steps_);
+    Adam(&neurons.beta_u_, &neurons.beta_m_, &neurons.beta_v_,
+        &neurons.beta_, learning_rate_, update_steps_);
   }
 }
