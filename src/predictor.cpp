@@ -8,6 +8,7 @@
 #include "models/bracket.h"
 #include "models/paq8.h"
 #include "models/paq8hp.h"
+#include "mixer/lstm.h"
 #include "contexts/context-hash.h"
 #include "contexts/bracket-context.h"
 #include "contexts/sparse.h"
@@ -184,8 +185,8 @@ void Predictor::AddMixers() {
   for (unsigned int i = 0; i < vocab_.size(); ++i) {
     if (vocab_[i]) ++vocab_size;
   }
-  AddByteMixer(new ByteMixer(byte_models_.size(), 200, 2, 100, 0.03, 10,
-      manager_.bit_context_, vocab_, vocab_size));
+  AddByteMixer(new ByteMixer(byte_models_.size(), manager_.bit_context_, vocab_,
+      vocab_size, new Lstm(vocab_size, vocab_size, 200, 2, 100, 0.03, 10)));
   AddAuxiliary();
 
   for (int i = 0; i < 3; ++i) {
