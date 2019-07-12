@@ -28,9 +28,10 @@ Lstm::Lstm(unsigned int input_size, unsigned int output_size, unsigned int
   }
 }
 
-void Lstm::SetInput(int index, float val) {
+void Lstm::SetInput(const std::valarray<float>& input) {
   for (unsigned int i = 0; i < layers_.size(); ++i) {
-    layer_input_[epoch_][i][index] = val;
+    std::copy(begin(input), begin(input) + input_size_,
+        begin(layer_input_[epoch_][i]));
   }
 }
 

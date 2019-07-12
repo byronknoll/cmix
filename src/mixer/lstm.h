@@ -14,7 +14,7 @@ class Lstm {
       float gradient_clip);
   std::valarray<float>& Perceive(unsigned int input);
   std::valarray<float>& Predict(unsigned int input);
-  void SetInput(int index, float val);
+  void SetInput(const std::valarray<float>& input);
 
  private:
   std::vector<std::unique_ptr<LstmLayer>> layers_;

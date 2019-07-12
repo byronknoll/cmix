@@ -20,9 +20,8 @@ void ByteMixer::SetInput(int index, float val) {
 }
 
 void ByteMixer::ByteUpdate() {
-  for (unsigned int i = 0; i < vocab_size_; ++i) {
-    lstm_->SetInput(i, 2*inputs_[i] / num_models_);
-  }
+  inputs_ *= 2 / num_models_;
+  lstm_->SetInput(inputs_);
   inputs_ = 0;
   const auto& output = lstm_->Perceive(byte_map_[byte_]);
   offset_ = 0;

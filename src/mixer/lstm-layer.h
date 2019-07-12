@@ -38,7 +38,7 @@ class LstmLayer {
   }
 
  private:
-  std::valarray<float> state_, state_error_, stored_error_, cache_, cache2_;
+  std::valarray<float> state_, state_error_, stored_error_;
   std::valarray<std::valarray<float>> tanh_state_, input_gate_state_,
       last_state_;
   float gradient_clip_, learning_rate_;
