@@ -66,8 +66,8 @@ std::valarray<float>& Lstm::Perceive(unsigned int input) {
     float error = 0;
     if (i == input) error = output_[last_epoch][i] - 1;
     else error = output_[last_epoch][i];
-    output_layer_[epoch_][i] = output_layer_[last_epoch][i] - learning_rate_ *
-        error * hidden_;
+    output_layer_[epoch_][i] = output_layer_[last_epoch][i];
+    output_layer_[epoch_][i] -= learning_rate_ * error * hidden_;
   }
   return Predict(input);
 }
