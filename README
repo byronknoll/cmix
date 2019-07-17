@@ -13,7 +13,7 @@ cmix can only compress/decompress single files. To compress multiple files or di
 
 For some files, preprocessing using "precomp" may improve compression: https://github.com/schnaader/precomp-cpp
 
-Compile with "-Ofast -march=native" for fastest performance. These compiler options might lead to incompatibility between different computers (due to floating-point precision differences). Compile with "-O3" to fix compatibility issues (at the cost of slower performance).
+Compile with "-Ofast -march=native" for fastest performance. These compiler options might lead to incompatibility between different computers due to floating-point precision differences. Compile with "-O3" to fix compatibility issues (at the cost of slower performance).
 
 Changes from version 16 to version 17:
 - New dictionary from phda 2017 November release
