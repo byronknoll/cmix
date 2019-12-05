@@ -78,8 +78,6 @@ void LstmLayer::ForwardPass(NeuronLayer& neurons,
         &input[input.size()], &neurons.weights_[i][output_size_],
         neurons.weights_[i][input_symbol]);
   }
-  float mean = neurons.norm_[epoch_].sum() / num_cells_;
-  neurons.norm_[epoch_] -= mean;
   neurons.ivar_[epoch_] = 1.0 / sqrt(((neurons.norm_[epoch_] *
       neurons.norm_[epoch_]).sum() / num_cells_) + 1e-5);
   neurons.norm_[epoch_] *= neurons.ivar_[epoch_];
@@ -148,7 +146,6 @@ void LstmLayer::BackwardPass(NeuronLayer& neurons,
   neurons.error_ *= neurons.gamma_ * neurons.ivar_[epoch];
   neurons.error_ -= ((neurons.error_ * neurons.norm_[epoch]).sum() /
       num_cells_) * neurons.norm_[epoch];
-  neurons.error_ -= neurons.error_.sum() / num_cells_;
   if (layer > 0) {
     for (unsigned int i = 0; i < num_cells_; ++i) {
       (*hidden_error)[i] += std::inner_product(&neurons.error_[0],
