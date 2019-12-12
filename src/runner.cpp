@@ -145,8 +145,6 @@ bool Store(const std::string& input_path, const std::string& temp_path,
   *input_bytes = ftell(data_in);
   fseek(data_in, 0L, SEEK_SET);
   WriteStorageHeader(data_out, dictionary != NULL);
-  fprintf(stderr, "\rencoding...");
-  fflush(stderr);
   preprocessor::Encode(data_in, data_out, *input_bytes, temp_path, dictionary);
   fseek(data_out, 0L, SEEK_END);
   *output_bytes = ftell(data_out);

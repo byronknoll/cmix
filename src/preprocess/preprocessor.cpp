@@ -501,12 +501,27 @@ void Encode(FILE* in, FILE* out, int n, std::string temp_path,
 
   long start = begin;
   int remainder = n;
-  int text_bytes = 0;
+  double text_fraction = 0, image_fraction = 0, audio_fraction = 0,
+      default_fraction = 0, exe_fraction = 0;
   while (remainder > 0) {
     Filetype nextType=detect(in, remainder, type);
     long end=ftell(in);
     int len=int(end-begin);
-    if (type == TEXT) text_bytes += len;
+    switch (type) {
+      case TEXT: text_fraction += len; break;
+      case EXE: exe_fraction += len; break;
+      case HDR:
+      case JPEG:
+      case IMAGE1:
+      case IMAGE4:
+      case IMAGE8:
+      case IMAGE8GRAY:
+      case IMAGE24:
+      case IMAGE32: image_fraction += len; break;
+      case AUDIO: audio_fraction += len; break;
+      case DEFAULT:
+      default: default_fraction += len; break;
+    }
     remainder-=len;
     type=nextType;
     begin=end;
@@ -515,8 +530,27 @@ void Encode(FILE* in, FILE* out, int n, std::string temp_path,
   type = DEFAULT;
   begin = start;
 
-  double text_fraction = text_bytes;
   text_fraction /= n;
+  image_fraction /= n;
+  audio_fraction /= n;
+  default_fraction /= n;
+  exe_fraction /= n;
+  if (text_fraction > 0.95) {
+    text_fraction = 1;
+    image_fraction = 0;
+    audio_fraction = 0;
+    default_fraction = 0;
+    exe_fraction = 0;
+  }
+  printf("\rDetected block types:");
+  if (text_fraction > 0) printf(" TEXT: %.1f%%", text_fraction * 100);
+  if (image_fraction > 0) printf(" IMAGE: %.1f%%", image_fraction * 100);
+  if (audio_fraction > 0) printf(" AUDIO: %.1f%%", audio_fraction * 100);
+  if (exe_fraction > 0) printf(" EXECUTABLE: %.1f%%", exe_fraction * 100);
+  if (default_fraction > 0) printf(" DEFAULT: %.1f%%", default_fraction * 100);
+  printf("\n");
+  fprintf(stderr, "\rencoding...");
+  fflush(stderr);
   if (text_fraction > 0.95) {
     fprintf(out, "%c%c%c%c%c", TEXT, n>>24, n>>16, n>>8, n);
     encode_text(in, out, n, temp_path, dictionary);
