@@ -2,6 +2,8 @@
 
 #include <numeric>
 #include <stdlib.h>
+#include <fstream>
+#include <iostream>
 
 Lstm::Lstm(unsigned int input_size, unsigned int output_size, unsigned int
     num_cells, unsigned int num_layers, int horizon, float learning_rate,
@@ -26,6 +28,48 @@ Lstm::Lstm(unsigned int input_size, unsigned int output_size, unsigned int
         layer_input_[0][i].size() + output_size, input_size_, output_size_,
         num_cells, horizon, gradient_clip, learning_rate)));
   }
+}
+
+void Lstm::SaveToDisk(const std::string& path) {
+  int last_epoch = epoch_ - 1;
+  if (last_epoch == -1) last_epoch = horizon_ - 1;
+  std::ofstream os(path, std::ios::binary | std::ios::out);
+  if (!os.is_open()) return;
+  for (int i = 0; i < output_size_; ++i) {
+    os.write(reinterpret_cast<const char*>(&output_layer_[last_epoch][i][0]),
+        std::streamsize(output_layer_[0][i].size() * sizeof(float)));
+  }
+  for (int i = 0; i < layers_.size(); ++i) {
+    auto weights = layers_[i]->Weights();
+    for (int j = 0; j < weights.size(); ++j) {
+      for (int k = 0; k < weights[j]->size(); ++k) {
+        os.write(reinterpret_cast<const char*>(&(*weights[j])[k][0]),
+          std::streamsize((*weights[j])[k].size() * sizeof(float)));
+      }
+    }
+  }
+  os.close();
+}
+
+void Lstm::LoadFromDisk(const std::string& path) {
+  int last_epoch = epoch_ - 1;
+  if (last_epoch == -1) last_epoch = horizon_ - 1;
+  std::ifstream is(path, std::ios::binary | std::ios::in);
+  if (!is.is_open()) return;
+  for (int i = 0; i < output_size_; ++i) {
+    is.read(reinterpret_cast<char*>(&output_layer_[last_epoch][i][0]),
+        std::streamsize(output_layer_[0][i].size() * sizeof(float)));
+  }
+  for (int i = 0; i < layers_.size(); ++i) {
+    auto weights = layers_[i]->Weights();
+    for (int j = 0; j < weights.size(); ++j) {
+      for (int k = 0; k < weights[j]->size(); ++k) {
+        is.read(reinterpret_cast<char*>(&(*weights[j])[k][0]),
+          std::streamsize((*weights[j])[k].size() * sizeof(float)));
+      }
+    }
+  }
+  is.close();
 }
 
 void Lstm::SetInput(const std::valarray<float>& input) {

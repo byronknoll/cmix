@@ -4,6 +4,7 @@
 #include <valarray>
 #include <vector>
 #include <memory>
+#include <string>
 
 #include "lstm-layer.h"
 
@@ -15,6 +16,8 @@ class Lstm {
   std::valarray<float>& Perceive(unsigned int input);
   std::valarray<float>& Predict(unsigned int input);
   void SetInput(const std::valarray<float>& input);
+  void SaveToDisk(const std::string& path);
+  void LoadFromDisk(const std::string& path);
 
  private:
   std::vector<std::unique_ptr<LstmLayer>> layers_;

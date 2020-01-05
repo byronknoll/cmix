@@ -2,6 +2,7 @@
 #define LSTM_LAYER_H
 
 #include <valarray>
+#include <vector>
 #include <stdlib.h>
 #include <math.h>
 
@@ -36,6 +37,7 @@ class LstmLayer {
   static inline float Rand() {
     return static_cast <float> (rand()) / static_cast <float> (RAND_MAX);
   }
+  std::vector<std::valarray<std::valarray<float>>*> Weights();
 
  private:
   std::valarray<float> state_, state_error_, stored_error_;

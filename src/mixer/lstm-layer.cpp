@@ -175,3 +175,11 @@ void LstmLayer::BackwardPass(NeuronLayer& neurons,
         &neurons.beta_, learning_rate_, update_steps_);
   }
 }
+
+std::vector<std::valarray<std::valarray<float>>*> LstmLayer::Weights() {
+  std::vector<std::valarray<std::valarray<float>>*> weights;
+  weights.push_back(&forget_gate_.weights_);
+  weights.push_back(&input_node_.weights_);
+  weights.push_back(&output_gate_.weights_);
+  return weights;
+}
