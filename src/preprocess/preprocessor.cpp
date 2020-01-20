@@ -561,6 +561,8 @@ void EncodeSegment(FILE* in, FILE* out, int n, const std::string& temp_path,
   }
 }
 
+const unsigned long long kMaxSegment = 0x80000000 - 1;
+
 void Encode(FILE* in, FILE* out, unsigned long long n, const std::string&
     temp_path, FILE* dictionary) {
   fprintf(stderr, "\rencoding...");
@@ -569,7 +571,7 @@ void Encode(FILE* in, FILE* out, unsigned long long n, const std::string&
   unsigned long long size = n;
   while(n > 0) {
     int segment = n;
-    if (n > 0x80000000) segment = 0x80000000 - 1;
+    if (n > kMaxSegment) segment = kMaxSegment;
     std::vector<double> segment_stats(5);
     EncodeSegment(in, out, segment, temp_path, dictionary, &segment_stats);
     for (int i = 0; i < 5; ++i) block_stats[i] += segment_stats[i];
@@ -588,7 +590,7 @@ void Encode(FILE* in, FILE* out, unsigned long long n, const std::string&
 void NoPreprocess(FILE* in, FILE* out, unsigned long long n) {
   while(n > 0) {
     int segment = n;
-    if (n > 0x80000000) segment = 0x80000000 - 1;
+    if (n > kMaxSegment) segment = kMaxSegment;
     fprintf(out, "%c%c%c%c%c", DEFAULT, segment>>24, segment>>16, segment>>8,
         segment);
     encode_default(in, out, segment);
