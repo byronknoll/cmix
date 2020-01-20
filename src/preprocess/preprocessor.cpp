@@ -494,22 +494,21 @@ int decode_text(FILE* in) {
   return dict->Decode(in);
 }
 
-void Encode(FILE* in, FILE* out, int n, std::string temp_path,
-    FILE* dictionary) {
+
+void EncodeSegment(FILE* in, FILE* out, int n, const std::string& temp_path,
+    FILE* dictionary, std::vector<double>* block_stats) {
   Filetype type=DEFAULT;
   long begin=ftell(in);
 
   long start = begin;
   int remainder = n;
-  double text_fraction = 0, image_fraction = 0, audio_fraction = 0,
-      default_fraction = 0, exe_fraction = 0;
   while (remainder > 0) {
     Filetype nextType=detect(in, remainder, type);
     long end=ftell(in);
     int len=int(end-begin);
     switch (type) {
-      case TEXT: text_fraction += len; break;
-      case EXE: exe_fraction += len; break;
+      case TEXT: (*block_stats)[0] += len; break;
+      case EXE: (*block_stats)[1] += len; break;
       case HDR:
       case JPEG:
       case IMAGE1:
@@ -517,10 +516,10 @@ void Encode(FILE* in, FILE* out, int n, std::string temp_path,
       case IMAGE8:
       case IMAGE8GRAY:
       case IMAGE24:
-      case IMAGE32: image_fraction += len; break;
-      case AUDIO: audio_fraction += len; break;
+      case IMAGE32: (*block_stats)[2] += len; break;
+      case AUDIO: (*block_stats)[3] += len; break;
       case DEFAULT:
-      default: default_fraction += len; break;
+      default: (*block_stats)[4] += len; break;
     }
     remainder-=len;
     type=nextType;
@@ -530,28 +529,9 @@ void Encode(FILE* in, FILE* out, int n, std::string temp_path,
   type = DEFAULT;
   begin = start;
 
-  text_fraction /= n;
-  image_fraction /= n;
-  audio_fraction /= n;
-  default_fraction /= n;
-  exe_fraction /= n;
-  if (text_fraction > 0.95) {
-    text_fraction = 1;
-    image_fraction = 0;
-    audio_fraction = 0;
-    default_fraction = 0;
-    exe_fraction = 0;
-  }
-  printf("\rDetected block types:");
-  if (text_fraction > 0) printf(" TEXT: %.1f%%", text_fraction * 100);
-  if (image_fraction > 0) printf(" IMAGE: %.1f%%", image_fraction * 100);
-  if (audio_fraction > 0) printf(" AUDIO: %.1f%%", audio_fraction * 100);
-  if (exe_fraction > 0) printf(" EXECUTABLE: %.1f%%", exe_fraction * 100);
-  if (default_fraction > 0) printf(" DEFAULT: %.1f%%", default_fraction * 100);
-  printf("\n");
-  fprintf(stderr, "\rencoding...");
-  fflush(stderr);
-  if (text_fraction > 0.95) {
+  if ((*block_stats)[0] / n > 0.95) {
+    (*block_stats)[0] = n;
+    for (unsigned int i = 1; i < block_stats->size(); ++i) (*block_stats)[i] = 0;
     fprintf(out, "%c%c%c%c%c", TEXT, n>>24, n>>16, n>>8, n);
     encode_text(in, out, n, temp_path, dictionary);
     return;
@@ -581,9 +561,39 @@ void Encode(FILE* in, FILE* out, int n, std::string temp_path,
   }
 }
 
-void NoPreprocess(FILE* in, FILE* out, int n) {
-  fprintf(out, "%c%c%c%c%c", DEFAULT, n>>24, n>>16, n>>8, n);
-  encode_default(in, out, n);
+void Encode(FILE* in, FILE* out, unsigned long long n, const std::string&
+    temp_path, FILE* dictionary) {
+  fprintf(stderr, "\rencoding...");
+  fflush(stderr);
+  std::vector<double> block_stats(5);
+  unsigned long long size = n;
+  while(n > 0) {
+    int segment = n;
+    if (n > 0x80000000) segment = 0x80000000 - 1;
+    std::vector<double> segment_stats(5);
+    EncodeSegment(in, out, segment, temp_path, dictionary, &segment_stats);
+    for (int i = 0; i < 5; ++i) block_stats[i] += segment_stats[i];
+    n -= segment;
+  }
+  for (int i = 0; i < 5; ++i) block_stats[i] /= size;
+  printf("\rDetected block types:");
+  if (block_stats[0] > 0) printf(" TEXT: %.1f%%", block_stats[0] * 100);
+  if (block_stats[1] > 0) printf(" IMAGE: %.1f%%", block_stats[1] * 100);
+  if (block_stats[2] > 0) printf(" AUDIO: %.1f%%", block_stats[2] * 100);
+  if (block_stats[3] > 0) printf(" EXECUTABLE: %.1f%%", block_stats[3] * 100);
+  if (block_stats[4] > 0) printf(" DEFAULT: %.1f%%", block_stats[4] * 100);
+  printf("\n");
+}
+
+void NoPreprocess(FILE* in, FILE* out, unsigned long long n) {
+  while(n > 0) {
+    int segment = n;
+    if (n > 0x80000000) segment = 0x80000000 - 1;
+    fprintf(out, "%c%c%c%c%c", DEFAULT, segment>>24, segment>>16, segment>>8,
+        segment);
+    encode_default(in, out, segment);
+    n -= segment;
+  }
 }
 
 int DecodeByte(FILE* in, FILE* dictionary) {
