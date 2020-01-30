@@ -565,8 +565,6 @@ const unsigned long long kMaxSegment = 0x80000000 - 1;
 
 void Encode(FILE* in, FILE* out, unsigned long long n, const std::string&
     temp_path, FILE* dictionary) {
-  fprintf(stderr, "\rencoding...");
-  fflush(stderr);
   std::vector<double> block_stats(5);
   unsigned long long size = n;
   while(n > 0) {
