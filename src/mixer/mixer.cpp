@@ -25,11 +25,19 @@ ContextData* Mixer::GetContextData() {
 
 float Mixer::Mix() {
   ContextData* data = GetContextData();
-  p_ = (inputs_ * data->weights).sum();
+  float p = 0;
+  for (int i = 0; i < inputs_.size(); ++i) {
+    p += inputs_[i] * data->weights[i];
+  }
+  p_ = p;
   for (unsigned int i = 0; i < extra_inputs_.size(); ++i) {
     extra_inputs_[i] = extra_inputs_vec_[i];
   }
-  p_ += (extra_inputs_ * data->extra_weights).sum();
+  float e = 0;
+  for (unsigned int i = 0; i < extra_inputs_.size(); ++i) {
+    e += extra_inputs_[i] * data->extra_weights[i];
+  }
+  p_ += e;
   return p_;
 }
 

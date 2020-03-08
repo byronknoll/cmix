@@ -74,9 +74,11 @@ void LstmLayer::ForwardPass(const std::valarray<float>& input, int input_symbol,
 void LstmLayer::ForwardPass(NeuronLayer& neurons,
     const std::valarray<float>& input, int input_symbol) {
   for (unsigned int i = 0; i < num_cells_; ++i) {
-    neurons.norm_[epoch_][i] = std::inner_product(&input[0],
-        &input[input.size()], &neurons.weights_[i][output_size_],
-        neurons.weights_[i][input_symbol]);
+    float f = neurons.weights_[i][input_symbol];
+    for (unsigned int j = 0; j < input.size(); ++j) {
+      f += input[j] * neurons.weights_[i][output_size_ + j];
+    }
+    neurons.norm_[epoch_][i] = f;
   }
   neurons.ivar_[epoch_] = 1.0 / sqrt(((neurons.norm_[epoch_] *
       neurons.norm_[epoch_]).sum() / num_cells_) + 1e-5);
@@ -148,15 +150,20 @@ void LstmLayer::BackwardPass(NeuronLayer& neurons,
       num_cells_) * neurons.norm_[epoch];
   if (layer > 0) {
     for (unsigned int i = 0; i < num_cells_; ++i) {
-      (*hidden_error)[i] += std::inner_product(&neurons.error_[0],
-          &neurons.error_[num_cells_], &neurons.transpose_[num_cells_ + i][0],
-          0.0);
+      float f = 0;
+      for (unsigned int j = 0; j < num_cells_; ++j) {
+        f += neurons.error_[j] * neurons.transpose_[num_cells_ + i][j];
+      }
+      (*hidden_error)[i] += f;
     }
   }
   if (epoch > 0) {
     for (unsigned int i = 0; i < num_cells_; ++i) {
-      stored_error_[i]  += std::inner_product(&neurons.error_[0],
-          &neurons.error_[num_cells_], &neurons.transpose_[i][0], 0.0);
+      float f = 0;
+      for (unsigned int j = 0; j < num_cells_; ++j) {
+        f += neurons.error_[j] * neurons.transpose_[i][j];
+      }
+      stored_error_[i] += f;
     }
   }
   std::slice slice = std::slice(output_size_, input.size(), 1);
