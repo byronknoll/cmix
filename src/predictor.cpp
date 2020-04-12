@@ -2,7 +2,6 @@
 #include "models/direct.h"
 #include "models/direct-hash.h"
 #include "models/indirect.h"
-#include "models/byte-run.h"
 #include "models/match.h"
 #include "models/ppmd.h"
 #include "models/bracket.h"
@@ -122,8 +121,6 @@ void Predictor::AddWord() {
     const Context& context = manager_.AddContext(std::move(hash));
     AddModel(new Match(manager_.history_, context.GetContext(),
         manager_.bit_context_, 200, 0.5, 10000000, &(manager_.longest_match_)));
-    AddModel(new ByteRun(context.GetContext(), manager_.bit_context_, 100,
-        10000000));
     if (params[0] == 1 && params.size() == 1) {
       AddModel(new Indirect(manager_.run_map_, context.GetContext(),
           manager_.bit_context_, delta, manager_.shared_map_));
