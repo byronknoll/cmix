@@ -14,12 +14,24 @@ Mixer::Mixer(const std::valarray<float>& inputs,
     {}
 
 ContextData* Mixer::GetContextData() {
-  ContextData* data = context_map_[context_].get();
-  if (data == nullptr) {
-    context_map_[context_] = std::unique_ptr<ContextData>(
-        new ContextData(inputs_.size(), extra_inputs_.size()));
+  ContextData* data;
+  unsigned long long limit = 10000;
+  if (context_map_.size() >= limit && context_map_.find(context_) == context_map_.end()) {
+    data = context_map_[0xDEADBEEF].get();
+    if (data == nullptr) {
+      context_map_[0xDEADBEEF] = std::unique_ptr<ContextData>(
+          new ContextData(inputs_.size(), extra_inputs_.size()));
+      data = context_map_[0xDEADBEEF].get();
+    }
+  } else {
     data = context_map_[context_].get();
+    if (data == nullptr) {
+      context_map_[context_] = std::unique_ptr<ContextData>(
+          new ContextData(inputs_.size(), extra_inputs_.size()));
+      data = context_map_[context_].get();
+    }
   }
+
   return data;
 }
 
@@ -53,9 +65,8 @@ void Mixer::Perceive(int bit) {
   }
   data->weights -= update * inputs_;
   data->extra_weights -= update * extra_inputs_;
-  if (data->steps % 1000 == 0) {
-    data->weights *= 1.0 - 3.0e-6;
-    data->extra_weights *= 1.0 - 3.0e-6;
+  if ((data->steps & 1023) == 0) {
+    data->weights *= 1.0f - 3.0e-6f;
+    data->extra_weights *= 1.0f - 3.0e-6f;
   }
 }
-

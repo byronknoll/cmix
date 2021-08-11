@@ -45,7 +45,7 @@ class LstmLayer {
       last_state_;
   float gradient_clip_, learning_rate_;
   unsigned int num_cells_, epoch_, horizon_, input_size_, output_size_;
-  unsigned long long update_steps_ = 0;
+  unsigned long long update_steps_ = 0, update_limit_ = 3000;
   NeuronLayer forget_gate_, input_node_, output_gate_;
 
   void ClipGradients(std::valarray<float>* arr);

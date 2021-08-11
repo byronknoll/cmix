@@ -13,6 +13,7 @@ class Lstm {
   Lstm(unsigned int input_size, unsigned int output_size, unsigned int
       num_cells, unsigned int num_layers, int horizon, float learning_rate,
       float gradient_clip);
+  ~Lstm();
   std::valarray<float>& Perceive(unsigned int input);
   std::valarray<float>& Predict(unsigned int input);
   void SetInput(const std::valarray<float>& input);

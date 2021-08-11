@@ -10,15 +10,25 @@ namespace {
 
 void Adam(std::valarray<float>* g, std::valarray<float>* m,
     std::valarray<float>* v, std::valarray<float>* w, float learning_rate,
-    float t) {
-  float beta1 = 0.025, beta2 = 0.9999, alpha = learning_rate * 0.1 /
-      sqrt(5e-5 * t + 1), eps = 1e-6;
+    float t, unsigned long long update_limit) {
+  const float beta1 = 0.025, beta2 = 0.9999, eps = 1e-6f; 
+  float alpha;
+  if (t < update_limit) {
+    alpha = learning_rate * 0.1f / sqrt(5e-5f * t + 1.0f); 
+  } else {
+    alpha = learning_rate * 0.1f / sqrt(5e-5f * update_limit + 1.0f); 
+  }
   (*m) *= beta1;
-  (*m) += (1 - beta1) * (*g);
+  (*m) += (1.0f - beta1) * (*g);
   (*v) *= beta2;
-  (*v) += (1 - beta2) * (*g) * (*g);
-  (*w) -= alpha * (((*m) / (float)(1 - pow(beta1, t))) /
-      (sqrt((*v) / (float)(1 - pow(beta2, t)) + eps)));
+  (*v) += (1.0f - beta2) * (*g) * (*g);
+  if (t < update_limit) {
+    (*w) -= alpha * (((*m) / (float)(1.0f - pow(beta1, t))) /
+        (sqrt((*v) / (float)(1.0f - pow(beta2, t)) + eps)));
+  } else {
+    (*w) -= alpha * (((*m) / (float)(1.0f - pow(beta1, update_limit))) /
+        (sqrt((*v) / (float)(1.0f - pow(beta2, update_limit)) + eps)));
+  }
 }
 
 }
@@ -36,8 +46,9 @@ LstmLayer::LstmLayer(unsigned int input_size, unsigned int auxiliary_input_size,
     forget_gate_(input_size, num_cells, horizon, output_size_ + input_size_),
     input_node_(input_size, num_cells, horizon, output_size_ + input_size_),
     output_gate_(input_size, num_cells, horizon, output_size_ + input_size_) {
-  float low = -0.2;
-  float range = 0.4;
+  float val = sqrt(6.0f / float(input_size_ + output_size_));
+  float low = -val;
+  float range = 2 * val;
   for (unsigned int i = 0; i < num_cells_; ++i) {
     for (unsigned int j = 0; j < forget_gate_.weights_[i].size(); ++j) {
       forget_gate_.weights_[i][j] = low + Rand() * range;
@@ -80,8 +91,8 @@ void LstmLayer::ForwardPass(NeuronLayer& neurons,
     }
     neurons.norm_[epoch_][i] = f;
   }
-  neurons.ivar_[epoch_] = 1.0 / sqrt(((neurons.norm_[epoch_] *
-      neurons.norm_[epoch_]).sum() / num_cells_) + 1e-5);
+  neurons.ivar_[epoch_] = 1.0f / sqrt(((neurons.norm_[epoch_] *
+      neurons.norm_[epoch_]).sum() / num_cells_) + 1e-5f);
   neurons.norm_[epoch_] *= neurons.ivar_[epoch_];
   neurons.state_[epoch_] = neurons.norm_[epoch_] * neurons.gamma_ +
       neurons.beta_;
@@ -117,7 +128,9 @@ void LstmLayer::BackwardPass(const std::valarray<float>&input, int epoch,
     state_error_ *= forget_gate_.state_[epoch];
     stored_error_ = 0;
   } else {
-    ++update_steps_;
+    if (update_steps_ < update_limit_) {
+      ++update_steps_;
+    }
   }
 
   BackwardPass(forget_gate_, input, epoch, layer, input_symbol, hidden_error);
@@ -174,12 +187,12 @@ void LstmLayer::BackwardPass(NeuronLayer& neurons,
   if (epoch == 0) {
     for (unsigned int i = 0; i < num_cells_; ++i) {
       Adam(&neurons.update_[i], &neurons.m_[i], &neurons.v_[i],
-          &neurons.weights_[i], learning_rate_, update_steps_);
+          &neurons.weights_[i], learning_rate_, update_steps_, update_limit_);
     }
     Adam(&neurons.gamma_u_, &neurons.gamma_m_, &neurons.gamma_v_,
-        &neurons.gamma_, learning_rate_, update_steps_);
+        &neurons.gamma_, learning_rate_, update_steps_, update_limit_);
     Adam(&neurons.beta_u_, &neurons.beta_m_, &neurons.beta_v_,
-        &neurons.beta_, learning_rate_, update_steps_);
+        &neurons.beta_, learning_rate_, update_steps_, update_limit_);
   }
 }
 

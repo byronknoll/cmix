@@ -27,6 +27,9 @@
 #include <time.h>
 #include <math.h>
 #include <ctype.h>
+#include <unordered_map>
+#include <memory>
+#include <sys/mman.h>
 #define NDEBUG
 
 #ifdef UNIX
@@ -114,6 +117,7 @@ template<class T, int ALIGN> void Array<T, ALIGN>::create(U32 i) {
   }
   const size_t sz=ALIGN+n*sizeof(T);
   ptr = (char*)calloc(sz, 1);
+  madvise(ptr, sz, MADV_HUGEPAGE);
   if (!ptr) quit("Out of memory");
   data = (ALIGN ? (T*)(ptr+ALIGN-(((long long)ptr)&(ALIGN-1))) : (T*)ptr);
 }
@@ -501,6 +505,7 @@ unsigned int prediction_index = 0;
 float conversion_factor = 1.0 / 4095;
 
 void AddPrediction(int x) {
+  //printf("%d\n", prediction_index);
   model_predictions[prediction_index++] = x * conversion_factor;
 }
 
@@ -509,9 +514,10 @@ void ResetPredictions() {
 }
 
 class Mixer {
-  const int N, M, S;
+  const int N, S, init_w;
   Array<short, 16> tx;
-  Array<short, 16> wx;
+  std::unordered_map<unsigned int, std::unique_ptr<Array<short, 16>>> wx_;
+
   Array<int> cxt;
   int ncxt;
   int base;
@@ -524,7 +530,14 @@ public:
   void update() {
     for (int i=0; i<ncxt; ++i) {
       int err=((y<<12)-pr[i])*7;
-      train(&tx[0], &wx[cxt[i]*N], nx, err);
+      int context = cxt[i];
+      auto* wts = wx_[context].get();
+      if (wts == nullptr) {
+        wx_[context] = std::unique_ptr<Array<short, 16>>(new Array<short, 16>(N));
+        wts = wx_[context].get();
+        for (int i=0; i<N; ++i) (*wts)[i]=init_w;
+      }
+      train(&tx[0], &(*wts)[0], nx, err);
     }
     nx=base=ncxt=0;
   }
@@ -544,14 +557,28 @@ public:
     if (mp) {
       mp->update();
       for (int i=0; i<ncxt; ++i) {
-        pr[i]=squash((dot_product(&tx[0], &wx[cxt[i]*N], nx) * 9)>>9);
+        int context = cxt[i];
+        auto* wts = wx_[context].get();
+        if (wts == nullptr) {
+          wx_[context] = std::unique_ptr<Array<short, 16>>(new Array<short, 16>(N));
+          wts = wx_[context].get();
+          for (int i=0; i<N; ++i) (*wts)[i]=init_w;
+        }
+        pr[i]=squash((dot_product(&tx[0], &(*wts)[0], nx) * 9)>>9);
         mp->add(stretch(pr[i]));
       }
       mp->set(0, 1);
       return mp->p();
     }
     else {
-      int z = dot_product(&tx[0], &wx[0], nx);
+      auto* wts = wx_[0].get();
+      if (wts == nullptr) {
+        wx_[0] = std::unique_ptr<Array<short, 16>>(new Array<short, 16>(N));
+        wts = wx_[0].get();
+        for (int i=0; i<N; ++i) (*wts)[i]=init_w;          
+      }
+
+      int z = dot_product(&tx[0], &(*wts)[0], nx);
       base = squash((z*16)>>13);
       return pr[0]=squash(z>>9);
     }
@@ -564,13 +591,14 @@ Mixer::~Mixer() {
 }
 
 Mixer::Mixer(int n, int m, int s, int w):
-    N((n+7)&-8), M(m), S(s), tx(N), wx(N*M),
-    cxt(S), ncxt(0), base(0), nx(0), pr(S), mp(0) {
+    N((n+7)&-8), S(s), init_w(w),
+    tx(N), cxt(S), ncxt(0), base(0), nx(0), pr(S), mp(0) {
   for (int i=0; i<S; ++i)
     pr[i]=2048;
-  for (int i=0; i<N*M; ++i)
-    wx[i]=w;
-  if (S>1) mp=new Mixer(S, 1, 1, 0x7fff);
+  if (S>1) {
+    mp=new Mixer(S, 1, 1, 0x7fff);
+    madvise(mp, sizeof(Mixer), MADV_HUGEPAGE);
+  }
 }
 
 class APM1 {
@@ -1025,6 +1053,7 @@ inline U8* ContextMap::E::get(U16 ch) {
 ContextMap::ContextMap(U64 m, int c): C(c), t(m>>6), cp(c), cp0(c),
     cxt(c), chk(c), runp(c), cn(0), mask(U32(t.size()-1)), hashbits(ilog2(mask+1)) {
   sm=new StateMap[C];
+  madvise(sm, sizeof(StateMap) * C, MADV_HUGEPAGE);
   for (int i=0; i<C; ++i) {
     cp0[i]=cp[i]=&t[0].bh[0][0];
     runp[i]=cp[i]+3;
@@ -8343,6 +8372,7 @@ PAQ8::PAQ8(int memory) {
   paq8::level = memory;
   paq8::buf.setsize(paq8::MEM()*8);
   predictor_.reset(new paq8::Predictor());
+  madvise(predictor_.get(), sizeof(paq8::Predictor), MADV_HUGEPAGE);
 }
 
 const std::valarray<float>& PAQ8::Predict() {

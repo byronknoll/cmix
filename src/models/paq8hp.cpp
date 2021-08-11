@@ -27,6 +27,9 @@
 #include <math.h>
 #include <ctype.h>
 #include <algorithm>
+#include <unordered_map>
+#include <memory>
+#include <sys/mman.h>
 #define NDEBUG
 
 #ifndef DEFAULT_OPTION
@@ -123,6 +126,7 @@ template<class T, int ALIGN> void Array<T, ALIGN>::create(U32 i) {
   }
   const U32 sz=ALIGN+n*sizeof(T);
   ptr = (char*)calloc(sz, 1);
+  madvise(ptr, sz, MADV_HUGEPAGE);
   if (!ptr) quit("Out of memory");
   data = (ALIGN ? (T*)(ptr+ALIGN-(((long long)ptr)&(ALIGN-1))) : (T*)ptr);
 }
@@ -436,11 +440,14 @@ void train(short *t, short *w, int n, int err) {
 }
 #endif
 
-std::valarray<float> model_predictions(0.5, 468);
+int num_models = 454;
+int num_extra_predictions = 8 + 6;
+std::valarray<float> model_predictions(0.5, num_models + num_extra_predictions);
 unsigned int prediction_index = 0;
 float conversion_factor = 1.0 / 4095;
 
 void AddPrediction(int x) {
+  // printf("%d\n", prediction_index);
   model_predictions[prediction_index++] = x * conversion_factor;
 }
 
@@ -449,8 +456,9 @@ void ResetPredictions() {
 }
 
 class Mixer {
-  const int N, M, S;
-  Array<short, 16> wx;
+  const int N, S, init_w;
+  std::unordered_map<unsigned int, std::unique_ptr<Array<short, 16>>> wx_;
+
   Array<int> cxt;
   int ncxt;
   int base;
@@ -464,13 +472,26 @@ public:
   void update() {
     for (int i=0; i<ncxt; ++i) {
       int err=((y<<12)-pr[i])*7;
-      train(&tx[0], &wx[cxt[i]*N], nx, err);
+      int context = cxt[i];
+      auto* wts = wx_[context].get();
+      if (wts == nullptr) {
+        wx_[context] = std::unique_ptr<Array<short, 16>>(new Array<short, 16>(N));
+        wts = wx_[context].get();
+        for (int i=0; i<N; ++i) (*wts)[i]=init_w;
+      }
+      train(&tx[0], &(*wts)[0], nx, err);
     }
     nx=base=ncxt=0;
   }
 
   void update2() {
-    train(&tx[0], &wx[0], nx, ((y<<12)-base)*3/2);
+    auto* wts = wx_[0].get();
+    if (wts == nullptr) {
+      wx_[0] = std::unique_ptr<Array<short, 16>>(new Array<short, 16>(N));
+      wts = wx_[0].get();
+      for (int i=0; i<N; ++i) (*wts)[i]=init_w;          
+    }
+    train(&tx[0], &(*wts)[0], nx, ((y<<12)-base)*3/2);
     nx=0;
   }
 
@@ -495,7 +516,14 @@ public:
     if (mp) {
       mp->update2();
       for (int i=0; i<ncxt; ++i) {
-        int dp=dot_product(&tx[0], &wx[cxt[i]*N], nx);
+        int context = cxt[i];
+        auto* wts = wx_[context].get();
+        if (wts == nullptr) {
+          wx_[context] = std::unique_ptr<Array<short, 16>>(new Array<short, 16>(N));
+          wts = wx_[context].get();
+          for (int i=0; i<N; ++i) (*wts)[i]=init_w;
+        }
+        int dp=dot_product(&tx[0], &(*wts)[0], nx);
  dp=(dp*9)>>9;
         pr[i] = squash(dp);
         mp->add(dp);
@@ -503,9 +531,15 @@ public:
       return mp->p();
     }
     else {
- int z=dot_product(&tx[0], &wx[0], nx);
- base=squash( (z*15) >>13);
- return squash(z>>9);
+      auto* wts = wx_[0].get();
+      if (wts == nullptr) {
+        wx_[0] = std::unique_ptr<Array<short, 16>>(new Array<short, 16>(N));
+        wts = wx_[0].get();
+        for (int i=0; i<N; ++i) (*wts)[i]=init_w;
+      }
+      int z=dot_product(&tx[0], &(*wts)[0], nx);
+      base=squash( (z*15) >>13);
+      return squash(z>>9);
     }
   }
   ~Mixer();
@@ -516,14 +550,15 @@ Mixer::~Mixer() {
 }
 
 Mixer::Mixer(int n, int m, int s, int w):
-    N((n+7)&-8), M(m), S(s), wx(N*M),
+    N((n+7)&-8), S(s), init_w(w),
     cxt(S), ncxt(0), base(0), pr(S), mp(0), tx(N), nx(0) {
   int i;
   for (i=0; i<S; ++i)
     pr[i]=2048;
-  for (i=0; i<N*M; ++i)
-    wx[i]=w;
-  if (S>1) mp=new Mixer(S, 1, 1, 0x7fff);
+  if (S>1) {
+    mp=new Mixer(S, 1, 1, 0x7fff);
+    madvise(mp, sizeof(Mixer), MADV_HUGEPAGE);
+  }
 }
 
 class APM {
@@ -610,6 +645,15 @@ inline U8* BH<B>::operator[](U32 i) {
 }
 
 inline int mix2(Mixer& m, int s, StateMap& sm) {
+  if (s == 0) {
+    if (cxtfl) {
+      m.add(0); m.add(0); m.add(0); m.add(0);
+    } else {
+      m.add(0); m.add(0); m.add(0);
+    }
+    m.add(64);
+    return 0;
+  }
   int p1=sm.p(s);
   int n0=-!nex(s,2);
   int n1=-!nex(s,3);
@@ -717,6 +761,7 @@ inline U8* ContextMap::E::get(U16 ch, int j) {
 ContextMap::ContextMap(U32 m, int c): C(c), Sz((m>>6)-1), t(m>>6), cp(c), cp0(c),
     cxt(c), runp(c), cn(0) {
   sm=new StateMap[C];
+  madvise(sm, sizeof(StateMap) * C, MADV_HUGEPAGE);
   for (int i=0; i<C; ++i) {
     cp0[i]=cp[i]=&t[0].bh[0][0];
     runp[i]=cp[i]+3;
@@ -1001,7 +1046,7 @@ static U32 WRT_mtt[16]= { 0, 0, 1, 2, 3, 4, 5, 5, 6, 6, 6, 6, 6, 7, 7, 7 };
 int contextModel2() {
   static ContextMap cm((unsigned int)MEM()*16, 7);
   static RunContextMap rcm7(MEM()/4,14), rcm9(MEM()/4,18), rcm10(MEM()/2,20);
-  static Mixer m(456, 128*(16+14+14+12+14+16), 6, 512);
+  static Mixer m(num_models, 128*(16+14+14+12+14+16), 6, 512);
   static U32 cxt[16];
 
   static int size=0;
@@ -1130,6 +1175,34 @@ void Predictor::update() {
  if (c0==32) --c0;
  f4=f4*16+(c0>>4);
  tt=tt*8+WRT_mtt[c0>>4];
+ int c = c0;
+    int f=0;
+    // utf8 uppercase to lowercase conversion 
+    // cyrillic 
+    if ((c4&0xff00ff00)==0x0c000c00){// b2==12&&b4==12  // 12 is escape char in drt/textfilter/preprocessor
+        if (c>=0x90 && c<=0x9F && b3==0xd0 ){
+            c+=0x20,buf[pos]=c,f=1;
+        } 
+        else if (c> 0x9F && c<=0xAF && b3==0xd0){
+            c+=0xE0,buf[pos]=c;
+            buf[pos-2]=0xD1,f=2;
+        } 
+        //greek
+        else if (c>=0x91 && c<=0x9f && b3==0xce ){
+             c+=0x20,buf[pos]=c,f=1;
+        } 
+        else if (c> 0x9f && c<=0xA9 && b3==0xce){
+             c+=0xE0,buf[pos]=c;
+             buf[pos-2]=0xcf,f=2;
+        }     
+        //latin 1 suplement
+        else if (((c>=0x80 && c<=0x96)||(c>=0x98 && c<=0x9e)) && b3==0xc3){
+             c+=0x20,buf[pos]=c,f=1;
+        }
+        if (f==1) c4=(c4&0xffffff00)+c,x5=(x5&0xffffff00)+c,x4=(x4&0xffffff00)+c;
+        else if (f==2) c4=(c4&0xff00ff00)+c+(b3<<16),x5=(x5&0xff00ff00)+c+(b3<<16),x4=(x4&0xff00ff00)+c+(b3<<16);
+        f=0;        
+    }    
     c0=1;
   }
   bpos=(bpos+1)&7;
@@ -1176,6 +1249,7 @@ PAQ8HP::PAQ8HP(int memory) {
   paq8hp::level = memory;
   paq8hp::buf.setsize(paq8hp::MEM()*8);
   predictor_.reset(new paq8hp::Predictor());
+  madvise(predictor_.get(), sizeof(paq8hp::Predictor), MADV_HUGEPAGE);
 }
 
 const std::valarray<float>& PAQ8HP::Predict() {

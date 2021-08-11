@@ -1,25 +1,17 @@
 // ppmd is written by Dmitry Shkarin.
 // mod_ppmd is adapted from ppmd by Eugene Shelwien.
-// This file is adapted from mod_ppmd_v3: http://encode.ru/threads/2515-mod_ppmd
+// This file is adapted from mod_ppmd_v2: http://encode.su/threads/2515-mod_ppmd
 
 #include "ppmd.h"
 #include <cstring>
+#include <sys/mman.h>
+#include <stdlib.h>
+#include <sys/stat.h>
+#include <fcntl.h>
+#include <unistd.h>
+#include <fcntl.h>
 
 namespace PPMD {
-
-#define NOASM
-#define _CRT_SECURE_NO_WARNINGS
-#define _CRT_SECURE_NO_DEPRECATE
-#define _CRT_DISABLE_PERFCRIT_LOCKS
-#define _CRT_NONSTDC_NO_DEPRECATE
-#define _SECURE_SCL 0
-#define _ITERATOR_DEBUG_LEVEL 0
-#define _SECURE_SCL_THROWS 0
-#define _HAS_ITERATOR_DEBUGGING 0
-#define VC_EXTRALEAN
-#define STRICT
-#define NDEBUG
-#define WIN32
 
 template <class T> T Min( T x, T y ) { return (x<y) ? x : y; }
 template <class T> T Max( T x, T y ) { return (x>y) ? x : y; }
@@ -30,6 +22,16 @@ typedef unsigned short word;
 typedef unsigned int uint;
 typedef unsigned char byte;
 typedef unsigned long long qword;
+
+// If mmap_to_disk is set to false (recommended setting), PPM will only use RAM
+// for memory.
+// If mmap_to_disk is set to true, PPM memory will be saved to disk using mmap.
+// This will reduce RAM usage, but will be slower as well. *Warning*: this will
+// write a *lot* of data to disk, so can reduce the lifespan of SSDs. Not
+// recommended for normal usage.
+bool mmap_to_disk = false;
+qword mmap_size;
+static constexpr char mmap_path[] = "ppm.temp";
 
 const int ORealMAX=256;
 
@@ -54,9 +56,19 @@ struct ppmd_Model {
 
   byte* HeapStart;
 
-  typedef byte* pbyte;
-  uint Ptr2Indx( void* p ) { return pbyte(p)-HeapStart; }
-  void* Indx2Ptr(uint indx) { return indx + HeapStart; }
+  uint Ptr2Indx( void* p ) {
+    qword addr = ((byte*)p)-HeapStart;
+    uint lim = (UnitsStart-HeapStart);
+    uint indx = (addr>=lim) ? (addr-lim)/UNIT_SIZE+lim : addr;
+    return indx;
+  }
+
+  void* Indx2Ptr( uint indx ) {
+    uint lim = (UnitsStart-HeapStart);
+    qword addr = (indx>=lim) ? qword(indx-lim)*UNIT_SIZE+lim : indx;
+    return HeapStart + addr;
+  }
+
 struct _MEM_BLK {
   uint Stamp;
   uint NextIndx;
@@ -126,7 +138,29 @@ uint U2B( uint NU ) {
 
 int StartSubAllocator( qword SASize ) {
   qword t = SASize << 20U;
-  HeapStart = new byte[t];
+
+  if (mmap_to_disk) {
+    mmap_size = t;
+    int fd = open(mmap_path, O_RDWR | O_CREAT | O_TRUNC, (mode_t)0664);
+    if(fd < 0){
+      exit(EXIT_FAILURE);
+    }
+      
+    if (lseek(fd, t, SEEK_SET) == -1) {
+      exit(EXIT_FAILURE);
+    }
+      
+    if (write(fd, "", 1) == -1) {
+      exit(EXIT_FAILURE);
+    }
+    HeapStart = (byte*) mmap(NULL, t, PROT_READ|PROT_WRITE, MAP_SHARED, fd, 0);
+    if(HeapStart == MAP_FAILED){
+      exit(EXIT_FAILURE);
+    }
+    close(fd);
+  } else {
+    HeapStart = new byte[t];
+  }
 
   if( HeapStart==NULL ) return 0;
   SubAllocatorSize = t;
@@ -433,7 +467,7 @@ struct PPM_CONTEXT {
   uint iStats;
   uint iSuffix;
 
-  STATE* oneState() const { return (STATE*)&SummFreq; }
+  STATE& oneState() const { return (STATE&) SummFreq; }
 };
 
 STATE* getStats( PPM_CONTEXT* This ) { return (STATE*)Indx2Ptr(This->iStats); }
@@ -534,8 +568,8 @@ STATE* rescale( PPM_CONTEXT& q, int OrderFall, STATE* FoundState ) {
       tmp.Freq = Min( MAX_FREQ/3, (2*tmp.Freq+EscFreq-1)/EscFreq );
       q.Flags &= 0x18;
       FreeUnits( getStats(&q), a );
-      *(q.oneState()) = tmp;
-      FoundState = q.oneState();
+      q.oneState() = tmp;
+      FoundState = &q.oneState();
       return FoundState;
     }
     q.iStats = Ptr2Indx( ShrinkUnits(getStats(&q),a,(q.NumStats+2)>>1) );
@@ -573,7 +607,7 @@ uint cutOff( PPM_CONTEXT& q, int Order, int MaxOrder ) {
   if( q.NumStats==0 ) {
 
     int flag = 1;
-    p = q.oneState();
+    p = &q.oneState();
     if( (byte*)getSucc(p) >= UnitsStart ) {
       AuxCutOff( p, Order, MaxOrder );
       if( p->iSuccessor || Order<O_BOUND ) flag=0;
@@ -607,7 +641,7 @@ uint cutOff( PPM_CONTEXT& q, int Order, int MaxOrder ) {
       if( i==0 ) {
         q.Flags = (q.Flags & 0x10) + 0x08*(p[0].Symbol>=0x40);
         p[0].Freq = 1+(2*(p[0].Freq-1))/(q.SummFreq-p[0].Freq);
-        *(q.oneState()) = p[0];
+        q.oneState() = p[0];
         FreeUnits( p, tmp );
       } else {
         p = (STATE*)ShrinkUnits( p0, tmp, (i+2)>>1 );
@@ -706,7 +740,7 @@ void RestoreModelRare( void ) {
 
     MaxContext->Flags = (MaxContext->Flags & 0x10) + 0x08*(p->Symbol>=0x40);
     p[0].Freq = (p[0].Freq+1) >> 1;
-    *(MaxContext->oneState()) = p[0];
+    MaxContext->oneState() = p[0];
     MaxContext->NumStats=0;
     FreeUnits( p, 1 );
   }
@@ -733,7 +767,7 @@ PPM_CONTEXT* UpdateModel( PPM_CONTEXT* MinContext ) {
   byte Flag, FSymbol;
   uint ns1, ns, cf, sf, s0, FFreq;
   uint iSuccessor, iFSuccessor;
-  PPM_CONTEXT* pc = NULL;
+  PPM_CONTEXT* pc;
   STATE* p = NULL;
 
   FSymbol = FoundState->Symbol;
@@ -755,11 +789,11 @@ PPM_CONTEXT* UpdateModel( PPM_CONTEXT* MinContext ) {
         pc[0].SummFreq += cf;
       }
     } else {
-      p = pc[0].oneState();
+      p = &(pc[0].oneState());
       p[0].Freq += (p[0].Freq<14);
     }
   }
-  pc = MaxContext;
+  // pc = MaxContext;
 
   if( !OrderFall && iFSuccessor ) {
     FoundState->iSuccessor = CreateSuccessors( 1, p, MinContext );
@@ -806,7 +840,7 @@ PPM_CONTEXT* UpdateModel( PPM_CONTEXT* MinContext ) {
 
       p = (STATE*)AllocUnits(1);
       if( !p ) { saved_pc=pc; return 0; };
-      p[0] = *(pc[0].oneState());
+      p[0] = pc[0].oneState();
       pc[0].iStats = Ptr2Indx(p);
       p[0].Freq = (p[0].Freq<=MAX_FREQ/3) ? (2*p[0].Freq-1) : (MAX_FREQ-15);
 
@@ -864,7 +898,7 @@ uint CreateSuccessors( uint Skip, STATE* p, PPM_CONTEXT* pc ) {
       pc[0].SummFreq += tmp;
     } else {
 
-      p = pc[0].oneState();
+      p = &(pc[0].oneState());
       p[0].Freq += (!suff(pc)->NumStats & (p[0].Freq<16));
     }
 
@@ -883,8 +917,8 @@ NO_LOOP:
   ct.NumStats = 0;
   ct.Flags = 0x10*(sym>=0x40);
   sym = *(byte*)Indx2Ptr(iUpBranch);
-  ct.oneState()->iSuccessor = Ptr2Indx((byte*)Indx2Ptr(iUpBranch)+1);
-  ct.oneState()->Symbol = sym;
+  ct.oneState().iSuccessor = Ptr2Indx((byte*)Indx2Ptr(iUpBranch)+1);
+  ct.oneState().Symbol = sym;
   ct.Flags |= 0x08*(sym>=0x40);
 
   if( pc[0].NumStats ) {
@@ -892,9 +926,9 @@ NO_LOOP:
     cf = p[0].Freq - 1;
     s0 = pc[0].SummFreq - pc[0].NumStats - cf;
     cf = 1 + ((2*cf<s0) ? (12*cf>s0) : 2+cf/s0);
-    ct.oneState()->Freq = Min<uint>( 7, cf );
+    ct.oneState().Freq = Min<uint>( 7, cf );
   } else {
-    ct.oneState()->Freq = pc[0].oneState()->Freq;
+    ct.oneState().Freq = pc[0].oneState().Freq;
   }
 
   do {
@@ -931,7 +965,7 @@ uint ReduceOrder( STATE* p, PPM_CONTEXT* pc ) {
       p->Freq += tmp;
       pc->SummFreq += tmp;
     } else {
-      p = pc->oneState();
+      p = &(pc->oneState());
       p->Freq += (p->Freq<11);
     }
 
@@ -961,7 +995,7 @@ word BinSumm[25][64];
 
 template< int ProcMode >
 void processBinSymbol( PPM_CONTEXT& q, int symbol ) {
-  STATE& rs = *(q.oneState());
+  STATE& rs = q.oneState();
   int i = NS2BSIndx[suff(&q)->NumStats] + PrevSuccess + q.Flags + ((RunLength>>26) & 0x20);
   word& bs = BinSumm[QTable[rs.Freq-1]][i];
   BSumm = bs;
@@ -1050,6 +1084,7 @@ void processSymbol2( PPM_CONTEXT& q, int symbol ) {
   int count=0;
   int low;
   int see_freq;
+  int freq;
   int cnum = q.NumStats;
 
   SEE2_CONTEXT* psee2c;
@@ -1094,6 +1129,8 @@ void processSymbol2( PPM_CONTEXT& q, int symbol ) {
     }
     p+=j;
 
+    freq = p[0].Freq;
+
     if( see_freq>2 ) psee2c->Summ -= see_freq;
     psee2c->update();
 
@@ -1104,6 +1141,7 @@ void processSymbol2( PPM_CONTEXT& q, int symbol ) {
     EscCount++;
   } else {
     low = Total;
+    freq = see_freq;
     NumMasked = cnum;
     psee2c->Summ += Total-see_freq;
 
@@ -1159,7 +1197,7 @@ void ConvertSQ( void ) {
 }
 
 void processBinSymbol_T( PPM_CONTEXT& q, int ) {
-  STATE& rs = *(q.oneState());
+  STATE& rs = q.oneState();
   int i = NS2BSIndx[suff(&q)->NumStats] + PrevSuccess + q.Flags + ((RunLength>>26) & 0x20);
   word& bs = BinSumm[QTable[rs.Freq-1]][i];
   BSumm = bs;
@@ -1310,6 +1348,7 @@ void ppmd_UpdateByte( uint c ) {
 
   if( p==0 ) {
     if( _CutOff ) {
+      printf("reset\n");
       RestoreModelRare();
     } else {
       StartModelRare();
@@ -1321,13 +1360,22 @@ void ppmd_UpdateByte( uint c ) {
 
 #pragma pack()
 
+unsigned long long counter_ = 0;
+
 PPMD::PPMD(int order, int memory, const unsigned int& bit_context,
     const std::vector<bool>& vocab) : ByteModel(vocab), byte_(bit_context) {
   ppmd_model_.reset(new ppmd_Model());
   ppmd_model_->Init(order,memory,1,0);
 }
 
+PPMD::~PPMD() {
+  if (mmap_to_disk) {
+    remove(mmap_path);
+  }
+}
+
 void PPMD::ByteUpdate() {
+  ++counter_;
   ppmd_model_->ppmd_UpdateByte(byte_);
   ppmd_model_->ppmd_PrepareByte();
   for (int i = 0; i < 256; ++i) {
@@ -1336,6 +1384,18 @@ void PPMD::ByteUpdate() {
   }
   ByteModel::ByteUpdate();
   probs_ /= probs_.sum();
+  if (mmap_to_disk && counter_ % 10000 == 0) {
+    int err = munmap(ppmd_model_->HeapStart, mmap_size);
+    if(err != 0) {
+      exit(EXIT_FAILURE);
+    }
+    int fd = open(mmap_path, O_RDWR);
+    ppmd_model_->HeapStart = (byte*) mmap(NULL, mmap_size, PROT_READ|PROT_WRITE, MAP_SHARED, fd, 0);
+    if(ppmd_model_->HeapStart == MAP_FAILED) {
+      exit(EXIT_FAILURE);
+    }
+    close(fd);
+  }
 }
 
 } // namespace PPMD

@@ -5,7 +5,7 @@
 Sigmoid::Sigmoid(int logit_size) : logit_size_(logit_size),
     logit_table_(logit_size, 0) {
   for (int i = 0; i < logit_size_; ++i) {
-    logit_table_[i] = SlowLogit((i + 0.5) / logit_size_);
+    logit_table_[i] = SlowLogit((i + 0.5f) / logit_size_);
   }
 }
 

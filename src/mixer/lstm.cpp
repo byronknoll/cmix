@@ -28,6 +28,11 @@ Lstm::Lstm(unsigned int input_size, unsigned int output_size, unsigned int
         layer_input_[0][i].size() + output_size, input_size_, output_size_,
         num_cells, horizon, gradient_clip, learning_rate)));
   }
+  //LoadFromDisk("lstm.dat");
+}
+
+Lstm::~Lstm() {
+  //SaveToDisk("lstm.dat");
 }
 
 void Lstm::SaveToDisk(const std::string& path) {
@@ -89,9 +94,7 @@ std::valarray<float>& Lstm::Perceive(unsigned int input) {
       for (int layer = layers_.size() - 1; layer >= 0; --layer) {
         int offset = layer * num_cells_;
         for (unsigned int i = 0; i < output_size_; ++i) {
-          float error = 0;
-          if (i == input_history_[epoch]) error = output_[epoch][i] - 1;
-          else error = output_[epoch][i];
+          float error = (i == input_history_[epoch]) ? (output_[epoch][i] - 1) : output_[epoch][i];
           for (unsigned int j = 0; j < hidden_error_.size(); ++j) {
             hidden_error_[j] += output_layer_[epoch][i][j + offset] * error;
           }
@@ -107,9 +110,7 @@ std::valarray<float>& Lstm::Perceive(unsigned int input) {
   }
 
   for (unsigned int i = 0; i < output_size_; ++i) {
-    float error = 0;
-    if (i == input) error = output_[last_epoch][i] - 1;
-    else error = output_[last_epoch][i];
+    float error = (i == input) ? (output_[last_epoch][i] - 1) : output_[last_epoch][i];
     output_layer_[epoch_][i] = output_layer_[last_epoch][i];
     output_layer_[epoch_][i] -= learning_rate_ * error * hidden_;
   }

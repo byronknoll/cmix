@@ -97,8 +97,7 @@ void Predictor::AddBracket() {
 }
 
 void Predictor::AddPPMD() {
-  AddByteModel(new PPMD::PPMD(6, 1200, manager_.bit_context_, vocab_));
-  AddByteModel(new PPMD::PPMD(16, 1200, manager_.bit_context_, vocab_));
+  AddByteModel(new PPMD::PPMD(25, 14000, manager_.bit_context_, vocab_));
 }
 
 void Predictor::AddWord() {
@@ -206,7 +205,7 @@ void Predictor::AddMixers() {
     AddMixer(0, bit_context.GetContext(), params[2]);
   }
 
-  model_params = {{0, 0.001}, {2, 0.002}, {3, 0.005}};
+  model_params = {{2, 0.002}, {3, 0.005}};
   for (const auto& params : model_params) {
     AddMixer(0, manager_.recent_bytes_[params[0]], params[1]);
   }
