@@ -4,12 +4,6 @@
 
 #include "ppmd.h"
 #include <cstring>
-#include <sys/mman.h>
-#include <stdlib.h>
-#include <sys/stat.h>
-#include <fcntl.h>
-#include <unistd.h>
-#include <fcntl.h>
 
 namespace PPMD {
 
@@ -22,16 +16,6 @@ typedef unsigned short word;
 typedef unsigned int uint;
 typedef unsigned char byte;
 typedef unsigned long long qword;
-
-// If mmap_to_disk is set to false (recommended setting), PPM will only use RAM
-// for memory.
-// If mmap_to_disk is set to true, PPM memory will be saved to disk using mmap.
-// This will reduce RAM usage, but will be slower as well. *Warning*: this will
-// write a *lot* of data to disk, so can reduce the lifespan of SSDs. Not
-// recommended for normal usage.
-bool mmap_to_disk = false;
-qword mmap_size;
-static constexpr char mmap_path[] = "ppm.temp";
 
 const int ORealMAX=256;
 
@@ -139,28 +123,7 @@ uint U2B( uint NU ) {
 int StartSubAllocator( qword SASize ) {
   qword t = SASize << 20U;
 
-  if (mmap_to_disk) {
-    mmap_size = t;
-    int fd = open(mmap_path, O_RDWR | O_CREAT | O_TRUNC, (mode_t)0664);
-    if(fd < 0){
-      exit(EXIT_FAILURE);
-    }
-      
-    if (lseek(fd, t, SEEK_SET) == -1) {
-      exit(EXIT_FAILURE);
-    }
-      
-    if (write(fd, "", 1) == -1) {
-      exit(EXIT_FAILURE);
-    }
-    HeapStart = (byte*) mmap(NULL, t, PROT_READ|PROT_WRITE, MAP_SHARED, fd, 0);
-    if(HeapStart == MAP_FAILED){
-      exit(EXIT_FAILURE);
-    }
-    close(fd);
-  } else {
-    HeapStart = new byte[t];
-  }
+  HeapStart = new byte[t];
 
   if( HeapStart==NULL ) return 0;
   SubAllocatorSize = t;
@@ -1368,12 +1331,6 @@ PPMD::PPMD(int order, int memory, const unsigned int& bit_context,
   ppmd_model_->Init(order,memory,1,0);
 }
 
-PPMD::~PPMD() {
-  if (mmap_to_disk) {
-    remove(mmap_path);
-  }
-}
-
 void PPMD::ByteUpdate() {
   ++counter_;
   ppmd_model_->ppmd_UpdateByte(byte_);
@@ -1384,18 +1341,6 @@ void PPMD::ByteUpdate() {
   }
   ByteModel::ByteUpdate();
   probs_ /= probs_.sum();
-  if (mmap_to_disk && counter_ % 10000 == 0) {
-    int err = munmap(ppmd_model_->HeapStart, mmap_size);
-    if(err != 0) {
-      exit(EXIT_FAILURE);
-    }
-    int fd = open(mmap_path, O_RDWR);
-    ppmd_model_->HeapStart = (byte*) mmap(NULL, mmap_size, PROT_READ|PROT_WRITE, MAP_SHARED, fd, 0);
-    if(ppmd_model_->HeapStart == MAP_FAILED) {
-      exit(EXIT_FAILURE);
-    }
-    close(fd);
-  }
 }
 
 } // namespace PPMD

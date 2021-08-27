@@ -13,7 +13,6 @@ class PPMD : public ByteModel {
  public:
   PPMD(int order, int memory, const unsigned int& bit_context,
       const std::vector<bool>& vocab);
-  ~PPMD();
   void ByteUpdate();
  private:
   const unsigned int& byte_;
