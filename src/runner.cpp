@@ -15,7 +15,7 @@ namespace {
 }
 
 int Help() {
-  printf("cmix version 18\n");
+  printf("cmix version 19\n");
   printf("Compress:\n");
   printf("    with dictionary:    cmix -c [dictionary] [input] [output]\n");
   printf("    without dictionary: cmix -c [input] [output]\n");
