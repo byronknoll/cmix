@@ -29,7 +29,6 @@
 #include <ctype.h>
 #include <unordered_map>
 #include <memory>
-#include <sys/mman.h>
 #define NDEBUG
 
 #ifdef UNIX
@@ -117,7 +116,6 @@ template<class T, int ALIGN> void Array<T, ALIGN>::create(U32 i) {
   }
   const size_t sz=ALIGN+n*sizeof(T);
   ptr = (char*)calloc(sz, 1);
-  madvise(ptr, sz, MADV_HUGEPAGE);
   if (!ptr) quit("Out of memory");
   data = (ALIGN ? (T*)(ptr+ALIGN-(((long long)ptr)&(ALIGN-1))) : (T*)ptr);
 }
@@ -597,7 +595,6 @@ Mixer::Mixer(int n, int m, int s, int w):
     pr[i]=2048;
   if (S>1) {
     mp=new Mixer(S, 1, 1, 0x7fff);
-    madvise(mp, sizeof(Mixer), MADV_HUGEPAGE);
   }
 }
 
@@ -1053,7 +1050,6 @@ inline U8* ContextMap::E::get(U16 ch) {
 ContextMap::ContextMap(U64 m, int c): C(c), t(m>>6), cp(c), cp0(c),
     cxt(c), chk(c), runp(c), cn(0), mask(U32(t.size()-1)), hashbits(ilog2(mask+1)) {
   sm=new StateMap[C];
-  madvise(sm, sizeof(StateMap) * C, MADV_HUGEPAGE);
   for (int i=0; i<C; ++i) {
     cp0[i]=cp[i]=&t[0].bh[0][0];
     runp[i]=cp[i]+3;
@@ -8372,7 +8368,6 @@ PAQ8::PAQ8(int memory) {
   paq8::level = memory;
   paq8::buf.setsize(paq8::MEM()*8);
   predictor_.reset(new paq8::Predictor());
-  madvise(predictor_.get(), sizeof(paq8::Predictor), MADV_HUGEPAGE);
 }
 
 const std::valarray<float>& PAQ8::Predict() {
