@@ -1311,7 +1311,6 @@ void ppmd_UpdateByte( uint c ) {
 
   if( p==0 ) {
     if( _CutOff ) {
-      printf("reset\n");
       RestoreModelRare();
     } else {
       StartModelRare();
