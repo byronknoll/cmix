@@ -1423,10 +1423,10 @@ public:
     }
   }
   ~OLS() {
-    delete x, delete w, delete b;
+    delete[] x, delete[] w, delete[] b;
     for (int i=0; i<n; i++) {
-      delete mCovariance[i];
-      delete mCholesky[i];
+      delete[] mCovariance[i];
+      delete[] mCholesky[i];
     }
     delete[] mCovariance, delete[] mCholesky;
   }
