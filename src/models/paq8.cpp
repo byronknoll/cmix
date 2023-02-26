@@ -2499,7 +2499,7 @@ private:
       if (W->Letters[i]==0xC3 && (IsVowel(c) || (W->Letters[i+1]&0xDF)==0x87)) {
         W->Letters[i] = c;
         if (i+1<W->End)
-          memcpy(&W->Letters[i+1], &W->Letters[i+2], W->End-i-1);
+          memmove(&W->Letters[i+1], &W->Letters[i+2], W->End-i-1);
         W->End--;
       }
     }
