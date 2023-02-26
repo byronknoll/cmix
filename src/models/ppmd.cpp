@@ -150,7 +150,7 @@ qword GetUsedMemory() {
 }
 
 void StopSubAllocator() {
-  if( SubAllocatorSize ) SubAllocatorSize=0, delete HeapStart;
+  if( SubAllocatorSize ) SubAllocatorSize=0, delete[] HeapStart;
 
 }
 
@@ -1254,7 +1254,7 @@ void processSymbol2_T( PPM_CONTEXT& q, int ) {
     return 0;
   }
 
-  void Quit( void ) {
+  ~ppmd_Model() {
     StopSubAllocator();
   }
 
