@@ -130,12 +130,17 @@ std::valarray<float>& Lstm::Predict(unsigned int input) {
       std::copy(start, start + num_cells_, start2);
     }
   }
+  float max_out = 0;
   for (unsigned int i = 0; i < output_size_; ++i) {
     float sum = 0;
     for (unsigned int j = 0; j < hidden_.size(); ++j) {
       sum += hidden_[j] * output_layer_[epoch_][i][j];
     }
-    output_[epoch_][i] = exp(sum);
+    output_[epoch_][i] = sum;
+    max_out = std::max(sum, max_out);
+  }
+  for (unsigned int i = 0; i < output_size_; ++i) {
+    output_[epoch_][i] = exp(output_[epoch_][i] - max_out);
   }
   output_[epoch_] /= output_[epoch_].sum();
   int epoch = epoch_;
