@@ -1,24 +1,24 @@
-#ifndef PAQ8HP_H
-#define PAQ8HP_H
+#ifndef FXCM_H
+#define FXCM_H
 
 #include "model.h"
 #include <vector>
 #include <memory>
 
-namespace paq8hp {
+namespace fxcmv1 {
   class Predictor;
 }
 
-class PAQ8HP : public Model {
+class FXCM : public Model {
  public:
-  PAQ8HP(int memory);
+  FXCM(int memory);
   const std::valarray<float>& Predict();
   unsigned int NumOutputs();
   void Perceive(int bit);
   void ByteUpdate() {};
 
  private:
-  std::unique_ptr<paq8hp::Predictor> predictor_;
+  std::unique_ptr<fxcmv1::Predictor> predictor_;
 };
 
 #endif

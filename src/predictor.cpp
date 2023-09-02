@@ -7,6 +7,7 @@
 #include "models/bracket.h"
 #include "models/paq8.h"
 #include "models/paq8hp.h"
+#include "models/fxcmv1.h"
 #include "mixer/lstm.h"
 #include "contexts/context-hash.h"
 #include "contexts/bracket-context.h"
@@ -74,9 +75,9 @@ void Predictor::AddAuxiliary() {
   auxiliary_.push_back(index);
 }
 
-void Predictor::AddPAQ8HP() {
-  PAQ8HP* paq = new PAQ8HP(11);
-  AddModel(paq);
+void Predictor::AddFXCM() {
+  FXCM* fxcm = new FXCM(11);
+  AddModel(fxcm);
   AddAuxiliary();
 }
 

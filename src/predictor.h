@@ -30,7 +30,7 @@ class Predictor {
   void AddByteMixer(ByteMixer* byte_mixer);
   void AddAuxiliary();
   void AddPAQ8();
-  void AddPAQ8HP();
+  void AddFXCM();
   void AddPPMD();
   void AddBracket();
   void AddWord();
