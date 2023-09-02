@@ -6,7 +6,6 @@
 #include "models/ppmd.h"
 #include "models/bracket.h"
 #include "models/paq8.h"
-#include "models/paq8hp.h"
 #include "models/fxcmv1.h"
 #include "mixer/lstm.h"
 #include "contexts/context-hash.h"
@@ -27,7 +26,7 @@ Predictor::Predictor(const std::vector<bool>& vocab) : manager_(),
   srand(0xDEADBEEF);
 
   AddBracket();
-  AddPAQ8HP();
+  AddFXCM();
   AddPAQ8();
   AddPPMD();
   AddWord();
