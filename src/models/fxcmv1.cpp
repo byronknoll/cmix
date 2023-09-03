@@ -2004,7 +2004,7 @@ int modelPrediction(int c0,int bpos,int c4){
                 numlen0=min(19,numlen0+1);mybenum=0;
             }else{
             
-                if (numlen0 ||((numbers&&0xf)==0)){
+                if (numlen0 ||((numbers&0xf)==0)){
                     number1=number0,numlen1=numlen0,number0=numlen0=0;
                 }
                 if (numlen1<=2 &&numlen1&&((numbers&5)==5) && numlen0==0 && c2=='.') mybenum=2;
