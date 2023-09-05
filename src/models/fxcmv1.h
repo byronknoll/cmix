@@ -11,7 +11,7 @@ namespace fxcmv1 {
 
 class FXCM : public Model {
  public:
-  FXCM(int memory);
+  FXCM();
   const std::valarray<float>& Predict();
   unsigned int NumOutputs();
   void Perceive(int bit);

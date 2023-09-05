@@ -75,7 +75,7 @@ void Predictor::AddAuxiliary() {
 }
 
 void Predictor::AddFXCM() {
-  FXCM* fxcm = new FXCM(11);
+  FXCM* fxcm = new FXCM();
   AddModel(fxcm);
   AddAuxiliary();
 }

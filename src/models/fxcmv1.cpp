@@ -2498,7 +2498,7 @@ void Predictor::update() {
 
 }
 
-FXCM::FXCM(int memory) {
+FXCM::FXCM() {
   predictor_.reset(new fxcmv1::Predictor());
 }
 
