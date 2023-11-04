@@ -1,5 +1,5 @@
-cmix version 19
-Released by Byron Knoll on August 29, 2021.
+cmix version 20
+Released by Byron Knoll on November 4, 2023.
 http://www.byronknoll.com/cmix.html
 https://github.com/byronknoll/cmix
 
@@ -19,6 +19,10 @@ Instructions for enwik9 preprocessing:
 1) Copy enwik9-preproc and dictionary/.new_article_order to a new folder.
 2) Run: ./enwik9-preproc c path_to_enwik9
 3) .ready4cmix is the preprocessed file. To reproduce enwik9, run: ./enwik9-preproc d .ready4cmix
+
+Changes from version 19 to version 20:
+- Removed PAQ8HP model
+- Added fxcm model: https://github.com/kaitz/fxcm
 
 Changes from version 18 to version 19:
 - Improvements from STARLIT and cmix-hp
