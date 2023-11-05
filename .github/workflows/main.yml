@@ -10,4 +10,12 @@ jobs:
     runs-on: ${{ matrix.os }}
     steps:
       - uses: actions/checkout@v4
+
       - run: make
+
+      - name: Test
+        run: |
+          echo "test" > foo
+          ./cmix -c foo foo.cmix
+          ./cmix -d foo.cmix foo2
+          grep test foo2
