@@ -340,6 +340,8 @@ int prepr6(char const* argv[])
   while(1) {
     fgets(s, 16384, sf);
     if (feof(sf))  break;
+    PROCESS('{', s, z, 1)
+    PROCESS('}', z, s, 1)
     PROCESS('[', s, z, 1)
     PROCESS(']', z, s, 1)
     PROCESS('&', s, z, 1)
@@ -450,7 +452,6 @@ int resto1(char const* argv[]) {
 
   do {
     ++lnu; //counter of the number of articles
-if( (lnu&0x3FFF)==0 ) fprintf(stderr, "\rlnu=%i", lnu );
 
     j = (int)(strchr((char *)p1, 10) + 1 - (char *)p1);
     if (p1 + j > p0) {
@@ -505,7 +506,6 @@ int resto2(char const* argv[])
   FILE *sf, *t2;
   int j, k, lastID = 0;
   char *p1=(char *)malloc(TMP2A_SIZE + TMP2B_SIZE), *p2=p1+TMP2A_SIZE, *p0=p2, *p3=(char *)malloc(OUT5_SIZE), *p4=p3, *p1_base = p1, *p3_base = p3;
-  char verbose = 0;
 
   sf = fopen(argv[0],"rb");
   fread(p1, TMP2A_SIZE + TMP2B_SIZE, 1, sf);
@@ -517,8 +517,6 @@ int resto2(char const* argv[])
 
     if (memcmp(&p1[-9],"</title>",8)==0 && *(int*)p1=='    ') {
       lastID += atoi(p2+1);
-      if (lastID == 34159) verbose = 1;
-      else verbose = 0;
       sprintf(p4, "    <id>%d</id>%c", lastID, 10);
       p4 = strchr(p4, 10) + 1;
       p2 = strchr(p2, 10) + 1;
