@@ -1,0 +1,22 @@
+name: main
+
+on: [push, pull_request]
+
+jobs:
+  build:
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-20.04, ubuntu-22.04, macos-12, macos-13]
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - run: make
+
+      - name: Test
+        run: |
+          echo "test" > foo
+          ./cmix -c foo foo.cmix
+          ./cmix -d foo.cmix foo2
+          grep test foo2
