@@ -2859,7 +2859,7 @@ private:
       if (W->Letters[i]==0xDF) {
         W->Letters[i]='s';
         if (i+1<MAX_WORD_SIZE) {
-          memcpy(&W->Letters[i+2], &W->Letters[i+1], MAX_WORD_SIZE-i-2);
+          memmove(&W->Letters[i+2], &W->Letters[i+1], MAX_WORD_SIZE-i-2);
           W->Letters[i+1]='s';
           W->End+=(W->End<MAX_WORD_SIZE-1);
         }
