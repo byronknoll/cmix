@@ -232,13 +232,13 @@ Filetype detect(FILE* in, int n, Filetype type) {
         else if (c==0x0a && !pgmh) s=2;
         else if (c==0x0a && !pgmc && pgmn!=4) s=3;
         if (s) {
-          pgm_buf[pgm_ptr++]=0;
+          if (pgm_ptr < 32) pgm_buf[pgm_ptr++]=0;
           int v=atoi(pgm_buf);
           if (s==1) pgmw=v; else if (s==2) pgmh=v; else if (s==3) pgmc=v; else if (s==4) pamd=v;
           if (v==0 || (s==3 && v>255)) pgm=0; else pgm_ptr=0;
         }
       }
-      if (!pgmcomment) pgm_buf[pgm_ptr++]=c;
+      if (!pgmcomment && pgm_ptr < 32) pgm_buf[pgm_ptr++]=c;
       if (pgm_ptr>=32) pgm=0;
       if (pgmcomment && c==0x0a) pgmcomment=0;
       if (pgmw && pgmh && !pgmc && pgmn==4) IMG_DET_NOHDR(IMAGE1,i-pgm+3,(pgmw+7)/8,pgmh);
