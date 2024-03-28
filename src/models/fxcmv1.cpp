@@ -775,51 +775,134 @@ U8 STA7[256][4];/*={
 // w[i] += ((t[i]*2*err)+(1<<16))>>17 bounded to +- 32K.
 // n is rounded up to a multiple of 8.
 
+#if defined(__MMX__)
+typedef __m128i XMM;
+#endif
+
 struct Mixer1 { 
   int N, M;   // max inputs, max contexts, max context sets
-  short *tx;  // N inputs from add()  
-  short *wx ; // N*M weights
+  short*tx; // N inputs from add()  
+  short* wx ; // N*M weights
   short *ptr;
-  int cxt;    // S contexts
-  int pr;     // last result (scaled 12 bits)
+  int cxt;  // S contexts
+  int pr;   // last result (scaled 12 bits)
   int shift1; 
   int elim;
   int uperr;
   int err;
-
+#if defined(__AVX2__)
  int dot_product (const short* const t, const short* const w, int n) {
   assert(n == ((n + 15) & -16));
-  YMM sum = _mm256_setzero_si256 ();
+  __m256i sum = _mm256_setzero_si256 ();
   while ((n -= 16) >= 0) { // Each loop sums 16 products
-    YMM tmp = _mm256_madd_epi16 (*(YMM *) &t[n], *(YMM *) &w[n]); // t[n] * w[n] + t[n+1] * w[n+1]
+    __m256i tmp = _mm256_madd_epi16 (*(__m256i *) &t[n], *(__m256i *) &w[n]); // t[n] * w[n] + t[n+1] * w[n+1]
     tmp = _mm256_srai_epi32 (tmp, 8); //                                        (t[n] * w[n] + t[n+1] * w[n+1]) >> 8
     sum = _mm256_add_epi32 (sum, tmp); //                                sum += (t[n] * w[n] + t[n+1] * w[n+1]) >> 8
   } 
    sum =_mm256_hadd_epi32(sum,_mm256_setzero_si256 ());       //add [1]=[1]+[2], [2]=[3]+[4], [3]=0, [4]=0, [5]=[5]+[6], [6]=[7]+[8], [7]=0, [8]=0
    sum =_mm256_hadd_epi32(sum,_mm256_setzero_si256 ());       //add [1]=[1]+[2], [2]=0,       [3]=0, [4]=0, [5]=[5]+[6], [6]=0,       [7]=0, [8]=0
-   XMM lo = _mm256_extractf128_si256(sum, 0);
-   XMM hi = _mm256_extractf128_si256(sum, 1);
-   XMM newsum = _mm_add_epi32(lo, hi);                    //sum last two
+   __m128i lo = _mm256_extractf128_si256(sum, 0);
+   __m128i hi = _mm256_extractf128_si256(sum, 1);
+   __m128i newsum = _mm_add_epi32(lo, hi);                    //sum last two
    return _mm_cvtsi128_si32(newsum);
 }
 
  void train (const short* const t, short* const w, int n, const int e) {
   assert(n == ((n + 15) & -16));
   if (e) {
-    const YMM one = _mm256_set1_epi16 (1);
-    const YMM err = _mm256_set1_epi16 (short(e));
+    const __m256i one = _mm256_set1_epi16 (1);
+    const __m256i err = _mm256_set1_epi16 (short(e));
     while ((n -= 16) >= 0) { // Each iteration adjusts 16 weights
-      YMM tmp = _mm256_adds_epi16 (*(YMM *) &t[n], *(YMM *) &t[n]); // t[n] * 2
+      __m256i tmp = _mm256_adds_epi16 (*(__m256i *) &t[n], *(__m256i *) &t[n]); // t[n] * 2
       tmp = _mm256_mulhi_epi16 (tmp, err); //                                     (t[n] * 2 * err) >> 16
       tmp = _mm256_adds_epi16 (tmp, one); //                                     ((t[n] * 2 * err) >> 16) + 1
       tmp = _mm256_srai_epi16 (tmp, 1); //                                      (((t[n] * 2 * err) >> 16) + 1) >> 1
-      tmp = _mm256_adds_epi16 (tmp, *(YMM *) &w[n]); //                    ((((t[n] * 2 * err) >> 16) + 1) >> 1) + w[n]
-      *(YMM *) &w[n] = tmp; //                                          save the new eight weights, bounded to +- 32K
+      tmp = _mm256_adds_epi16 (tmp, *(__m256i *) &w[n]); //                    ((((t[n] * 2 * err) >> 16) + 1) >> 1) + w[n]
+      *(__m256i *) &w[n] = tmp; //                                          save the new eight weights, bounded to +- 32K
     }
   }
 }
 
-/*
+#elif defined(__SSE2__) || defined(__SSSE3__)
+ int dot_product (const short* const t, const short* const w, int n) {
+  assert(n == ((n + 15) & -16));
+  XMM sum = _mm_setzero_si128 ();
+  while ((n -= 8) >= 0) { // Each loop sums eight products
+    XMM tmp = _mm_madd_epi16 (*(XMM *) &t[n], *(XMM *) &w[n]); // t[n] * w[n] + t[n+1] * w[n+1]
+    tmp = _mm_srai_epi32 (tmp, 8); //                                        (t[n] * w[n] + t[n+1] * w[n+1]) >> 8
+    sum = _mm_add_epi32 (sum, tmp); //                                sum += (t[n] * w[n] + t[n+1] * w[n+1]) >> 8
+  }
+  #if  defined(__SSSE3__)
+  sum=_mm_hadd_epi32 (sum,sum);
+  sum=_mm_hadd_epi32 (sum,sum);
+ #else
+  sum = _mm_add_epi32(sum, _mm_srli_si128 (sum, 8));
+  sum = _mm_add_epi32(sum, _mm_srli_si128 (sum, 4));
+  #endif
+
+  return _mm_cvtsi128_si32 (sum); //                     ...  and scale back to integer
+}
+
+ void train (const short* const t, short* const w, int n, const int e) {
+  assert(n == ((n + 15) & -16));
+  if (e) {
+    const XMM one = _mm_set1_epi16 (1);
+    const XMM err = _mm_set1_epi16 (short(e));
+    while ((n -= 8) >= 0) { // Each iteration adjusts eight weights
+      XMM tmp = _mm_adds_epi16 (*(XMM *) &t[n], *(XMM *) &t[n]); // t[n] * 2
+      tmp = _mm_mulhi_epi16 (tmp, err); //                                     (t[n] * 2 * err) >> 16
+      tmp = _mm_adds_epi16 (tmp, one); //                                     ((t[n] * 2 * err) >> 16) + 1
+      tmp = _mm_srai_epi16 (tmp, 1); //                                      (((t[n] * 2 * err) >> 16) + 1) >> 1
+      tmp = _mm_adds_epi16 (tmp, *(XMM *) &w[n]); //                    ((((t[n] * 2 * err) >> 16) + 1) >> 1) + w[n]
+      *(XMM *) &w[n] = tmp; //                                          save the new eight weights, bounded to +- 32K
+    }
+  }
+}
+
+#elif defined(__SSE__)
+ int dot_product (const short* const t, const short* const w, int n) {
+  assert(n == ((n + 15) & -16));
+  __m64 sum = _mm_setzero_si64 ();
+  while ((n -= 8) >= 0) { // Each loop sums eight products
+    __m64 tmp = _mm_madd_pi16 (*(__m64 *) &t[n], *(__m64 *) &w[n]); //   t[n] * w[n] + t[n+1] * w[n+1]
+    tmp = _mm_srai_pi32 (tmp, 8); //                                    (t[n] * w[n] + t[n+1] * w[n+1]) >> 8
+    sum = _mm_add_pi32 (sum, tmp); //                            sum += (t[n] * w[n] + t[n+1] * w[n+1]) >> 8
+
+    tmp = _mm_madd_pi16 (*(__m64 *) &t[n + 4], *(__m64 *) &w[n + 4]); // t[n+4] * w[n+4] + t[n+5] * w[n+5]
+    tmp = _mm_srai_pi32 (tmp, 8); //                                    (t[n+4] * w[n+4] + t[n+5] * w[n+5]) >> 8
+    sum = _mm_add_pi32 (sum, tmp); //                            sum += (t[n+4] * w[n+4] + t[n+5] * w[n+5]) >> 8
+  }
+  sum = _mm_add_pi32 (sum, _mm_srli_si64 (sum, 32)); // Add eight sums together ...
+  const int retval = _mm_cvtsi64_si32 (sum); //                     ...  and scale back to integer
+  _mm_empty(); // Empty the multimedia state
+  return retval;
+}
+
+ void train (const short* const t, short* const w, int n, const int e) {
+  assert(n == ((n + 15) & -16));
+  if (e) {
+    const __m64 one = _mm_set1_pi16 (1);
+    const __m64 err = _mm_set1_pi16 (short(e));
+    while ((n -= 8) >= 0) { // Each iteration adjusts eight weights
+      __m64 tmp = _mm_adds_pi16 (*(__m64 *) &t[n], *(__m64 *) &t[n]); //   t[n] * 2
+      tmp = _mm_mulhi_pi16 (tmp, err); //                                 (t[n] * 2 * err) >> 16
+      tmp = _mm_adds_pi16 (tmp, one); //                                 ((t[n] * 2 * err) >> 16) + 1
+      tmp = _mm_srai_pi16 (tmp, 1); //                                  (((t[n] * 2 * err) >> 16) + 1) >> 1
+      tmp = _mm_adds_pi16 (tmp, *(__m64 *) &w[n]); //                  ((((t[n] * 2 * err) >> 16) + 1) >> 1) + w[n]
+      *(__m64 *) &w[n] = tmp; //                                       save the new four weights, bounded to +- 32K
+
+      tmp = _mm_adds_pi16 (*(__m64 *) &t[n + 4], *(__m64 *) &t[n + 4]); // t[n+4] * 2
+      tmp = _mm_mulhi_pi16 (tmp, err); //                                 (t[n+4] * 2 * err) >> 16
+      tmp = _mm_adds_pi16 (tmp, one); //                                 ((t[n+4] * 2 * err) >> 16) + 1
+      tmp = _mm_srai_pi16 (tmp, 1); //                                  (((t[n+4] * 2 * err) >> 16) + 1) >> 1
+      tmp = _mm_adds_pi16 (tmp, *(__m64 *) &w[n + 4]); //              ((((t[n+4] * 2 * err) >> 16) + 1) >> 1) + w[n]
+      *(__m64 *) &w[n + 4] = tmp; //                                   save the new four weights, bounded to +- 32K
+    }
+    _mm_empty(); // Empty the multimedia state
+  }
+}
+#else
+
 // dot_product returns dot product t*w of n elements.  n is rounded
 // up to a multiple of 8.  Result is scaled down by 8 bits.
 int dot_product(short *t, short *w, int n) {
@@ -829,12 +912,10 @@ int dot_product(short *t, short *w, int n) {
     sum+=(t[i]*w[i]+t[i+1]*w[i+1]) >> 8;
   return sum;
 }
-
 // Train neural network weights w[n] given inputs t[n] and err.
 // w[i] += t[i]*err, i=0..n-1.  t, w, err are signed 16 bits (+- 32K).
 // err is scaled 16 bits (representing +- 1/2).  w[i] is clamped to +- 32K
 // and rounded.  n is rounded up to a multiple of 8.
-
 void train(short *t, short *w, int n, int err) {
   n=(n+15)&-16;
   for (int i=0; i<n; ++i) {
@@ -844,7 +925,7 @@ void train(short *t, short *w, int n, int err) {
     w[i]=wt;
   }
 }
-*/
+#endif 
 
   // Adjust weights to minimize coding cost of last prediction
   void __attribute__ ((noinline)) update(int y) {
