@@ -1047,7 +1047,6 @@ void processSymbol2( PPM_CONTEXT& q, int symbol ) {
   int count=0;
   int low;
   int see_freq;
-  int freq;
   int cnum = q.NumStats;
 
   SEE2_CONTEXT* psee2c;
@@ -1092,8 +1091,6 @@ void processSymbol2( PPM_CONTEXT& q, int symbol ) {
     }
     p+=j;
 
-    freq = p[0].Freq;
-
     if( see_freq>2 ) psee2c->Summ -= see_freq;
     psee2c->update();
 
@@ -1104,7 +1101,6 @@ void processSymbol2( PPM_CONTEXT& q, int symbol ) {
     EscCount++;
   } else {
     low = Total;
-    freq = see_freq;
     NumMasked = cnum;
     psee2c->Summ += Total-see_freq;
 
