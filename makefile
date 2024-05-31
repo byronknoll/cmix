@@ -1,5 +1,5 @@
 CC = clang++
-LFLAGS = -std=c++11 -Wall
+LFLAGS = -std=c++14 -Wall
 
 all: LFLAGS += -Ofast -march=native
 all: cmix enwik9-preproc
