@@ -14,7 +14,7 @@ typedef enum {DEFAULT, HDR, JPEG, EXE, TEXT, IMAGE1, IMAGE4, IMAGE8, IMAGE8GRAY,
 inline bool HasInfo(Filetype ft) { return ft==TEXT || ft==IMAGE1 || ft==IMAGE4
     || ft==IMAGE8 || ft==IMAGE8GRAY || ft==IMAGE24 || ft==IMAGE32; }
 
-void Encode(FILE* in, FILE* out, unsigned long long n, const std::string&
+void Encode(FILE* in, FILE* out, bool text_mode, unsigned long long n, const std::string&
     temp_path, FILE* dictionary);
 
 void NoPreprocess(FILE* in, FILE* out, unsigned long long n);

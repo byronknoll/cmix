@@ -14,11 +14,14 @@ namespace {
   const int kMinVocabFileSize = 10000;
 }
 
+char* dictionary_path = NULL;
+
 int Help() {
-  printf("cmix version 20\n");
+  printf("cmix version 21\n");
   printf("Compress:\n");
   printf("    with dictionary:    cmix -c [dictionary] [input] [output]\n");
   printf("    without dictionary: cmix -c [input] [output]\n");
+  printf("    force text-mode:    cmix -t [dictionary] [input] [output]\n");
   printf("    no preprocessing:   cmix -n [input] [output]\n");
   printf("    only preprocessing: cmix -s [dictionary] [input] [output]\n");
   printf("                        cmix -s [input] [output]\n");
@@ -147,7 +150,8 @@ bool Store(const std::string& input_path, const std::string& temp_path,
   WriteStorageHeader(data_out, dictionary != NULL);
   fprintf(stderr, "\rpreprocessing...");
   fflush(stderr);
-  preprocessor::Encode(data_in, data_out, *input_bytes, temp_path, dictionary);
+  preprocessor::Encode(data_in, data_out, false, *input_bytes, temp_path,
+      dictionary);
   fseek(data_out, 0L, SEEK_END);
   *output_bytes = ftell(data_out);
   fclose(data_in);
@@ -155,10 +159,10 @@ bool Store(const std::string& input_path, const std::string& temp_path,
   return true;
 }
 
-bool RunCompression(bool enable_preprocess, const std::string& input_path,
-    const std::string& temp_path, const std::string& output_path,
-    FILE* dictionary, unsigned long long* input_bytes,
-    unsigned long long* output_bytes) {
+bool RunCompression(bool enable_preprocess, bool text_mode,
+    const std::string& input_path, const std::string& temp_path,
+    const std::string& output_path, FILE* dictionary,
+    unsigned long long* input_bytes, unsigned long long* output_bytes) {
   FILE* data_in = fopen(input_path.c_str(), "rb");
   if (!data_in) return false;
   FILE* temp_out = fopen(temp_path.c_str(), "wb");
@@ -171,7 +175,7 @@ bool RunCompression(bool enable_preprocess, const std::string& input_path,
   if (enable_preprocess) {
     fprintf(stderr, "\rpreprocessing...");
     fflush(stderr);
-    preprocessor::Encode(data_in, temp_out, *input_bytes, temp_path,
+    preprocessor::Encode(data_in, temp_out, text_mode, *input_bytes, temp_path,
         dictionary);
   } else {
     preprocessor::NoPreprocess(data_in, temp_out, *input_bytes);
@@ -266,23 +270,28 @@ bool RunDecompression(const std::string& input_path,
 int main(int argc, char* argv[]) {
   if (argc < 4 || argc > 5 || strlen(argv[1]) != 2 || argv[1][0] != '-' ||
       (argv[1][1] != 'c' && argv[1][1] != 'd' && argv[1][1] != 's' &&
-      argv[1][1] != 'n')) {
+      argv[1][1] != 'n' && argv[1][1] != 't')) {
     return Help();
   }
 
   clock_t start = clock();
 
   bool enable_preprocess = true;
+  bool text_mode = false;
   if (argv[1][1] == 'n') enable_preprocess = false;
   std::string input_path = argv[2];
   std::string output_path = argv[3];
   FILE* dictionary = NULL;
   if (argc == 5) {
     if (argv[1][1] == 'n') return Help();
+    if (argv[1][1] == 't') text_mode = true;
     dictionary = fopen(argv[2], "rb");
     if (!dictionary) return Help();
+    dictionary_path = argv[2];
     input_path = argv[3];
     output_path = argv[4];
+  } else {
+    if (argv[1][1] == 't') return Help();
   }
 
   std::string temp_path = output_path + ".cmix.temp";
@@ -294,9 +303,9 @@ int main(int argc, char* argv[]) {
         &output_bytes)) {
       return Help();
     }
-  } else if (argv[1][1] == 'c' || argv[1][1] == 'n') {
-    if (!RunCompression(enable_preprocess, input_path, temp_path, output_path,
-        dictionary, &input_bytes, &output_bytes)) {
+  } else if (argv[1][1] == 'c' || argv[1][1] == 'n' || argv[1][1] == 't') {
+    if (!RunCompression(enable_preprocess, text_mode, input_path, temp_path,
+        output_path, dictionary, &input_bytes, &output_bytes)) {
       return Help();
     }
   } else {

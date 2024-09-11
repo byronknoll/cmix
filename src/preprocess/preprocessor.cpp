@@ -494,42 +494,44 @@ int decode_text(FILE* in) {
   return dict->Decode(in);
 }
 
-
-void EncodeSegment(FILE* in, FILE* out, int n, const std::string& temp_path,
-    FILE* dictionary, std::vector<double>* block_stats) {
+void EncodeSegment(FILE* in, FILE* out, bool text_mode, int n,
+    const std::string& temp_path, FILE* dictionary,
+    std::vector<double>* block_stats) {
   Filetype type=DEFAULT;
   long begin=ftell(in);
 
   long start = begin;
   int remainder = n;
-  while (remainder > 0) {
-    Filetype nextType=detect(in, remainder, type);
-    long end=ftell(in);
-    int len=int(end-begin);
-    switch (type) {
-      case TEXT: (*block_stats)[0] += len; break;
-      case EXE: (*block_stats)[1] += len; break;
-      case HDR:
-      case JPEG:
-      case IMAGE1:
-      case IMAGE4:
-      case IMAGE8:
-      case IMAGE8GRAY:
-      case IMAGE24:
-      case IMAGE32: (*block_stats)[2] += len; break;
-      case AUDIO: (*block_stats)[3] += len; break;
-      case DEFAULT:
-      default: (*block_stats)[4] += len; break;
+  if (!text_mode) {
+    while (remainder > 0) {
+      Filetype nextType=detect(in, remainder, type);
+      long end=ftell(in);
+      int len=int(end-begin);
+      switch (type) {
+        case TEXT: (*block_stats)[0] += len; break;
+        case EXE: (*block_stats)[1] += len; break;
+        case HDR:
+        case JPEG:
+        case IMAGE1:
+        case IMAGE4:
+        case IMAGE8:
+        case IMAGE8GRAY:
+        case IMAGE24:
+        case IMAGE32: (*block_stats)[2] += len; break;
+        case AUDIO: (*block_stats)[3] += len; break;
+        case DEFAULT:
+        default: (*block_stats)[4] += len; break;
+      }
+      remainder-=len;
+      type=nextType;
+      begin=end;
     }
-    remainder-=len;
-    type=nextType;
-    begin=end;
+    fseek(in, start, SEEK_SET);
+    type = DEFAULT;
+    begin = start;
   }
-  fseek(in, start, SEEK_SET);
-  type = DEFAULT;
-  begin = start;
 
-  if ((*block_stats)[0] / n > 0.95) {
+  if (text_mode || (*block_stats)[0] / n > 0.95) {
     (*block_stats)[0] = n;
     for (unsigned int i = 1; i < block_stats->size(); ++i) (*block_stats)[i] = 0;
     fprintf(out, "%c%c%c%c%c", TEXT, n>>24, n>>16, n>>8, n);
@@ -563,24 +565,25 @@ void EncodeSegment(FILE* in, FILE* out, int n, const std::string& temp_path,
 
 const unsigned long long kMaxSegment = 0x80000000 - 1;
 
-void Encode(FILE* in, FILE* out, unsigned long long n, const std::string&
-    temp_path, FILE* dictionary) {
+void Encode(FILE* in, FILE* out, bool text_mode, unsigned long long n,
+    const std::string& temp_path, FILE* dictionary) {
   std::vector<double> block_stats(5);
   unsigned long long size = n;
   while(n > 0) {
     int segment = n;
     if (n > kMaxSegment) segment = kMaxSegment;
     std::vector<double> segment_stats(5);
-    EncodeSegment(in, out, segment, temp_path, dictionary, &segment_stats);
+    EncodeSegment(in, out, text_mode, segment, temp_path, dictionary,
+        &segment_stats);
     for (int i = 0; i < 5; ++i) block_stats[i] += segment_stats[i];
     n -= segment;
   }
   for (int i = 0; i < 5; ++i) block_stats[i] /= size;
   printf("\rDetected block types:");
   if (block_stats[0] > 0) printf(" TEXT: %.1f%%", block_stats[0] * 100);
-  if (block_stats[1] > 0) printf(" IMAGE: %.1f%%", block_stats[1] * 100);
-  if (block_stats[2] > 0) printf(" AUDIO: %.1f%%", block_stats[2] * 100);
-  if (block_stats[3] > 0) printf(" EXECUTABLE: %.1f%%", block_stats[3] * 100);
+  if (block_stats[1] > 0) printf(" EXECUTABLE: %.1f%%", block_stats[1] * 100);
+  if (block_stats[2] > 0) printf(" IMAGE: %.1f%%", block_stats[2] * 100);
+  if (block_stats[3] > 0) printf(" AUDIO: %.1f%%", block_stats[3] * 100);
   if (block_stats[4] > 0) printf(" DEFAULT: %.1f%%", block_stats[4] * 100);
   printf("\n");
 }

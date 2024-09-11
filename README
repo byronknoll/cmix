@@ -1,5 +1,5 @@
-cmix version 20
-Released by Byron Knoll on November 4, 2023.
+cmix version 21
+Released by Byron Knoll on September 10, 2024.
 http://www.byronknoll.com/cmix.html
 https://github.com/byronknoll/cmix
 
@@ -16,9 +16,12 @@ For some files, preprocessing using "precomp" may improve compression: https://g
 Compile with "-Ofast -march=native" for fastest performance. These compiler options might lead to incompatibility between different computers due to floating-point precision differences. Compile with "-O3" to fix compatibility issues (at the cost of slower performance).
 
 Instructions for enwik9 preprocessing:
-1) Copy enwik9-preproc and dictionary/.new_article_order to a new folder.
+1) Copy enwik9-preproc and dictionary/new_article_order to a new folder.
 2) Run: ./enwik9-preproc c path_to_enwik9
 3) .ready4cmix is the preprocessed file. To reproduce enwik9, run: ./enwik9-preproc d .ready4cmix
+
+Changes from version 20 to version 21:
+- Improvements from fx2-cmix: https://github.com/kaitz/fx2-cmix
 
 Changes from version 19 to version 20:
 - Removed PAQ8HP model

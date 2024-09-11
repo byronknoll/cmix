@@ -1128,17 +1128,16 @@ uint trF[256];
 uint trT[256];
 
 void ConvertSQ( void ) {
-  uint i,c,j,b,freq,total,prob,cnum;
+  uint i,c,j,b,freq,total,prob;
   uint cum = 0xFFFFFF00;
 
-  cnum=256;
   for( i=0; i<256; i++ ) sqp[i]=0,trF[i]=0,trT[i]=0;
 
   for( i=0; i<SQ_ptr; i++ ) {
     c = SQ[i].sym; freq = SQ[i].freq; total = SQ[i].total;
     prob = qword(qword(cum)*freq)/total;
     if( c<256 ) {
-      sqp[c] = prob+1; cnum--;
+      sqp[c] = prob+1;
     } else {
       cum = prob;
     }

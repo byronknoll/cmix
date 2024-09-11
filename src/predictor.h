@@ -45,6 +45,7 @@ class Predictor {
   std::vector<std::unique_ptr<MixerInput>> layers_;
   std::vector<std::vector<std::unique_ptr<Mixer>>> mixers_;
   std::vector<unsigned int> auxiliary_;
+  unsigned int fxcm_index_;
   ContextManager manager_;
   Sigmoid sigmoid_;
   std::vector<std::unique_ptr<ByteMixer>> byte_mixers_;

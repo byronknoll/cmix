@@ -78,6 +78,7 @@ void Predictor::AddFXCM() {
   FXCM* fxcm = new FXCM();
   AddModel(fxcm);
   AddAuxiliary();
+  fxcm_index_ = models_.size() - 1;
 }
 
 void Predictor::AddPAQ8() {
@@ -174,6 +175,10 @@ void Predictor::AddDoubleIndirect() {
     AddModel(new Indirect(manager_.nonstationary_, context.GetContext(),
         manager_.bit_context_, delta, manager_.shared_map_));
   }
+}
+
+unsigned int Discretize(float p) {
+  return 1 + 4094 * p;
 }
 
 void Predictor::AddMixers() {
@@ -351,6 +356,8 @@ void Predictor::AddMixers() {
   AddMixer(2, manager_.zero_context_, 0.0003);
 }
 
+int lstmpr=0, lstmex=0;
+
 float Predictor::Predict() {
   unsigned int input_index = 0;
   for (unsigned int i = 0; i < models_.size(); ++i) {
@@ -412,8 +419,9 @@ float Predictor::Predict() {
 }
 
 void Predictor::Perceive(int bit) {
-  for (const auto& model : models_) {
-    model->Perceive(bit);
+  for (unsigned int i = 0; i < models_.size(); ++i) {
+    if (i == fxcm_index_) continue;
+    models_[i]->Perceive(bit);
   }
   for (const auto& model : byte_models_) {
     model->Perceive(bit);
@@ -450,8 +458,14 @@ void Predictor::Perceive(int bit) {
     for (const auto& byte_mixer : byte_mixers_) {
       byte_mixer->ByteUpdate();
     }
-    manager_.bit_context_ = 1;
   }
+  for (const auto& byte_mixer : byte_mixers_) {
+    float byte_mixer_output = byte_mixer->Predict()[0];
+    lstmpr=Discretize(byte_mixer_output);
+    lstmex=byte_mixer->ex;
+    models_[fxcm_index_]->Perceive(bit);
+  }
+  if (byte_update) manager_.bit_context_ = 1;
 }
 
 void Predictor::Pretrain(int bit) {

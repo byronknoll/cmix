@@ -8,55 +8,60 @@
 #define DECOMP_CODA_END_LINE  13147027
 
 void split4Comp(char const *enwik9_filename) {
-  std::ifstream ifile(enwik9_filename); 
-  std::ofstream ofile1(".intro"); 
-  std::ofstream ofile2(".main"); 
-  std::ofstream ofile3(".coda"); 
-
+  FILE* ifile = fopen(enwik9_filename, "rb");
+  FILE* ofile1 = fopen(".intro", "wb");
+  FILE* ofile2 = fopen(".main", "wb");
+  FILE* ofile3 = fopen(".coda", "wb");  
   int line_count = 0;
-
-  std::string s;
-  while (std::getline(ifile, s)) {
+  
+  do {
+    int c=getc(ifile);
+    if (c==EOF) break;
     if (line_count < COMP_INTRO_END_LINE) {
-      ofile1 << s << std::endl;
+      putc(c,ofile1);
     } else if (line_count < COMP_MAIN_END_LINE) {
-        ofile2 << s << std::endl;
-      } else if (line_count < COMP_CODA_END_LINE) {
-          ofile3 << s << std::endl;
-          } else {
-            ofile3 << s; 
-          }
+      putc(c,ofile2);
+    } else if (line_count < COMP_CODA_END_LINE) {
+      putc(c,ofile3);
+    } else {
+      putc(c,ofile3);
+    }
+    if (c==10)
     line_count++;
   }
-
-  ofile1.close();
-  ofile2.close();
-  ofile3.close();
+  while (!feof(ifile));
+  fclose(ifile);
+  fclose(ofile1);
+  fclose(ofile2);
+  fclose(ofile3);
 }
 
 void split4Decomp( const char* inpnam ) {
-  std::ifstream ifile(inpnam); 
-  std::ofstream ofile1(".intro_decomp"); 
-  std::ofstream ofile2(".main_decomp"); 
-  std::ofstream ofile3(".coda_decomp"); 
-
+  FILE* ifile = fopen(inpnam, "rb");
+  FILE* ofile1 = fopen(".intro_decomp", "wb");
+  FILE* ofile2 = fopen(".main_decomp", "wb");
+  FILE* ofile3 = fopen(".coda_decomp", "wb");  
   int line_count = 0;
-
-  std::string s;
-  while (std::getline(ifile, s)) {
-    if (line_count < 13146905) {
-      ofile2 << s << std::endl;
-    } else if (line_count < 13146934) {
-        ofile1 << s << std::endl;
-      } else if (line_count < 13147027) {
-          ofile3 << s << std::endl;
-          } else {
-            ofile3 << s; 
-          }
+  
+  do {
+      int c=getc(ifile);
+      if (c==EOF) break;
+    if (line_count < 13146906) {
+      putc(c,ofile2);
+    } else if (line_count < 13146935) {
+        putc(c,ofile1);
+    } else if (line_count < 13147027) {
+        putc(c,ofile3);
+    } else {
+        putc(c,ofile3);
+    }
+    if (c==10)
     line_count++;
   }
-
-  ofile1.close();
-  ofile2.close();
-  ofile3.close();
+  while (!feof(ifile));
+  fclose(ifile);
+  fclose(ofile1);
+  fclose(ofile2);
+  fclose(ofile3);
+  
 }
