@@ -31,14 +31,16 @@
 #define NDEBUG  // remove for debugging (turns on Array bound checks)
 #include <assert.h>
 
-// AVX2
-#include <immintrin.h>
 typedef unsigned char U8;
 typedef unsigned short U16;
 typedef unsigned int U32;
-//
+
+#if defined(__AVX2__)
+#include <immintrin.h>
 typedef __m128i XMM;
 typedef __m256i YMM;
+#endif
+
 extern const U8 wrt_2b[256];
 extern const U8 wrt_3b[256];
 extern int lstmpr, lstmex;
