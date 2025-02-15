@@ -172,7 +172,7 @@ void hent6(char *in,char *out){
             k=utf8len(in);
             int nu=utf8towc(in,k);
             *out='&';
-            sprintf(out+1, "#%d;",   nu);
+            snprintf(out + 1, sizeof(out) - (out - in) - 1, "#%d;", nu);
             int a=numlen(out+1+1);
             out=out+2+a+1;
             in=in+k;
@@ -580,7 +580,7 @@ void decode_txt_wit(FILE*in,  FILE*out1,U64 size){
                         
                         n++;
                         lastID = lastID+ atoi(&h1p[1]);
-                        sprintf(o+j, "<id>%d</id>%c",   lastID, 10);
+                        snprintf(o + j, sizeof(o) - j, "<id>%d</id>%c", lastID, 10);
                         wfputs(o,out1);
                     }
                 }
@@ -589,8 +589,8 @@ void decode_txt_wit(FILE*in,  FILE*out1,U64 size){
                     int d = atoi(&h1p[19-7]), hms = atoi(p+1), h = hms/3600;
                     o[0]=h1p[17-7],o[1]=h1p[18-7],o[2]=' ';
                     int y=atoi(&o[0]);
-                    sprintf(o, "      <timestamp>%d-%02d-%02dT%02d:%02d:%02dZ</timestamp>%c",
-                    y + 2001, d/31+1, d%31+1, h, hms/60 - h*60, hms%60, 10);
+                    snprintf(o, sizeof(o), "      <timestamp>%d-%02d-%02dT%02d:%02d:%02dZ</timestamp>%c",
+                    y + 2001, d / 31 + 1, d % 31 + 1, h, hms / 60 - h * 60, hms % 60, 10);
                     wfputs(o,out1);
                 }
                 else if (n || cont==1){
@@ -698,7 +698,7 @@ void encode_txt_wit(FILE* in, FILE* out) {
         exit(1);
         }//return 0;// just fail it '>di<'
         //if (curID <= lastID)        return 0;
-       sprintf(o,  ">%d%c", curID - lastID, 10);
+       snprintf(o, sizeof(o), ">%d%c", curID - lastID, 10);
         wfputs(o,out3);
         lastID = curID;
         f = 1;
@@ -712,7 +712,7 @@ void encode_txt_wit(FILE* in, FILE* out) {
             int hour   = atoi(&s[28]);
             int minute = atoi(&s[31]);
             int second = atoi(&s[34]);
-            sprintf(o, "timestamp>%02d%d:%d%c", 
+            snprintf(o, sizeof(o), "timestamp>%02d%d:%d%c", 
                     year-2001, month*31+day-32, hour*3600+minute*60+second, 10);
             wfputs(o,out3);
             continue;
@@ -780,10 +780,10 @@ void encode_txt_wit(FILE* in, FILE* out) {
   int headersize=curpos(out3);
    setpos(out1,0);
    setpos(out3,0);
-   sprintf(o, "%d%c", headersize, 10);
+   snprintf(o, sizeof(o), "%d%c", headersize, 10);
    j=strlen(o);
    wfputs(o,out); //header
-   sprintf(o, "%d%c", tsize, 10);
+   snprintf(o, sizeof(o), "%d%c", tsize, 10);
    j=j+strlen(o);
    wfputs(o,out); //lang
 
@@ -807,7 +807,7 @@ void encode_txt_wit(FILE* in, FILE* out) {
   tsize=tsize+j+headersize;
   // write out size of tail lenght
   setpos(out,0);
-  sprintf(o, "%d%c", tsize, 20);
+  snprintf(o, sizeof(o), "%d%c", tsize, 20);
   for (int i = 0; i<20; i++){
        U8 a=o[i];
        if (a>='0' && a<='9') putc(a,out);
