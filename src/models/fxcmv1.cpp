@@ -35,10 +35,12 @@ typedef unsigned char U8;
 typedef unsigned short U16;
 typedef unsigned int U32;
 
-#if defined(__AVX2__)
+#if defined(__x86_64__) || defined(_M_X64)
 #include <immintrin.h>
 typedef __m128i XMM;
+#if defined(__AVX2__)
 typedef __m256i YMM;
+#endif
 #endif
 
 extern const U8 wrt_2b[256];
