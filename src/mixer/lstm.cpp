@@ -5,6 +5,71 @@
 #include <fstream>
 #include <iostream>
 
+#ifdef __AVX2__
+#include <immintrin.h>
+
+namespace {
+
+inline float HorizontalSum(__m256 v) {
+  __m128 hi = _mm256_extractf128_ps(v, 1);
+  __m128 lo = _mm256_castps256_ps128(v);
+  lo = _mm_add_ps(lo, hi);
+  hi = _mm_movehl_ps(hi, lo);
+  lo = _mm_add_ps(lo, hi);
+  hi = _mm_shuffle_ps(lo, lo, 1);
+  lo = _mm_add_ss(lo, hi);
+  return _mm_cvtss_f32(lo);
+}
+
+inline float AvxDotProduct(const float* a, const float* b, int n) {
+  __m256 sum = _mm256_setzero_ps();
+  int i = 0;
+  for (; i + 7 < n; i += 8) {
+    __m256 va = _mm256_loadu_ps(a + i);
+    __m256 vb = _mm256_loadu_ps(b + i);
+    sum = _mm256_fmadd_ps(va, vb, sum);
+  }
+  float result = HorizontalSum(sum);
+  for (; i < n; ++i) {
+    result += a[i] * b[i];
+  }
+  return result;
+}
+
+// dst[i] += src[i] * scalar
+inline void AvxScaledAdd(float* dst, const float* src, float scalar, int n) {
+  __m256 vs = _mm256_set1_ps(scalar);
+  int i = 0;
+  for (; i + 7 < n; i += 8) {
+    __m256 vd = _mm256_loadu_ps(dst + i);
+    __m256 vsrc = _mm256_loadu_ps(src + i);
+    vd = _mm256_fmadd_ps(vsrc, vs, vd);
+    _mm256_storeu_ps(dst + i, vd);
+  }
+  for (; i < n; ++i) {
+    dst[i] += src[i] * scalar;
+  }
+}
+
+// dst = src; dst -= scalar * mul
+inline void AvxCopyAndScaledSub(float* dst, const float* src, const float* mul,
+    float scalar, int n) {
+  __m256 vs = _mm256_set1_ps(scalar);
+  int i = 0;
+  for (; i + 7 < n; i += 8) {
+    __m256 vsrc = _mm256_loadu_ps(src + i);
+    __m256 vmul = _mm256_loadu_ps(mul + i);
+    vsrc = _mm256_fnmadd_ps(vs, vmul, vsrc);
+    _mm256_storeu_ps(dst + i, vsrc);
+  }
+  for (; i < n; ++i) {
+    dst[i] = src[i] - scalar * mul[i];
+  }
+}
+
+}  // namespace
+#endif
+
 Lstm::Lstm(unsigned int input_size, unsigned int output_size, unsigned int
     num_cells, unsigned int num_layers, int horizon, float learning_rate,
     float gradient_clip) : input_history_(horizon),
@@ -93,12 +158,22 @@ std::valarray<float>& Lstm::Perceive(unsigned int input) {
     for (int epoch = horizon_ - 1; epoch >= 0; --epoch) {
       for (int layer = layers_.size() - 1; layer >= 0; --layer) {
         int offset = layer * num_cells_;
+#ifdef __AVX2__
+        int hn = hidden_error_.size();
+        for (unsigned int i = 0; i < output_size_; ++i) {
+          float error = (i == input_history_[epoch]) ?
+              (output_[epoch][i] - 1) : output_[epoch][i];
+          AvxScaledAdd(&hidden_error_[0],
+              &output_layer_[epoch][i][offset], error, hn);
+        }
+#else
         for (unsigned int i = 0; i < output_size_; ++i) {
           float error = (i == input_history_[epoch]) ? (output_[epoch][i] - 1) : output_[epoch][i];
           for (unsigned int j = 0; j < hidden_error_.size(); ++j) {
             hidden_error_[j] += output_layer_[epoch][i][j + offset] * error;
           }
         }
+#endif
         int prev_epoch = epoch - 1;
         if (prev_epoch == -1) prev_epoch = horizon_ - 1;
         int input_symbol = input_history_[prev_epoch];
@@ -109,11 +184,21 @@ std::valarray<float>& Lstm::Perceive(unsigned int input) {
     }
   }
 
+#ifdef __AVX2__
+  int hn = hidden_.size();
+  for (unsigned int i = 0; i < output_size_; ++i) {
+    float error = (i == input) ? (output_[last_epoch][i] - 1) : output_[last_epoch][i];
+    float lr_error = learning_rate_ * error;
+    AvxCopyAndScaledSub(&output_layer_[epoch_][i][0],
+        &output_layer_[last_epoch][i][0], &hidden_[0], lr_error, hn);
+  }
+#else
   for (unsigned int i = 0; i < output_size_; ++i) {
     float error = (i == input) ? (output_[last_epoch][i] - 1) : output_[last_epoch][i];
     output_layer_[epoch_][i] = output_layer_[last_epoch][i];
     output_layer_[epoch_][i] -= learning_rate_ * error * hidden_;
   }
+#endif
   return Predict(input);
 }
 
@@ -130,6 +215,17 @@ std::valarray<float>& Lstm::Predict(unsigned int input) {
       std::copy(start, start + num_cells_, start2);
     }
   }
+
+#ifdef __AVX2__
+  int hn = hidden_.size();
+  const float* hp = &hidden_[0];
+  float max_out = 0;
+  for (unsigned int i = 0; i < output_size_; ++i) {
+    float sum = AvxDotProduct(hp, &output_layer_[epoch_][i][0], hn);
+    output_[epoch_][i] = sum;
+    max_out = std::max(sum, max_out);
+  }
+#else
   float max_out = 0;
   for (unsigned int i = 0; i < output_size_; ++i) {
     float sum = 0;
@@ -139,6 +235,8 @@ std::valarray<float>& Lstm::Predict(unsigned int input) {
     output_[epoch_][i] = sum;
     max_out = std::max(sum, max_out);
   }
+#endif
+
   for (unsigned int i = 0; i < output_size_; ++i) {
     output_[epoch_][i] = exp(output_[epoch_][i] - max_out);
   }
