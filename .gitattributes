@@ -1,0 +1,19 @@
+# Set the default behavior for all files. All other settings below will overwrite this default.
+* text=auto
+
+# These files must stay intact.
+english.dic binary
+new_article_order binary
+
+# Normalized and converts to native line endings on checkout.
+*.cpp text
+*.hpp text
+*.c   text
+*.h   text
+
+# Convert to CRLF line endings on checkout.
+*.sln text eol=crlf
+*.cmd text eol=crlf
+
+# Convert to LF line endings on checkout.
+*.sh text eol=lf
