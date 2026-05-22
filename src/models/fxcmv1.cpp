@@ -28,7 +28,6 @@
 #include <algorithm>
 #include <unordered_map>
 #include <memory>
-#define NDEBUG  // remove for debugging (turns on Array bound checks)
 #include <assert.h>
 
 typedef unsigned char U8;

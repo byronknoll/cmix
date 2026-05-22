@@ -1,7 +1,7 @@
 CXX = clang++-17
 LFLAGS = -std=c++14 -Wall
 
-all: LFLAGS += -Ofast -march=native
+all: LFLAGS += -Ofast -march=native -DNDEBUG
 all: cmix enwik9-preproc remap
 
 debug: LFLAGS += -ggdb

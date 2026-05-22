@@ -7,8 +7,9 @@ ByteModel::ByteModel(const std::vector<bool>& vocab) : ex(0),top_(255), mid_(0),
 
 const std::valarray<float>& ByteModel::Predict() {
   auto mid = bot_ + ((top_ - bot_) / 2);
-  float num = std::accumulate(&probs_[mid + 1], &probs_[top_ + 1], 0.0f);
-  float denom = std::accumulate(&probs_[bot_], &probs_[mid + 1], num);
+  const float* base = &probs_[0];
+  float num = std::accumulate(base + mid + 1, base + top_ + 1, 0.0f);
+  float denom = std::accumulate(base + bot_, base + mid + 1, num);
   ex = bot_;
     float max_prob_val = probs_[bot_];
     for (int i = bot_ + 1; i <= top_; i++) {
