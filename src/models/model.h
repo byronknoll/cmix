@@ -1,6 +1,7 @@
 #ifndef MODEL_H
 #define MODEL_H
 
+#include <cstdint>
 #include <valarray>
 
 class Model {
