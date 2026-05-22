@@ -10,6 +10,11 @@ project('cmix', 'cpp',
 # compiler setup
 cpp = meson.get_compiler('cpp')
 
+# Add NDEBUG for non-debug builds (release, minsize, etc.)
+if get_option('buildtype') != 'debug'
+  add_project_arguments('-DNDEBUG', language: 'cpp')
+endif
+
 # base compiler flags
 base_args = []
 
