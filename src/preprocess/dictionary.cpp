@@ -61,9 +61,9 @@ Dictionary::Dictionary(FILE* dictionary, bool encode, bool decode) {
         bytes += (0xD0 + (((line_count-kBoundary2) / 80) % 32)) << 8;
         bytes += (0x80 + ((line_count-kBoundary2) % 80)) << 16;
       } else if (line_count < kBoundary4) {
-        bytes = 0xD0 + (((line_count-kBoundary2) / 80) / 32);
-        bytes += (0xD0 + (((line_count-kBoundary2) / 80) % 32)) << 8;
-        bytes += (0x80 + ((line_count-kBoundary2) % 80)) << 16;
+        bytes = 0xD0 + (((line_count-kBoundary3) / 80) / 32);
+        bytes += (0xD0 + (((line_count-kBoundary3) / 80) % 32)) << 8;
+        bytes += (0x80 + ((line_count-kBoundary3) % 80)) << 16;
       }
       if (encode) byte_map_[line] = bytes;
       if (decode) reverse_map_[bytes] = line;
