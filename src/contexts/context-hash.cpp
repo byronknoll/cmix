@@ -7,7 +7,7 @@ ContextHash::ContextHash(const unsigned int& bit_context, unsigned int order,
 }
 
 void ContextHash::Update() {
-  context_ = (context_ * (1 << hash_size_) + byte_) % size_;
+  context_ = ((context_ << hash_size_) + byte_) & (size_ - 1);
 }
 
 bool ContextHash::IsEqual(Context* c) {
