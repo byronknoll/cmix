@@ -106,7 +106,7 @@ void reorder() {
       "      <text xml:space=\"preserve\">#REdirect",
       "      <text xml:space=\"preserve\">{{softredirect",};
     while (getline(infile, line)) {
-      for (auto pre : prefix) {
+      for (const auto& pre : prefix) {
         if (line.rfind(pre, 0) == 0) {
           redirect = true;
           break;
