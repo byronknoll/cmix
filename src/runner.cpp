@@ -87,9 +87,17 @@ void ReadHeader(std::ifstream* is, unsigned long long* length,
 
 void ExtractVocab(unsigned long long input_bytes, std::ifstream* is,
     std::vector<bool>* vocab) {
-  for (unsigned long long pos = 0; pos < input_bytes; ++pos) {
-    unsigned char c = is->get();
-    (*vocab)[c] = true;
+  constexpr size_t BUF_SIZE = 65536;
+  char buf[BUF_SIZE];
+  while (input_bytes > 0) {
+    size_t to_read = std::min<unsigned long long>(input_bytes, BUF_SIZE);
+    is->read(buf, to_read);
+    std::streamsize n = is->gcount();
+    if (n <= 0) break;
+    for (std::streamsize i = 0; i < n; ++i) {
+      (*vocab)[static_cast<unsigned char>(buf[i])] = true;
+    }
+    input_bytes -= n;
   }
 }
 
@@ -103,15 +111,25 @@ void Compress(unsigned long long input_bytes, std::ifstream* is,
   Encoder e(os, p);
   unsigned long long percent = 1 + (input_bytes / 10000);
   ClearOutput();
-  for (unsigned long long pos = 0; pos < input_bytes; ++pos) {
-    char c = is->get();
-    for (int j = 7; j >= 0; --j) {
-      e.Encode((c>>j)&1);
-    }
-    if (pos % percent == 0) {
-      double frac = 100.0 * pos / input_bytes;
-      fprintf(stderr, "\rprogress: %.2f%%", frac);
-      fflush(stderr);
+  constexpr size_t BUF_SIZE = 65536;
+  char buf[BUF_SIZE];
+  unsigned long long pos = 0;
+  while (pos < input_bytes) {
+    size_t to_read = std::min<unsigned long long>(input_bytes - pos, BUF_SIZE);
+    is->read(buf, to_read);
+    std::streamsize n = is->gcount();
+    if (n <= 0) break;
+    for (std::streamsize i = 0; i < n; ++i) {
+      char c = buf[i];
+      for (int j = 7; j >= 0; --j) {
+        e.Encode((c>>j)&1);
+      }
+      if (pos % percent == 0) {
+        double frac = 100.0 * pos / input_bytes;
+        fprintf(stderr, "\rprogress: %.2f%%", frac);
+        fflush(stderr);
+      }
+      pos++;
     }
   }
   e.Flush();
@@ -123,17 +141,27 @@ void Decompress(unsigned long long output_length, std::ifstream* is,
   Decoder d(is, p);
   unsigned long long percent = 1 + (output_length / 10000);
   ClearOutput();
+  constexpr size_t BUF_SIZE = 65536;
+  char buf[BUF_SIZE];
+  size_t buf_pos = 0;
   for(unsigned long long pos = 0; pos < output_length; ++pos) {
     int byte = 1;
     while (byte < 256) {
       byte += byte + d.Decode();
     }
-    os->put(byte);
+    buf[buf_pos++] = static_cast<char>(byte);
+    if (buf_pos == BUF_SIZE) {
+      os->write(buf, BUF_SIZE);
+      buf_pos = 0;
+    }
     if (pos % percent == 0) {
       double frac = 100.0 * pos / output_length;
       fprintf(stderr, "\rprogress: %.2f%%", frac);
       fflush(stderr);
     }
+  }
+  if (buf_pos > 0) {
+    os->write(buf, buf_pos);
   }
 }
 
