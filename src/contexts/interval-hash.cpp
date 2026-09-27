@@ -17,7 +17,7 @@ IntervalHash::IntervalHash(const unsigned int& bit_context,
 
 void IntervalHash::Update() {
   interval_ = mask_ & ((interval_ << shift_) + map_[byte_]);
-  context_ = (context_ * (1 << hash_size_) + interval_) % size_;
+  context_ = ((context_ << hash_size_) + interval_) & (size_ - 1);
 }
 
 bool IntervalHash::IsEqual(Context* c) {

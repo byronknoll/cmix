@@ -11,8 +11,8 @@ IndirectHash::IndirectHash(const unsigned int& bit_context, unsigned int order1,
 }
 
 void IndirectHash::Update() {
-  hashes_[context1_] = (context_ * (1 << hash_size2_) + byte_) % size_;
-  context1_ = (context1_ * (1 << hash_size1_) + byte_) % size1_;
+  hashes_[context1_] = ((context_ << hash_size2_) + byte_) & (size_ - 1);
+  context1_ = ((context1_ << hash_size1_) + byte_) & (size1_ - 1);
   context_ = hashes_[context1_];
 }
 

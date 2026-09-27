@@ -8,6 +8,7 @@
 #include <cstdio>
 #include <unordered_map>
 #include <fstream>
+#include <algorithm>
 
 #define NUM_OF_ARTICLES 243425
 
@@ -32,13 +33,9 @@ int line_count = 0;
 static char s[8192*8];
 
 void bubblesort(std::vector<Accumulator>& mylist) {
-    for (int i = 1; i < mylist.size(); i++)	{
-        for (int j = 0; j < mylist.size() - i; j++) {
-            if (mylist[j].id > mylist[j + 1].id) {
-            std::swap(mylist[j], mylist[j + 1]);
-            }
-       }
-   }
+  std::sort(mylist.begin(), mylist.end(), [](const Accumulator& a, const Accumulator& b) {
+    return a.id < b.id;
+  });
 }
 const char *patterns1[] = { "<page>", "<id>", "</page>" };
 const int transitions1[3] = { expect_id, expect_pageend, expect_page };
@@ -109,7 +106,7 @@ void reorder() {
       "      <text xml:space=\"preserve\">#REdirect",
       "      <text xml:space=\"preserve\">{{softredirect",};
     while (getline(infile, line)) {
-      for (auto pre : prefix) {
+      for (const auto& pre : prefix) {
         if (line.rfind(pre, 0) == 0) {
           redirect = true;
           break;
