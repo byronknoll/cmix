@@ -292,7 +292,15 @@ Filetype detect(FILE* in, int n, Filetype type) {
 }
 
 void encode_default(FILE* in, FILE* out, int len) {
-  while (len--) putc(getc(in), out);
+  constexpr size_t BUF_SIZE = 65536;
+  char buf[BUF_SIZE];
+  while (len > 0) {
+    size_t to_read = std::min<size_t>(len, BUF_SIZE);
+    size_t n = fread(buf, 1, to_read, in);
+    if (n == 0) break;
+    fwrite(buf, 1, n, out);
+    len -= n;
+  }
 }
 
 int decode_default(FILE* in) {
@@ -444,9 +452,7 @@ void encode_text(FILE* in, FILE* out, int len, std::string temp_path,
     FILE* dictionary) {
   if (dictionary == NULL) {
     putc(0, out);
-    for (int i = 0; i < len; ++i) {
-      putc(getc(in), out);
-    }
+    encode_default(in, out, len);
     return;
   }
   std::string path = temp_path + "2";
@@ -461,15 +467,11 @@ void encode_text(FILE* in, FILE* out, int len, std::string temp_path,
   if (size > len - 50) {
     putc(0, out);
     fseek(in, orig_pos, SEEK_SET);
-    for (int i = 0; i < len; ++i) {
-      putc(getc(in), out);
-    }
+    encode_default(in, out, len);
   } else {
     putc(1, out);
     rewind(temp_output);
-    for (int i = 0; i < size; ++i) {
-      putc(getc(temp_output), out);
-    }
+    encode_default(temp_output, out, size);
   }
 
   fclose(temp_output);
@@ -630,13 +632,23 @@ int DecodeByte(FILE* in, FILE* dictionary) {
 }
 
 void Decode(FILE* in, FILE* out, FILE* dictionary) {
+  constexpr size_t BUF_SIZE = 65536;
+  char buf[BUF_SIZE];
+  size_t buf_pos = 0;
   while (true) {
     int result = DecodeByte(in, dictionary);
     if (result == -1) {
+      if (buf_pos > 0) {
+        fwrite(buf, 1, buf_pos, out);
+      }
       if (dict != NULL) delete dict;
       return;
     }
-    putc(result, out);
+    buf[buf_pos++] = static_cast<char>(result);
+    if (buf_pos == BUF_SIZE) {
+      fwrite(buf, 1, BUF_SIZE, out);
+      buf_pos = 0;
+    }
   }
 }
 
